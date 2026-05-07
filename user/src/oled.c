@@ -1,17 +1,20 @@
 #include "gpio.h"
 #include "OLED_Font.h"
+
+// 位操作枚举，仅用于兼容旧接口。
 typedef enum
 { Bit_RESET = 0,
   Bit_SET
 }BitAction;
 
+// I2C 位带延时，单位为微秒。
 void I2C_Delay(uint32_t us)
 {
     uint32_t ticks = us * (SystemCoreClock / 1000000) / 10;
     while(ticks--);
 }
 
-/*引脚配置*/
+// I2C SCL 引脚写入电平。
 void OLED_W_SCL(uint8_t BitValue)
 {
 	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, (GPIO_PinState)(BitValue));
@@ -19,6 +22,7 @@ void OLED_W_SCL(uint8_t BitValue)
 	
 }
 
+// I2C SDA 引脚写入电平。
 void OLED_W_SDA(uint8_t BitValue)
 {
 	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, (GPIO_PinState)(BitValue));
@@ -28,7 +32,7 @@ void OLED_W_SDA(uint8_t BitValue)
 
 //#define OLED_W_SCL(x) HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, (GPIO_PinState)(x))
 //#define OLED_W_SDA(x) HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, (GPIO_PinState)(x))
-/*引脚初始化*/
+// I2C 引脚初始状态设置。
 void OLED_I2C_Init(void)
 {
 	HAL_Delay(10);

@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+// 电机运行状态。
 typedef enum
 {
     MOTOR_STATE_STOPPED = 0,
@@ -11,6 +12,7 @@ typedef enum
     MOTOR_STATE_FAULT
 } MotorState;
 
+// 电机系统关键变量。
 typedef struct
 {
     MotorState state;
@@ -18,9 +20,12 @@ typedef struct
     uint16_t target;
 } MotorSystem;
 
+// 电机系统全局实例。
 extern MotorSystem g_motor_system;
 
+// 初始化电机系统。
 void Motor_System_Init(void);
+// 周期任务入口。
 void Motor_System_Task(void);
 
 #endif

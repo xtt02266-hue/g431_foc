@@ -7,17 +7,17 @@
 // OLED_Init 由显示驱动实现，这里做前置声明。
 void OLED_Init(void);
 
+// 硬件外设初始化与启动时序。
 void hardware_init(void)
 {
-    // 1. 启动常规通道的 DMA 搬运（读取电位器等慢速信号）
-    // 【修改点】：去掉了 HAL_ADC_Start(&hadc1); 
-    // 解释：HAL_ADC_Start_DMA 内部已经包含了启动 ADC 的动作。连续调用两者容易导致 HAL 库状态机锁死报错。
+    // 1. 启动常规通道 DMA 搬运（读取电位器等慢速信号）。
+    // 说明：HAL_ADC_Start_DMA 内部已启动 ADC，本处不再额外调用 HAL_ADC_Start。
     (void)UserIO_StartDma();
 
-    // 2. 启动 TIM1 的通道 4（如果你在 CubeMX 里选了 CC4 作为 ADC 的触发源）
+    // 2. 启动 TIM1 通道 4（ADC 触发源若配置为 CC4）。
     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4); 
 
-    // 3. 启动 TIM1 的 6 路互补 PWM 输出 (驱动 DRV8300 的三个半桥)
+    // 3. 启动 TIM1 的 6 路互补 PWM 输出（驱动三相半桥）。
     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
@@ -25,8 +25,7 @@ void hardware_init(void)
     HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_2);
     HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_3);
 
-    // 4. 【核心缺失项】启动 ADC 注入通道中断
-    // 解释：你的代码里忘记让 ADC 去监听 TIM1 的触发信号了！加上这句，ADC 才会像狙击手一样潜伏，等待 TIM1 的指令瞬间采样 U/W 相电流。
+    // 4. 启动 ADC 注入通道中断，使其响应 TIM1 触发进行采样。
     HAL_ADCEx_InjectedStart_IT(&hadc1);
     Motor_CurrentLoop_Init();
 

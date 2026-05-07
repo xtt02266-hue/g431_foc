@@ -1,7 +1,7 @@
 #ifndef __OLED_FONT_H
 #define __OLED_FONT_H
 
-/*OLED×ÖÄ£¿â£¬¿í8ÏñËØ£¬¸ß16ÏñËØ*/
+/* OLED 字模库，宽 8 像素，高 16 像素。 */
 const uint8_t OLED_F8x16[][16]=
 {
 	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
