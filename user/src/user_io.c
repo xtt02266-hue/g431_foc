@@ -16,12 +16,11 @@
 #define LED_GPIO_PORT GPIOB
 #define LED_PIN GPIO_PIN_6
 
-// 启动电位器 ADC 的 DMA 循环采样。
+// 启动电位器 ADC 的 DMA 循环采样（实际上现改为在硬件初始化中底层手动启动无中断 DMA）
+// 为了保持接口兼容性，保留此函数，但当前可以为空。
 HAL_StatusTypeDef UserIO_StartDma(void)
 {
-    return HAL_ADC_Start_DMA(POT_ADC_HANDLE,
-                             (uint32_t *)&g_motor_publicdata.pot_raw,
-                             1U);
+    return HAL_OK;
 }
 
 // 返回 12 位 ADC 原始值（DMA 持续更新）。

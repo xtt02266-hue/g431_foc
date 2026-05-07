@@ -27,5 +27,7 @@ extern MotorSystem g_motor_system;
 void Motor_System_Init(void);
 // 周期任务入口。
 void Motor_System_Task(void);
+// OLED上显示临时调试信息。
+void Motor_ShowDebugInfo_OLED(void);
 
 #endif
