@@ -84,7 +84,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 // ---------------------------------------------------------
 // 综合测试任务：OLED 显示与 VOFA+ 上位机波形观察 (放在 main 的 while(1) 中调用)
 // ---------------------------------------------------------
-void Motor_Test_DebugTask(void)
+void Motor_ShowDebugInfo_OLED(void)
 {
     // 获取实时的 FOC 内部状态（电流、坐标变换后结果）
     // 注意：这里读取全局变量，如果有严谨强迫症可以加关中断，但对于只是观察调试没关系。
@@ -104,11 +104,11 @@ void Motor_Test_DebugTask(void)
         OLED_ShowSignedNum(2, 4, (int32_t)(g_foc_state.park.d * 1000.0f), 5);
         OLED_ShowString(3, 1, "Iq:      mA");
         OLED_ShowSignedNum(3, 4, (int32_t)(g_foc_state.park.q * 1000.0f), 5);
-        
-        // 显示机械角度
-        OLED_ShowString(4, 1, "Ang:");
-        OLED_ShowNum(4, 5, AS5600_ReadRawAngle(), 4);
     }
+
+    // 始终显示 AS5600 原始角度（第4行）—— 如果一直是 0，说明 I2C 没通！
+    OLED_ShowString(4, 1, "Ang:");
+    OLED_ShowNum(4, 5, AS5600_ReadRawAngle(), 4);
 
     // 2. VOFA+ 串口发送波形数据 (使用 Just_Float 协议)
     // 你可以在上位机中查看波形，看看用手转动电机时，电流和角度的变化
@@ -118,7 +118,7 @@ void Motor_Test_DebugTask(void)
     vofa_data[2] = g_foc_state.park.d * 1000.0f;      // D轴电流 (mA)
     vofa_data[3] = g_foc_state.park.q * 1000.0f;      // Q轴电流 (mA)
     
-    VOFA_SendData_JustFloat(vofa_data, 4); // 发送四个通道浮点数
+    VOFA_JustFloat_Send(vofa_data, 4); // 发送四个通道浮点数
     
     // 适当的软件延时，刷新太快 OLED 会闪
     // 这里设定 50ms (即20Hz刷新率)，对 OLED 友好，对 VOFA 观察手动转动也足够

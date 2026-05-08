@@ -21,4 +21,7 @@ void AS5600_RequestRead_DMA(void);
 // 读取 AS5600 原始角度值缓存（12 位）。
 uint16_t AS5600_ReadRawAngle(void);
 
+// 检查 I2C 通信是否正常（1=正常, 0=故障）。
+uint8_t AS5600_IsI2cOk(void);
+
 #endif

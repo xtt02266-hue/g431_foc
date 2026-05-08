@@ -46,3 +46,5 @@ g431_foc\motor_system.o: ../Core/Inc/tim.h
 g431_foc\motor_system.o: ../Core/Inc/main.h
 g431_foc\motor_system.o: F:\Keil5\ARM\armcc\Bin\..\include\math.h
 g431_foc\motor_system.o: ../user/inc/user_io.h
+g431_foc\motor_system.o: ../user/inc/vofa_usart.h
+g431_foc\motor_system.o: ../user/inc/motor_identify.h

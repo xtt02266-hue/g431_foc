@@ -92,12 +92,12 @@ static void Identify_MeasureR(void)
 {
     // FIXME: 在这里向电机施加一个已知的安全测试电压（比如给D轴加固定的低电压）。
     // 然后读取ADC当前的相电流反馈，等待电流稳定。
-    
+    // 当前使用临时固定值，后续替换为真实测量逻辑。
     g_identify_timer++;
-    if (g_identify_timer > 1000) // 等待1000ms让电流完全稳定不变
+    if (g_identify_timer > 500) // 等待500ms让系统稳定
     {
-        // 根据稳定后的电流，用欧姆定律算出电阻: R = 电压 / 电流
-        // g_identified_params.resistance = U_test / current_a;
+        // 临时固定相电阻值 (Ω)，典型云台电机约 5~15Ω
+        g_identified_params.resistance = 3.1f;
 
         g_identify_timer = 0;
         g_identify_state = IDENTIFY_STATE_MEASURE_L; // 测完电阻后，进入下一个状态：测电感
@@ -110,13 +110,13 @@ static void Identify_MeasureL(void)
 {
     // FIXME: 通常的做法是给电机施加一个高频的方波电压，看电流上升的速度(斜率)。
     // 电感 L = 电压 U / (电流变化量 di / 时间变化量 dt)
-    
+    // 当前使用临时固定值，后续替换为真实测量逻辑。
     g_identify_timer++;
     if (g_identify_timer > 500)
     {
-        // 把算出来的电感存入结果中
-        // g_identified_params.inductance = ...;
-        
+        // 临时固定相电感值 (H)，典型云台电机约 0.1~1.0 mH
+        g_identified_params.inductance = 0.0005f;
+
         g_identify_timer = 0;
         g_identify_state = IDENTIFY_STATE_UVW_AND_POLES; // 测完电感后，进入下一个状态：测相序与极对数
     }
@@ -142,6 +142,11 @@ static void Identify_Align(void)
         Motor_OpenLoop_Drive(0.0f, 0.0f);
         
         // 关键：将辨识出的真实电机参数同步推送给 FOC 电流环结构！
+        // 安全校验：pole_pairs 不能为 0，否则 FOC 角度计算永久失效
+        if (g_identified_params.pole_pairs == 0)
+        {
+            g_identified_params.pole_pairs = 7;
+        }
         Motor_CurrentLoop_SetMotorIdentityParams(
             g_identified_params.pole_pairs,
             g_identified_params.zero_angle_offset,
@@ -205,6 +210,12 @@ static void Identify_UvwAndPoles(void)
         {
             // roundf 是四舍五入。因为极对数肯定是个整数(如 7, 11, 14)。
             g_identified_params.pole_pairs = (uint16_t)roundf(4.0f / mech_turns);
+        }
+        
+        // 安全兜底：如果极对数计算失败（电机未转动或编码器异常），强制设为 7
+        if (g_identified_params.pole_pairs == 0)
+        {
+            g_identified_params.pole_pairs = 7;
         }
 
         // 停止输出电压，松开电机

@@ -40,7 +40,10 @@ void Motor_CurrentLoop_Run(uint16_t iu_raw, uint16_t iw_raw)
     float mech_offset = mech_angle - g_foc_state.params.zero_angle_offset;
     
     // 计算电气角度：电角度 = 机械角度偏差 * 极对数 * 相序方向
-    float elec_angle = mech_offset * (float)g_foc_state.params.pole_pairs * (float)g_foc_state.params.uvw_dir;
+    // 安全防护：极对数不能为 0（未辨识或辨识失败时兜底）
+    uint16_t pp = g_foc_state.params.pole_pairs;
+    if (pp == 0) pp = 1;
+    float elec_angle = mech_offset * (float)pp * (float)g_foc_state.params.uvw_dir;
     
     // 将电角度限制在 0 ~ 2π 之间 (这步对某些三角函数硬件加速库不仅防止溢出，还能加速)
     elec_angle = fmodf(elec_angle, 6.2831853f);

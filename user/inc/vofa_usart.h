@@ -37,3 +37,4 @@ void VOFA_Send_DQ_Currents(float id, float iq);
 void VOFA_Send_All(float elec_angle, float id, float iq, float target_iq);
 
 #endif // VOFA_USART_H
+

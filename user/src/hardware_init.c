@@ -6,6 +6,7 @@
 #include "user_io.h"
 #include "motor_current_loop.h"
 #include "motor_publicdata.h"
+#include "motor_identify.h"
 #include "vofa_usart.h" // 包含 VOFA 系列函数
 
 // OLED_Init 由显示驱动实现，这里做前置声明。
@@ -96,4 +97,7 @@ void hardware_init(void)
 
     OLED_Init();
     HAL_Delay(50);
+
+    // 8. 启动电机参数自动辨识 (电阻/电感为临时固定值，极对数/相序/零点自动测量)
+    Motor_Identify_Start();
 }
