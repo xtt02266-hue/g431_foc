@@ -7,10 +7,10 @@
 typedef enum
 {
     IDENTIFY_STATE_IDLE = 0,       // 空闲状态
-    IDENTIFY_STATE_ALIGN,          // 强行对齐转子（获取电角度零点偏移）
     IDENTIFY_STATE_MEASURE_R,      // 测量相电阻 (R)
     IDENTIFY_STATE_MEASURE_L,      // 测量相电感 (L)
-    IDENTIFY_STATE_POLE_PAIRS,     // 识别极对数
+    IDENTIFY_STATE_UVW_AND_POLES,  // 识别 UVW 相序方向和极对数
+    IDENTIFY_STATE_ALIGN,          // 强行对齐转子（获取电角度零点偏移）
     IDENTIFY_STATE_DONE,           // 辨识完成
     IDENTIFY_STATE_ERROR           // 辨识出错（如电流超限等）
 } MotorIdentifyState;
@@ -22,6 +22,7 @@ typedef struct
     float inductance;         // 相电感 (H)
     uint16_t pole_pairs;      // 极对数
     float zero_angle_offset;  // 机械/电角度的零点对应偏置 (弧度)
+    int8_t uvw_dir;            // UVW 相序方向: 1=正向, -1=反向
 } MotorIdentifiedParams;
 
 // 启动辨识流程序列。
@@ -35,5 +36,7 @@ MotorIdentifiedParams Motor_Identify_GetResult(void);
 
 // 辨识系统周期调度任务（主循环或定时器中调用）。
 void Motor_Identify_Task(void);
+
+void Motor_OpenLoop_Drive(float elec_angle, float amplitude);
 
 #endif

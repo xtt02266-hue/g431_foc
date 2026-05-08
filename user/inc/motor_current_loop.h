@@ -55,6 +55,11 @@ typedef struct
     float shunt_ohms;
     float gain;
     float adc_max;
+    
+    // 电机本体辨识参数
+    uint16_t pole_pairs;        // 极对数
+    float    zero_angle_offset; // 机械零点偏置(弧度)
+    int8_t   uvw_dir;           // 相序方向 (1 或 -1)
 } MotorCurrentParams;
 
 // 电流采样数据。
@@ -94,6 +99,9 @@ typedef struct
     float target_d;              // d 轴目标电流 (A)
     float target_q;              // q 轴目标电流 (A)
     
+    // 闭环使能标志：0=闭环计算停止(PID复位并停止输出占空比)，1=执行全套电流闭环
+    uint8_t closed_loop_enable; 
+    
     float sin_theta;             // 当前电角度的正弦值
     float cos_theta;             // 当前电角度的余弦值
 } MotorCurrentLoopState;
@@ -105,6 +113,10 @@ extern MotorCurrentLoopState g_foc_state;
 void Motor_CurrentLoop_Init(void);
 // 设置所有参数。
 void Motor_CurrentLoop_SetParams(MotorCurrentParams params);
+// 设置电机辨识参数 (把 motor_identify 辨识出的参数灌入给 FOC)
+void Motor_CurrentLoop_SetMotorIdentityParams(uint16_t pole_pairs, float zero_angle_offset, int8_t uvw_dir);
+// FOC 闭环启停开关
+void Motor_CurrentLoop_Enable(uint8_t enable);
 // 获取当前参数。
 MotorCurrentParams Motor_CurrentLoop_GetParams(void);
 // 设置偏置电压。

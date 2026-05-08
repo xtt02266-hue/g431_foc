@@ -6,9 +6,49 @@
 #include "user_io.h"
 #include "motor_current_loop.h"
 #include "motor_publicdata.h"
+#include "vofa_usart.h" // 包含 VOFA 系列函数
 
 // OLED_Init 由显示驱动实现，这里做前置声明。
 void OLED_Init(void);
+
+// ---------------------------------------------------------
+// 电流偏置(Bias)校准：在不施加任何电压时获取真正的零点电压偏移
+// ---------------------------------------------------------
+static void Hardware_CalibrateCurrentBias(void)
+{
+    uint32_t bias_sum_u = 0;
+    uint32_t bias_sum_w = 0;
+    const uint16_t calibrate_count = 500;
+    
+    HAL_Delay(10); // 等待 ADC 稳妥上电
+    
+    for (uint16_t i = 0; i < calibrate_count; i++)
+    {
+        // 在这里因为没开启 PWM 通道强推电机，我们手动软件触发注入采样
+        // 然后累加求平均值
+        HAL_ADCEx_InjectedStart(&hadc1); 
+        HAL_ADCEx_InjectedPollForConversion(&hadc1, 10);
+        
+        bias_sum_u += HAL_ADCEx_InjectedGetValue(&hadc1, ADC_INJECTED_RANK_1);
+        bias_sum_w += HAL_ADCEx_InjectedGetValue(&hadc1, ADC_INJECTED_RANK_2);
+        
+        HAL_Delay(1);
+    }
+    
+    // 计算平均原始值并求出基准电压
+    float bias_raw_u = (float)bias_sum_u / calibrate_count;
+    float bias_raw_w = (float)bias_sum_w / calibrate_count;
+    // 取两相偏置平均作为系统的基准偏置电压 （也可以单相独立处理，这里合并计算平均）
+    float actual_bias_raw = (bias_raw_u + bias_raw_w) / 2.0f;
+    
+    // 原始值 -> 电压
+    MotorCurrentParams params = Motor_CurrentLoop_GetParams();
+    float actual_bias_volts = (actual_bias_raw * params.vref_volts) / params.adc_max;
+    Motor_CurrentLoop_SetBiasVolts(actual_bias_volts);
+    
+    // 重新让 ADC 开始准备被外部中断模式（TIM1触发）引发
+    HAL_ADCEx_InjectedStart_IT(&hadc1);
+}
 
 // 硬件外设初始化与启动时序。
 void hardware_init(void)
@@ -26,33 +66,33 @@ void hardware_init(void)
     HAL_ADC_Start(&hadc2);                          // 开启 ADC2
 
     // 2. 首先配置并开启 ADC 注入通道，等待被 TIM1 触发
-    HAL_ADCEx_InjectedStart_IT(&hadc1);
     Motor_CurrentLoop_Init();
+    HAL_ADCEx_InjectedStart_IT(&hadc1);
 
     // 3. 启动 TIM1 通道 4（用作 ADC 的触发信号 CC4）
+    //此时不开启PWM输出（占空比全0），对运放偏置进行初始标定
     HAL_TIM_Base_Init(&htim1);
 	HAL_TIM_PWM_Start(&htim1,TIM_CHANNEL_4);
+
+    // 调用封装好的偏置校准函数
+    Hardware_CalibrateCurrentBias();
+
+    // 4. 启动 TIM1 的 6 路互补 PWM 输出（驱动三相半桥）。
 	HAL_TIM_PWM_Start(&htim1,TIM_CHANNEL_1);
 	HAL_TIM_PWM_Start(&htim1,TIM_CHANNEL_2);
 	HAL_TIM_PWM_Start(&htim1,TIM_CHANNEL_3);
 	HAL_TIMEx_PWMN_Start(&htim1,TIM_CHANNEL_1);
 	HAL_TIMEx_PWMN_Start(&htim1,TIM_CHANNEL_2);
 	HAL_TIMEx_PWMN_Start(&htim1,TIM_CHANNEL_3);
-
-    // 4. 启动 TIM1 的 6 路互补 PWM 输出（驱动三相半桥）。
-
     // 5. 启动 TIM2 (用于 1ms / 1000Hz 周期任务调度，如 AS5600 慢速读取、目标值更新等)
     HAL_TIM_Base_Start_IT(&htim2);
 
-    // 6. 启动串口接收 (示例：按需开启串口空闲中断/DMA接收，如与上位机通信)
-    // 假设你有全局接收缓存 rx_buffer，请解开注释并修改：
-    // HAL_UARTEx_ReceiveToIdle_DMA(&huart2, rx_buffer, RX_BUFFER_SIZE); 
-    // 或 HAL_UART_Receive_IT(&huart2, &rx_data, 1);
+    // 6. 启动串口接收 (与 VOFA+ 上位机通信)
+    VOFA_Init(); 
 
-    // 7. 启动 I2C DMA (如果对于 AS5600 你编写了基于 DMA 的无阻塞读取逻辑)
-    // 注意：如果是普通阻塞式读写(HAL_I2C_Master_Transmit)，无需在此处 Init 外启动。
-    // 如果使用 DMA 周期读取，请将请求动作发在这里或 TIM2 任务中。
-    // HAL_I2C_Master_Receive_DMA(&hi2c1, AS5600_Address | 1, i2c_rx_buffer, 2);
+    // 7. 启动 I2C DMA (用于 AS5600 基于 DMA 的无阻塞读取逻辑)
+    // 首次发起一次 AS5600 的 DMA 接收请求
+    AS5600_RequestRead_DMA();
 
     OLED_Init();
     HAL_Delay(50);

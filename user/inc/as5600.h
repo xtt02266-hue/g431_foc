@@ -13,7 +13,12 @@
 // I2C 超时（ms）。
 #define I2C_TIMEOUT 10000U
 
-// 读取 AS5600 原始角度值（12 位）。
+extern uint8_t as5600_rx_buffer[2];
+
+// 发起 DMA 无阻塞读取请求
+void AS5600_RequestRead_DMA(void);
+
+// 读取 AS5600 原始角度值缓存（12 位）。
 uint16_t AS5600_ReadRawAngle(void);
 
 #endif

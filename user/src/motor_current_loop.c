@@ -29,10 +29,28 @@ void Motor_CurrentLoop_Run(uint16_t iu_raw, uint16_t iw_raw)
     // 以下为整个 FOC 电流环的调用骨架
     // ----------------------------------------------------
 
-    // 2. 获取当前电角度（目前占位，以后从 AS5600 读再经过运算得到）
-    // float theta = ...;
-    // g_foc_state.sin_theta = sinf(theta);
-    // g_foc_state.cos_theta = cosf(theta);
+    // 2. 获取当前电角度  (注意：原先的硬编码已替换为真实传递的参数)
+    // 从 AS5600 缓存中极速获取 12 位原始机械角度 (0 ~ 4095)
+    uint16_t raw_mech_angle = AS5600_ReadRawAngle();
+    
+    // 将 AS5600 的计数转换成真实机械弧度 (0 ~ 2π)
+    float mech_angle = (float)raw_mech_angle * (6.2831853f / 4096.0f);
+    
+    // 减去在辨识阶段标定好、并传进来的绝对机械零点偏置
+    float mech_offset = mech_angle - g_foc_state.params.zero_angle_offset;
+    
+    // 计算电气角度：电角度 = 机械角度偏差 * 极对数 * 相序方向
+    float elec_angle = mech_offset * (float)g_foc_state.params.pole_pairs * (float)g_foc_state.params.uvw_dir;
+    
+    // 将电角度限制在 0 ~ 2π 之间 (这步对某些三角函数硬件加速库不仅防止溢出，还能加速)
+    elec_angle = fmodf(elec_angle, 6.2831853f);
+    if (elec_angle < 0.0f) {
+        elec_angle += 6.2831853f;
+    }
+    
+    // 供后续 Park 坐标变换使用的正余弦值
+    g_foc_state.sin_theta = sinf(elec_angle);
+    g_foc_state.cos_theta = cosf(elec_angle);
 
     // 3. Clarke 变换：将三相相电流（实际上只需两相，假设三相和为0）转换至两相静止坐标系 (Alpha-Beta)
     g_foc_state.clarke = Motor_CurrentLoop_Clarke(iu_a, iw_a);
@@ -48,21 +66,29 @@ void Motor_CurrentLoop_Run(uint16_t iu_raw, uint16_t iw_raw)
     g_foc_state.pi_d.target = g_foc_state.target_d;
     g_foc_state.pi_q.target = g_foc_state.target_q;
 
-    // 6. 执行 PID 模块的计算，会自动将结果刷新到 g_foc_state.pi_d.output 和 pi_q.output 中
-    PID_Calculate(&g_foc_state.pi_d);
-    PID_Calculate(&g_foc_state.pi_q);
+    if (g_foc_state.closed_loop_enable)
+    {
+        // 6. 执行 PID 模块的计算，会自动将结果刷新到 g_foc_state.pi_d.output 和 pi_q.output 中
+        PID_Calculate(&g_foc_state.pi_d);
+        PID_Calculate(&g_foc_state.pi_q);
+        
+        // 7. 读取 PID 调整算出的新电压指令 (Vd, Vq)
+        MotorParkFrame v_dq;
+        v_dq.d = g_foc_state.pi_d.output;
+        v_dq.q = g_foc_state.pi_q.output;
 
-    // 7. 读取 PID 调整算出的新电压指令 (Vd, Vq)
-    MotorParkFrame v_dq;
-    v_dq.d = g_foc_state.pi_d.output;
-    v_dq.q = g_foc_state.pi_q.output;
+        // 8. 逆 Park 变换：将新的电压指令转为静止坐标系 (V_alpha, V_beta)
+        MotorClarkeFrame v_ab;
+        v_ab = Motor_CurrentLoop_InvPark(v_dq, g_foc_state.sin_theta, g_foc_state.cos_theta);
 
-    // 8. 逆 Park 变换：将新的电压指令转为静止坐标系 (V_alpha, V_beta)
-    MotorClarkeFrame v_ab;
-    v_ab = Motor_CurrentLoop_InvPark(v_dq, g_foc_state.sin_theta, g_foc_state.cos_theta);
-
-    // 9. SVPWM 生成：将计算出的 V_alpha/V_beta 生成占空比控制定时器（TODO：待实现）
-    // Motor_CurrentLoop_SVPWM(v_ab.alpha, v_ab.beta);
+        // 9. SVPWM 生成：将计算出的 V_alpha/V_beta 生成占空比控制定时器（TODO：待实现）
+        // Motor_CurrentLoop_SVPWM(v_ab.alpha, v_ab.beta);
+    } 
+    else 
+    {
+        // 闭环未使能时，停止执行PID，防止积分跑飞，并不对外输出任何SVPWM修改。
+        // 这时可以安全执行辨识流程（开环控制直接操作定时器CCR寄存器而不会与闭环打架）
+    }
 }
 
 // 初始化电流环参数与缓存。
@@ -73,6 +99,11 @@ void Motor_CurrentLoop_Init(void)
     g_foc_state.params.shunt_ohms = MOTOR_CURRENT_SHUNT_OHMS;
     g_foc_state.params.gain = MOTOR_CURRENT_GAIN;
     g_foc_state.params.adc_max = MOTOR_CURRENT_ADC_MAX;
+
+    // 提供默认安全的未标定参数（为了防爆，极对数默认1）
+    g_foc_state.params.pole_pairs = 1;
+    g_foc_state.params.zero_angle_offset = 0.0f;
+    g_foc_state.params.uvw_dir = 1;
 
     g_foc_state.sample.iu_raw = 0U;
     g_foc_state.sample.iw_raw = 0U;
@@ -87,12 +118,33 @@ void Motor_CurrentLoop_Init(void)
     PID_Init(&g_foc_state.pi_q, 
              MOTOR_CURRENT_PID_Q_KP, MOTOR_CURRENT_PID_Q_KI, MOTOR_CURRENT_PID_Q_KD, 
              MOTOR_CURRENT_PID_Q_OUT_MAX, MOTOR_CURRENT_PID_Q_OUT_MIN);
+             
+    g_foc_state.closed_loop_enable = 0; // 默认不上电闭环，等待辨识完成
 }
 
 // 设置所有参数。
 void Motor_CurrentLoop_SetParams(MotorCurrentParams params)
 {
     g_foc_state.params = params;
+}
+
+// 专门接收并刷新电机辨识后的机械参数
+void Motor_CurrentLoop_SetMotorIdentityParams(uint16_t pole_pairs, float zero_angle_offset, int8_t uvw_dir)
+{
+    g_foc_state.params.pole_pairs = pole_pairs;
+    g_foc_state.params.zero_angle_offset = zero_angle_offset;
+    g_foc_state.params.uvw_dir = uvw_dir;
+}
+
+// FOC 闭环启停开关
+void Motor_CurrentLoop_Enable(uint8_t enable)
+{
+    g_foc_state.closed_loop_enable = enable;
+    if (!enable) {
+        // 如果关闭闭环，必须立刻清空PID积分器，否则如果被外部外力转动，PID会积分饱和
+        PID_Reset(&g_foc_state.pi_d);
+        PID_Reset(&g_foc_state.pi_q);
+    }
 }
 
 // 获取当前参数。
