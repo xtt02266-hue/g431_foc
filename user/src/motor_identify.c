@@ -97,7 +97,7 @@ static void Identify_MeasureR(void)
     if (g_identify_timer > 500) // 等待500ms让系统稳定
     {
         // 临时固定相电阻值 (Ω)，典型云台电机约 5~15Ω
-        g_identified_params.resistance = 0.2f;
+        g_identified_params.resistance = 0.05f;
 
         g_identify_timer = 0;
         g_identify_state = IDENTIFY_STATE_MEASURE_L; // 测完电阻后，进入下一个状态：测电感
@@ -115,7 +115,7 @@ static void Identify_MeasureL(void)
     if (g_identify_timer > 500)
     {
         // 临时固定相电感值 (H)，典型云台电机约 0.1~1.0 mH
-        g_identified_params.inductance = 0.000001f;
+        g_identified_params.inductance = 0.000005f;
 
         g_identify_timer = 0;
         g_identify_state = IDENTIFY_STATE_UVW_AND_POLES; // 测完电感后，进入下一个状态：测相序与极对数

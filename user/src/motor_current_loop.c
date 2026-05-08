@@ -1,7 +1,13 @@
 #include "motor_current_loop.h"
 #include "adc.h"
 #include "svpwm.h"
+#include "as5600.h"
 #include <math.h>
+
+    // 一阶低通滤波：滤除 PWM 开关噪声和 ADC 采样毛刺
+    // alpha 越大滤波越弱（响应越快），越小滤波越强（越平滑）
+    // 20kHz 采样下，alpha=0.15 对应截止频率约 500Hz
+#define ADC_FILTER_ALPHA  0.15f
 
 // 电流环/FOC 全局运行状态与参数。
 MotorCurrentLoopState g_foc_state = {0};
@@ -49,11 +55,11 @@ void Motor_CurrentLoop_Run(uint16_t iu_raw, uint16_t iw_raw)
     
     // 将电角度限制在 0 ~ 2π 之间 (这步对某些三角函数硬件加速库不仅防止溢出，还能加速)
     // 替换为高效的边界限制逻辑
-    if (elec_angle >= 6.2831853f) {
+    while (elec_angle >= 6.2831853f) {
         elec_angle -= 6.2831853f;
     }
 
-    if (elec_angle < 0.0f) {
+    while (elec_angle < 0.0f) {
         elec_angle += 6.2831853f;
     }
     
@@ -163,8 +169,8 @@ void Motor_CurrentLoop_Enable(uint8_t enable)
 //   CURRENT_LOOP_BW_HZ  — 电流环带宽 (Hz)，越大响应越快但越容易振荡
 //                        云台电机推荐 200~500，高速电机 500~2000
 //   KI_DAMPING          — 积分阻尼系数 (0.5~1.0)，<1.0 可减少超调
-#define CURRENT_LOOP_BW_HZ   300.0f   // 电流环带宽 (Hz)
-#define KI_DAMPING           0.4f     // 积分阻尼 (0.3=柔和, 0.6=较快, 1.0=理论值)
+#define CURRENT_LOOP_BW_HZ   200.0f   // 电流环带宽 (Hz)
+#define KI_DAMPING           0.7f     // 积分阻尼 (0.3=柔和, 0.6=较快, 1.0=理论值)
 
 void Motor_CurrentLoop_AutoTunePID(float resistance, float inductance, float bus_voltage)
 {
@@ -281,5 +287,22 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
     uint16_t iu_raw = (uint16_t)HAL_ADCEx_InjectedGetValue(&hadc1, ADC_INJECTED_RANK_1);
     uint16_t iw_raw = (uint16_t)HAL_ADCEx_InjectedGetValue(&hadc1, ADC_INJECTED_RANK_2);
 
-    Motor_CurrentLoop_Run(iu_raw, iw_raw);
+    static float iu_filtered = 0.0f;
+    static float iw_filtered = 0.0f;
+    static uint8_t filter_inited = 0;
+
+    if (!filter_inited)
+    {
+        // 首次采样直接装入，避免从 0 爬坡
+        iu_filtered = (float)iu_raw;
+        iw_filtered = (float)iw_raw;
+        filter_inited = 1;
+    }
+    else
+    {
+        iu_filtered += ADC_FILTER_ALPHA * ((float)iu_raw - iu_filtered);
+        iw_filtered += ADC_FILTER_ALPHA * ((float)iw_raw - iw_filtered);
+    }
+
+    Motor_CurrentLoop_Run((uint16_t)iw_filtered, (uint16_t)iu_filtered);
 }
