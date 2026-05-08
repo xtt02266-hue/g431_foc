@@ -1,5 +1,7 @@
 #include "motor_current_loop.h"
 #include "adc.h"
+#include "svpwm.h"
+#include <math.h>
 
 // 电流环/FOC 全局运行状态与参数。
 MotorCurrentLoopState g_foc_state = {0};
@@ -46,7 +48,11 @@ void Motor_CurrentLoop_Run(uint16_t iu_raw, uint16_t iw_raw)
     float elec_angle = mech_offset * (float)pp * (float)g_foc_state.params.uvw_dir;
     
     // 将电角度限制在 0 ~ 2π 之间 (这步对某些三角函数硬件加速库不仅防止溢出，还能加速)
-    elec_angle = fmodf(elec_angle, 6.2831853f);
+    // 替换为高效的边界限制逻辑
+    if (elec_angle >= 6.2831853f) {
+        elec_angle -= 6.2831853f;
+    }
+
     if (elec_angle < 0.0f) {
         elec_angle += 6.2831853f;
     }
@@ -84,8 +90,8 @@ void Motor_CurrentLoop_Run(uint16_t iu_raw, uint16_t iw_raw)
         MotorClarkeFrame v_ab;
         v_ab = Motor_CurrentLoop_InvPark(v_dq, g_foc_state.sin_theta, g_foc_state.cos_theta);
 
-        // 9. SVPWM 生成：将计算出的 V_alpha/V_beta 生成占空比控制定时器（TODO：待实现）
-        // Motor_CurrentLoop_SVPWM(v_ab.alpha, v_ab.beta);
+        // 9. SVPWM 生成：将 V_alpha/V_beta 转换为三相占空比，写入 TIM1 CCR
+        SVPWM_SetVoltage(v_ab.alpha, v_ab.beta, 12.0f);  // 第三个参数：母线电压(V)
     } 
     else 
     {
@@ -113,14 +119,16 @@ void Motor_CurrentLoop_Init(void)
     g_foc_state.sample.iu_a = 0.0f;
     g_foc_state.sample.iw_a = 0.0f;
     
-    // 初始化 PID 参数（使用头文件定义的宏变量，便于集中管理）
+    // 初始化 PID 参数（默认保守值，辨识完成后自动整定为最优值）
+    // dt = 1/20000 = 50us (20kHz PWM 触发 ADC 采样频率)
+    const float pid_dt = 0.00005f;
     PID_Init(&g_foc_state.pi_d, 
              MOTOR_CURRENT_PID_D_KP, MOTOR_CURRENT_PID_D_KI, MOTOR_CURRENT_PID_D_KD, 
-             MOTOR_CURRENT_PID_D_OUT_MAX, MOTOR_CURRENT_PID_D_OUT_MIN);
+             MOTOR_CURRENT_PID_D_OUT_MAX, MOTOR_CURRENT_PID_D_OUT_MIN, pid_dt);
 
     PID_Init(&g_foc_state.pi_q, 
              MOTOR_CURRENT_PID_Q_KP, MOTOR_CURRENT_PID_Q_KI, MOTOR_CURRENT_PID_Q_KD, 
-             MOTOR_CURRENT_PID_Q_OUT_MAX, MOTOR_CURRENT_PID_Q_OUT_MIN);
+             MOTOR_CURRENT_PID_Q_OUT_MAX, MOTOR_CURRENT_PID_Q_OUT_MIN, pid_dt);
              
     g_foc_state.closed_loop_enable = 0; // 默认不上电闭环，等待辨识完成
 }
@@ -143,11 +151,40 @@ void Motor_CurrentLoop_SetMotorIdentityParams(uint16_t pole_pairs, float zero_an
 void Motor_CurrentLoop_Enable(uint8_t enable)
 {
     g_foc_state.closed_loop_enable = enable;
-    if (!enable) {
-        // 如果关闭闭环，必须立刻清空PID积分器，否则如果被外部外力转动，PID会积分饱和
-        PID_Reset(&g_foc_state.pi_d);
-        PID_Reset(&g_foc_state.pi_q);
-    }
+    // 无论启用还是停用，都重置 PID 积分，确保从零开始
+    PID_Reset(&g_foc_state.pi_d);
+    PID_Reset(&g_foc_state.pi_q);
+}
+
+// 根据辨识出的电机 R/L 自动计算最优电流环 PI 参数。
+// 应在辨识完成后调用，使 d/q 轴电流快速跟随目标。
+// 
+// 调参指南：
+//   CURRENT_LOOP_BW_HZ  — 电流环带宽 (Hz)，越大响应越快但越容易振荡
+//                        云台电机推荐 200~500，高速电机 500~2000
+//   KI_DAMPING          — 积分阻尼系数 (0.5~1.0)，<1.0 可减少超调
+#define CURRENT_LOOP_BW_HZ   300.0f   // 电流环带宽 (Hz)
+#define KI_DAMPING           0.4f     // 积分阻尼 (0.3=柔和, 0.6=较快, 1.0=理论值)
+
+void Motor_CurrentLoop_AutoTunePID(float resistance, float inductance, float bus_voltage)
+{
+    if (resistance <= 0.0f || inductance <= 0.0f) return;
+
+    float dt = 0.00005f;  // 20kHz 采样
+    float wc = 2.0f * 3.1415926f * CURRENT_LOOP_BW_HZ;
+
+    float kp = inductance * wc;                      // 比例 (V/A)
+    float ki = resistance * wc * KI_DAMPING;          // 积分 (V/(A·s))，阻尼抑制超调
+    float kd = 0.0f;
+
+    // SVPWM 线性调制区最大相电压幅值 = Vbus / √3
+    // 留 5% 余量防止进入过调制导致削波 → PID 积分饱和
+    float v_max = bus_voltage * 0.57735f * 0.95f;   // Vbus/√3 × 0.95
+    float out_max =  v_max;
+    float out_min = -v_max;
+
+    PID_Init(&g_foc_state.pi_d, kp, ki, kd, out_max, out_min, dt);
+    PID_Init(&g_foc_state.pi_q, kp, ki, kd, out_max, out_min, dt);
 }
 
 // 获取当前参数。

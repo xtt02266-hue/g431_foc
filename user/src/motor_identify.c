@@ -97,7 +97,7 @@ static void Identify_MeasureR(void)
     if (g_identify_timer > 500) // 等待500ms让系统稳定
     {
         // 临时固定相电阻值 (Ω)，典型云台电机约 5~15Ω
-        g_identified_params.resistance = 3.1f;
+        g_identified_params.resistance = 0.2f;
 
         g_identify_timer = 0;
         g_identify_state = IDENTIFY_STATE_MEASURE_L; // 测完电阻后，进入下一个状态：测电感
@@ -115,7 +115,7 @@ static void Identify_MeasureL(void)
     if (g_identify_timer > 500)
     {
         // 临时固定相电感值 (H)，典型云台电机约 0.1~1.0 mH
-        g_identified_params.inductance = 0.0005f;
+        g_identified_params.inductance = 0.000001f;
 
         g_identify_timer = 0;
         g_identify_state = IDENTIFY_STATE_UVW_AND_POLES; // 测完电感后，进入下一个状态：测相序与极对数
@@ -162,67 +162,73 @@ static void Identify_Align(void)
 // 4. 同时识别 UVW 相序方向与极对数
 // 目的1：判断接线方向(相序)。知道给正向电压时，编码器的读数是变大还是变小。
 // 目的2：计算极对数(Pole Pairs)。知道转子上有几块磁铁，这是电角度和机械角度相互转换的核心参数。
+static float g_accumulated_mech_angle = 0.0f; // 累加的机械角度
+static uint16_t g_last_raw_angle = 0;         // 上一次循环的编码器角度
+
 static void Identify_UvwAndPoles(void)
 {
-    // 我们在这个环节，用代码强行拖着电机转 4 个电周期 (4圈电角度，即 4 * 2π)。
-    // 为什么要转 4 个周期？因为云台电机在低速下可能会有“一顿一顿”的齿槽效应，多转几圈综合计算出来的误差更小。
-    const float target_elec_angle = 4.0f * 2.0f * 3.1415926f;
-
-    // 刚进入此状态时，记录电机当前的位置作为起点
-    if (g_identify_timer == 0)
+    const float target_elec_angle = 4.0f * 2.0f * 3.1415926f; // 目标转过 4 个电周期
+    const uint32_t lock_time = 500; // 预对齐锁定时间：500个计时周期 (通常为 500ms)
+    
+    // ================= 阶段 1：静态预对齐 =================
+    if (g_identify_timer < lock_time)
     {
-        g_uvw_start_angle = AS5600_ReadRawAngle();
-        g_uvw_elec_angle = 0.0f;
+        // 锁定在电角度 0 的位置，让转子物理对齐
+        Motor_OpenLoop_Drive(0.0f, 200.0f);
+        
+        // 在锁定即将结束的前一刻，清零累加器，并记录此时真正的起始机械角度
+        if (g_identify_timer == lock_time - 1)
+        {
+            g_uvw_elec_angle = 0.0f;
+            g_accumulated_mech_angle = 0.0f;
+            g_last_raw_angle = AS5600_ReadRawAngle();
+        }
+        g_identify_timer++;
+        return; // 预对齐阶段直接返回
     }
 
-    // 每次循环（通常1毫秒一次），让电角度略微往前推进一点点 (0.05弧度)
+    // ================= 阶段 2：开环拖动与积分 =================
+    // 每次循环让电角度略微往前推进 (相当于给定一个固定的开环速度)
     g_uvw_elec_angle += 0.05f; 
-    
-    // 向底层给入电角度和驱动电压 (幅值200.0f约为安全力度)
-    // fmodf() 是为了防止角度无限变大，把它限制在 0~2π 的范围内传到底层
     Motor_OpenLoop_Drive(fmodf(g_uvw_elec_angle, 2.0f * 3.1415926f), 200.0f);
+
+    // 1. 获取当前最新角度
+    uint16_t current_angle = AS5600_ReadRawAngle();
+    
+    // 2. 计算这 1ms 内发生的微小位移
+    int32_t step_delta = (int32_t)current_angle - (int32_t)g_last_raw_angle;
+    
+    // 3. 处理单步的跨零点 (因为是 1ms 的微小位移，绝不可能超过 2048，此处逻辑变得100%安全)
+    if (step_delta > 2048) step_delta -= 4096;
+    else if (step_delta < -2048) step_delta += 4096;
+    
+    // 4. 将微小位移积分到全局累加器中，并更新历史值
+    g_accumulated_mech_angle += (float)step_delta;
+    g_last_raw_angle = current_angle;
 
     g_identify_timer++;
     
-    // 当我们累积推过的总电角度 达到或超过 4圈 (target_elec_angle) 时，说明测完了
+    // ================= 阶段 3：结算数据 =================
     if (g_uvw_elec_angle >= target_elec_angle)
     {
-        uint16_t end_angle = AS5600_ReadRawAngle(); // 获取拖动结束时的最终角度
+        // 1. 判断相序方向 (累加的角度是正还是负一目了然)
+        g_identified_params.uvw_dir = (g_accumulated_mech_angle >= 0.0f) ? 1 : -1;
         
-        // 计算机械上实际转过了多少 (终点减起点)
-        int32_t delta = (int32_t)end_angle - (int32_t)g_uvw_start_angle;
+        // 2. 计算极对数 (累积的机械角度 / 4096 = 机械圈数)
+        float mech_turns = fabsf(g_accumulated_mech_angle) / 4096.0f; 
         
-        // 【注意跨零点问题】
-        // 编码器是从 0 到 4095 一直循环的。如果起点是 4000，终点是 100，
-        // 算出来 delta 是 -3900，但实际上它是正向跨过了 0 点转了 196 (4096-4000+100)。
-        // 所以我们需要对过大的偏差进行修补：
-        if (delta > 2048) delta -= 4096;
-        else if (delta < -2048) delta += 4096;
-        
-        // 1. 判断相序方向 (极简判断法：电角度正向加，如果是正转，相序就是对的1，否则反转则是-1)
-        g_identified_params.uvw_dir = (delta >= 0) ? 1 : -1;
-        
-        // 2. 计算极对数
-        // 公式：极对数 = 我们强迫它转的总电周期数 / 机械上实际跟着转了多少圈
-        // 我们上面让它转了 4个电周期，现在算它机械上转了几圈 (delta 占 4096 的比例)
-        float mech_turns = (float)abs(delta) / 4096.0f; 
-        if (mech_turns > 0.01f) // 防止除零导致程序崩溃
+        if (mech_turns > 0.01f) 
         {
-            // roundf 是四舍五入。因为极对数肯定是个整数(如 7, 11, 14)。
             g_identified_params.pole_pairs = (uint16_t)roundf(4.0f / mech_turns);
         }
-        
-        // 安全兜底：如果极对数计算失败（电机未转动或编码器异常），强制设为 7
-        if (g_identified_params.pole_pairs == 0)
+        else 
         {
-            g_identified_params.pole_pairs = 7;
+            g_identified_params.pole_pairs = 7; // 安全兜底
         }
 
-        // 停止输出电压，松开电机
+        // 停止输出，状态流转
         Motor_OpenLoop_Drive(0.0f, 0.0f);
         g_identify_timer = 0;
-        
-        // 测完极对数和方向后，就可以去做最后一步：静止对齐零点了
         g_identify_state = IDENTIFY_STATE_ALIGN; 
     }
 }

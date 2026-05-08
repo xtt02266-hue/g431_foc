@@ -16,7 +16,7 @@
 
 // 分流电阻值（Ω）。
 #ifndef MOTOR_CURRENT_SHUNT_OHMS
-#define MOTOR_CURRENT_SHUNT_OHMS 0.01f
+#define MOTOR_CURRENT_SHUNT_OHMS 0.016f
 #endif
 
 // 放大器增益。
@@ -29,22 +29,25 @@
 #define MOTOR_CURRENT_ADC_MAX 4095.0f
 #endif
 
-// d 轴电流环 PID 默认参数。
+// d 轴电流环 PID 默认参数（辨识完成后由 AutoTunePID 自动覆盖为最优值）。
+// Kp 单位: V/A  (每安培误差输出电压)
+// Ki 单位: V/(A·s) (内部自动乘 dt)
+// Kd 单位: V/(A/s)
 #ifndef MOTOR_CURRENT_PID_D_KP
-#define MOTOR_CURRENT_PID_D_KP       0.1f
-#define MOTOR_CURRENT_PID_D_KI       0.01f
+#define MOTOR_CURRENT_PID_D_KP       1.0f
+#define MOTOR_CURRENT_PID_D_KI       1000.0f
 #define MOTOR_CURRENT_PID_D_KD       0.0f
-#define MOTOR_CURRENT_PID_D_OUT_MAX  12.0f
-#define MOTOR_CURRENT_PID_D_OUT_MIN -12.0f
+#define MOTOR_CURRENT_PID_D_OUT_MAX  6.5f   // SVPWM 线性区最大相电压 = 12V/√3 × 0.95
+#define MOTOR_CURRENT_PID_D_OUT_MIN -6.5f
 #endif
 
 // q 轴电流环 PID 默认参数。
 #ifndef MOTOR_CURRENT_PID_Q_KP
-#define MOTOR_CURRENT_PID_Q_KP       0.1f
-#define MOTOR_CURRENT_PID_Q_KI       0.01f
+#define MOTOR_CURRENT_PID_Q_KP       1.0f
+#define MOTOR_CURRENT_PID_Q_KI       1000.0f
 #define MOTOR_CURRENT_PID_Q_KD       0.0f
-#define MOTOR_CURRENT_PID_Q_OUT_MAX  12.0f
-#define MOTOR_CURRENT_PID_Q_OUT_MIN -12.0f
+#define MOTOR_CURRENT_PID_Q_OUT_MAX  6.5f
+#define MOTOR_CURRENT_PID_Q_OUT_MIN -6.5f
 #endif
 
 // 电流采样参数。
@@ -117,6 +120,8 @@ void Motor_CurrentLoop_SetParams(MotorCurrentParams params);
 void Motor_CurrentLoop_SetMotorIdentityParams(uint16_t pole_pairs, float zero_angle_offset, int8_t uvw_dir);
 // FOC 闭环启停开关
 void Motor_CurrentLoop_Enable(uint8_t enable);
+// 根据辨识出的 R/L 自动整定电流环 PID（辨识完成后调用）
+void Motor_CurrentLoop_AutoTunePID(float resistance, float inductance, float bus_voltage);
 // 获取当前参数。
 MotorCurrentParams Motor_CurrentLoop_GetParams(void);
 // 设置偏置电压。

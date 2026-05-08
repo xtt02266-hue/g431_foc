@@ -7,6 +7,7 @@
 #include "motor_current_loop.h"
 #include "motor_publicdata.h"
 #include "motor_identify.h"
+#include "svpwm.h"
 #include "vofa_usart.h" // 包含 VOFA 系列函数
 
 // OLED_Init 由显示驱动实现，这里做前置声明。
@@ -33,7 +34,6 @@ static void Hardware_CalibrateCurrentBias(void)
         bias_sum_u += HAL_ADCEx_InjectedGetValue(&hadc1, ADC_INJECTED_RANK_1);
         bias_sum_w += HAL_ADCEx_InjectedGetValue(&hadc1, ADC_INJECTED_RANK_2);
         
-        HAL_Delay(1);
     }
     
     // 计算平均原始值并求出基准电压
@@ -46,14 +46,14 @@ static void Hardware_CalibrateCurrentBias(void)
     MotorCurrentParams params = Motor_CurrentLoop_GetParams();
     float actual_bias_volts = (actual_bias_raw * params.vref_volts) / params.adc_max;
     Motor_CurrentLoop_SetBiasVolts(actual_bias_volts);
+    HAL_ADCEx_InjectedStop(&hadc1);
     
-    // 重新让 ADC 开始准备被外部中断模式（TIM1触发）引发
-    HAL_ADCEx_InjectedStart_IT(&hadc1);
 }
 
 // 硬件外设初始化与启动时序。
 void hardware_init(void)
 {
+    HAL_Delay(100); // 上电后等待外设稳定（尤其是 ADC 和 I2C）
     // 0. 执行 ADC 内部自校准以提高采样精度（必须在 ADC 启动前调用）
     HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
     HAL_ADCEx_Calibration_Start(&hadc2, ADC_SINGLE_ENDED);
@@ -66,17 +66,19 @@ void hardware_init(void)
     SET_BIT(hadc2.Instance->CFGR, ADC_CFGR_DMAEN);  // 开启 ADC2 的 DMA 请求功能
     HAL_ADC_Start(&hadc2);                          // 开启 ADC2
 
-    // 2. 首先配置并开启 ADC 注入通道，等待被 TIM1 触发
-    Motor_CurrentLoop_Init();
-    HAL_ADCEx_InjectedStart_IT(&hadc1);
-
-    // 3. 启动 TIM1 通道 4（用作 ADC 的触发信号 CC4）
+    // 2. 启动 TIM1 通道 4（用作 ADC 的触发信号 CC4）
     //此时不开启PWM输出（占空比全0），对运放偏置进行初始标定
     HAL_TIM_Base_Init(&htim1);
 	HAL_TIM_PWM_Start(&htim1,TIM_CHANNEL_4);
 
+    // 3. 首先配置并开启 ADC 注入通道，等待被 TIM1 触发
+    Motor_CurrentLoop_Init();
+    HAL_Delay(10);
     // 调用封装好的偏置校准函数
     Hardware_CalibrateCurrentBias();
+    HAL_Delay(10);
+    HAL_ADCEx_InjectedStart_IT(&hadc1);
+
 
     // 4. 启动 TIM1 的 6 路互补 PWM 输出（驱动三相半桥）。
 	HAL_TIM_PWM_Start(&htim1,TIM_CHANNEL_1);
@@ -85,6 +87,10 @@ void hardware_init(void)
 	HAL_TIMEx_PWMN_Start(&htim1,TIM_CHANNEL_1);
 	HAL_TIMEx_PWMN_Start(&htim1,TIM_CHANNEL_2);
 	HAL_TIMEx_PWMN_Start(&htim1,TIM_CHANNEL_3);
+
+    // 初始化 SVPWM 模块（三相输出 50% 零矢量，上电安全）
+    SVPWM_Init();
+
     // 5. 启动 TIM2 (用于 1ms / 1000Hz 周期任务调度，如 AS5600 慢速读取、目标值更新等)
     HAL_TIM_Base_Start_IT(&htim2);
 

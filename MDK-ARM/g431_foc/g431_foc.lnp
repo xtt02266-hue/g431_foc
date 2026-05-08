@@ -42,6 +42,7 @@
 "g431_foc\pid.o"
 "g431_foc\user_io.o"
 "g431_foc\vofa_usart.o"
+"g431_foc\svpwm.o"
 --strict --scatter "g431_foc\g431_foc.sct"
 --summary_stderr --info summarysizes --map --load_addr_map_info --xref --callgraph --symbols
 --info sizes --info totals --info unused --info veneers

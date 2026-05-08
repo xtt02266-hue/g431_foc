@@ -47,8 +47,6 @@ void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c)
         HAL_I2C_DeInit(hi2c);
         MX_I2C1_Init();
         
-        // 短暂延时后重试 DMA 读取
-        HAL_Delay(5);
         AS5600_RequestRead_DMA();
     }
 }

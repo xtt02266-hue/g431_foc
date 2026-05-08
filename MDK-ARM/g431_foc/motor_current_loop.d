@@ -40,3 +40,5 @@ g431_foc\motor_current_loop.o: ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal
 g431_foc\motor_current_loop.o: ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_tim_ex.h
 g431_foc\motor_current_loop.o: ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_uart.h
 g431_foc\motor_current_loop.o: ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_uart_ex.h
+g431_foc\motor_current_loop.o: ../user/inc/svpwm.h
+g431_foc\motor_current_loop.o: F:\Keil5\ARM\armcc\Bin\..\include\math.h

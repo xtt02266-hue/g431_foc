@@ -8,6 +8,7 @@
 #include "user_io.h"
 #include "vofa_usart.h"
 #include "motor_identify.h"
+#include "svpwm.h"
 
 // 电机系统运行状态与目标值缓存。
 MotorSystem g_motor_system = {
@@ -16,10 +17,30 @@ MotorSystem g_motor_system = {
     .target = 0U,
 };
 
-// 电位器原始值映射到目标量（占位实现）。
-static uint16_t Motor_MapPotToTarget(uint16_t pot_raw)
+// 电位器原始值映射到 q 轴目标电流 (安培)。
+// ADC 范围 0~4095，中位 ≈ 2048 对应 0A，两端对应 ±MAX_CURRENT。
+#define POT_CURRENT_MAX   1.0f    // 最大 q 轴电流 (A)
+#define POT_DEADZONE      30U     // 中位死区 (±80 LSB)，避免微小漂移
+
+static float Motor_MapPotToCurrent(uint16_t pot_raw)
 {
-    return pot_raw;
+    // 以中点 2048 为零点，计算偏差
+    int32_t offset = (int32_t)pot_raw - 2048;
+
+    // 死区：中位附近强制输出 0，手感更好
+    if (offset > -(int32_t)POT_DEADZONE && offset < (int32_t)POT_DEADZONE) {
+        return 0.0f;
+    }
+
+    // 线性映射：偏差 → 电流 (A)
+    // offset 范围约 ±2048，映射到 ±POT_CURRENT_MAX
+    float current = (float)offset * (POT_CURRENT_MAX / 2048.0f);
+
+    // 限幅
+    if (current >  POT_CURRENT_MAX) current =  POT_CURRENT_MAX;
+    if (current < -POT_CURRENT_MAX) current = -POT_CURRENT_MAX;
+
+    return current;
 }
 
 // 初始化系统状态与目标值。
@@ -27,14 +48,20 @@ void Motor_System_Init(void)
 {
     g_motor_system.state = MOTOR_STATE_STOPPED;
     g_motor_system.pot_raw = g_motor_publicdata.pot_raw;
-    g_motor_system.target = Motor_MapPotToTarget(g_motor_system.pot_raw);
+
+    // 初始目标电流归零
+    g_foc_state.target_q = 0.0f;
+    g_foc_state.target_d = 0.0f;
 }
 
-// 周期任务：更新输入与目标值。
+// 周期任务：更新电位器输入，映射为 q 轴目标电流。
 void Motor_System_Task(void)
 {
     g_motor_system.pot_raw = g_motor_publicdata.pot_raw;
-    g_motor_system.target = Motor_MapPotToTarget(g_motor_system.pot_raw);
+
+    // 电位器 → q 轴电流目标 (A)，D 轴目标保持 0（Id=0 控制）
+    g_foc_state.target_q = Motor_MapPotToCurrent(g_motor_system.pot_raw);
+    g_foc_state.target_d = 0.0f;
 }
 
 // ---------------------------------------------------------
@@ -56,11 +83,22 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         {
              Motor_Identify_Task();
         }
-        // 2. 如果校准完毕，可以在这里设置目标等，但暂时不动电机 (等待SVPWM就绪)
+        // 2. 辨识刚完成时：自动整定 PID + 启用 FOC 闭环 + SVPWM 输出
         else
         {
-             // 临时安全：关闭任何底层开环强拖，保证即使辨识完成也不会乱跑
-             Motor_OpenLoop_Drive(0.0f, 0.0f);
+             static uint8_t loop_was_enabled = 0;
+             if (!loop_was_enabled)
+             {
+                 loop_was_enabled = 1;
+
+                 // 根据辨识出的 R/L 自动计算电流环 PI 增益
+                 MotorIdentifiedParams id = Motor_Identify_GetResult();
+                 Motor_CurrentLoop_AutoTunePID(id.resistance, id.inductance, 12.0f);
+
+                 g_svpwm.enabled = 1;                    // 使能 SVPWM 输出
+                 Motor_CurrentLoop_Enable(1);             // 使能 FOC 电流闭环
+             }
+             // 闭环已接管 CCR，不再调用 Motor_OpenLoop_Drive（否则会覆盖 SVPWM 输出！）
         }
         
         // 调用系统普通任务 (1ms 周期刷新电位器和目标)
@@ -92,33 +130,50 @@ void Motor_ShowDebugInfo_OLED(void)
     
     // 1. OLED 界面显示关键调度状态
     if (id_state != IDENTIFY_STATE_DONE) {
-        // 如果正在校准，OLED显示校准进度
-        OLED_ShowString(1, 1, "State: Idt     ");
-        OLED_ShowNum(2, 1, id_state, 2);
+        // 辨识进行中：显示状态编号 + 目标 q 电流
+        OLED_ShowString(1, 1, "Idt");
+        OLED_ShowString(1, 4, "Tq:");
+        OLED_ShowSignedNum(1, 7, (int32_t)(g_foc_state.target_q * 1000.0f), 5);
+        OLED_ShowNum(1, 14, id_state, 2);
     } else {
-        // 如果校准完毕，显示我们通过参数计算出的电量
-        OLED_ShowString(1, 1, "State: Run     ");
-        
-        // 显示当前 Id 和 Iq (放大1000倍转为mA显示)
-        OLED_ShowString(2, 1, "Id:      mA");
-        OLED_ShowSignedNum(2, 4, (int32_t)(g_foc_state.park.d * 1000.0f), 5);
-        OLED_ShowString(3, 1, "Iq:      mA");
-        OLED_ShowSignedNum(3, 4, (int32_t)(g_foc_state.park.q * 1000.0f), 5);
+        // 辨识完成：显示 Run + 目标 q 电流
+        OLED_ShowString(1, 1, "Run");
+        OLED_ShowString(1, 4, "Tq:");
+        OLED_ShowSignedNum(1, 7, (int32_t)(g_foc_state.target_q * 1000.0f), 5);
     }
+if(1)  // 开启 OLED 诊断显示：d/q电流、ADC原始值、角度、电位器
+{
+    // 第2行：D 轴实际电流 (mA) + ADC U 相原始值
+    OLED_ShowChar(2, 1, 'd');
+    OLED_ShowSignedNum(2, 2, (int32_t)(g_foc_state.park.d * 1000.0f), 4);
+    OLED_ShowChar(2, 7, 'U');
+    OLED_ShowChar(2, 8, ':');
+    OLED_ShowNum(2, 9, g_foc_state.sample.iu_raw, 4);
 
-    // 始终显示 AS5600 原始角度（第4行）—— 如果一直是 0，说明 I2C 没通！
-    OLED_ShowString(4, 1, "Ang:");
-    OLED_ShowNum(4, 5, AS5600_ReadRawAngle(), 4);
+    // 第3行：Q 轴实际电流 (mA) + ADC W 相原始值
+    OLED_ShowChar(3, 1, 'q');
+    OLED_ShowSignedNum(3, 2, (int32_t)(g_foc_state.park.q * 1000.0f), 4);
+    OLED_ShowChar(3, 7, 'W');
+    OLED_ShowChar(3, 8, ':');
+    OLED_ShowNum(3, 9, g_foc_state.sample.iw_raw, 4);
 
-    // 2. VOFA+ 串口发送波形数据 (使用 Just_Float 协议)
-    // 你可以在上位机中查看波形，看看用手转动电机时，电流和角度的变化
+    // 第4行：AS5600 角度 + 电位器原始值
+    OLED_ShowChar(4, 1, 'A');
+    OLED_ShowChar(4, 2, ':');
+    OLED_ShowNum(4, 3, AS5600_ReadRawAngle(), 4);
+    OLED_ShowChar(4, 8, 'P');
+    OLED_ShowChar(4, 9, ':');
+    OLED_ShowNum(4, 10, g_motor_publicdata.pot_raw, 4);
+}
+    // 2. VOFA+ 诊断波形 (4 通道)
+    //    CH0 vs CH1 对比看跟随，CH2 看PID输出，CH3 看是否有真实电流
     float vofa_data[4];
-    vofa_data[0] = g_foc_state.sample.iu_a * 1000.0f; // U相真实物理电流 (mA)
-    vofa_data[1] = g_foc_state.sample.iw_a * 1000.0f; // W相真实物理电流 (mA)
-    vofa_data[2] = g_foc_state.park.d * 1000.0f;      // D轴电流 (mA)
-    vofa_data[3] = g_foc_state.park.q * 1000.0f;      // Q轴电流 (mA)
-    
-    VOFA_JustFloat_Send(vofa_data, 4); // 发送四个通道浮点数
+    vofa_data[0] = g_foc_state.target_q;         // Q轴目标 (A)
+    vofa_data[1] = g_foc_state.park.q;           // Q轴实际 (A)
+    vofa_data[2] = g_foc_state.pi_q.output;      // PID 输出 Vq (V)
+    vofa_data[3] = g_foc_state.sample.iu_a;      // U相实际电流 (A)
+
+    VOFA_JustFloat_Send(vofa_data, 4);
     
     // 适当的软件延时，刷新太快 OLED 会闪
     // 这里设定 50ms (即20Hz刷新率)，对 OLED 友好，对 VOFA 观察手动转动也足够
