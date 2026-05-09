@@ -7,7 +7,7 @@
     // 一阶低通滤波：滤除 PWM 开关噪声和 ADC 采样毛刺
     // alpha 越大滤波越弱（响应越快），越小滤波越强（越平滑）
     // 20kHz 采样下，alpha=0.15 对应截止频率约 500Hz
-#define ADC_FILTER_ALPHA  0.15f
+#define ADC_FILTER_ALPHA  0.2f
 
 // 电流环/FOC 全局运行状态与参数。
 MotorCurrentLoopState g_foc_state = {0};
@@ -30,7 +30,7 @@ void Motor_CurrentLoop_Run(uint16_t iu_raw, uint16_t iw_raw)
     // 记录采样值（用于调试或显示）
     g_foc_state.sample.iu_raw = iu_raw;
     g_foc_state.sample.iw_raw = iw_raw;
-    g_foc_state.sample.iu_a = iu_a;
+    g_foc_state.sample.iu_a = -iu_a;
     g_foc_state.sample.iw_a = iw_a;
 
     // ----------------------------------------------------
@@ -68,7 +68,7 @@ void Motor_CurrentLoop_Run(uint16_t iu_raw, uint16_t iw_raw)
     g_foc_state.cos_theta = cosf(elec_angle);
 
     // 3. Clarke 变换：将三相相电流（实际上只需两相，假设三相和为0）转换至两相静止坐标系 (Alpha-Beta)
-    g_foc_state.clarke = Motor_CurrentLoop_Clarke(iu_a, iw_a);
+    g_foc_state.clarke = Motor_CurrentLoop_Clarke(g_foc_state.sample.iu_a, g_foc_state.sample.iw_a);
 
     // 4. Park 变换：将静止坐标系转化为同步旋转坐标系 (D-Q)
     g_foc_state.park = Motor_CurrentLoop_Park(g_foc_state.clarke, g_foc_state.sin_theta, g_foc_state.cos_theta);
@@ -98,6 +98,7 @@ void Motor_CurrentLoop_Run(uint16_t iu_raw, uint16_t iw_raw)
 
         // 9. SVPWM 生成：将 V_alpha/V_beta 转换为三相占空比，写入 TIM1 CCR
         SVPWM_SetVoltage(v_ab.alpha, v_ab.beta, 12.0f);  // 第三个参数：母线电压(V)
+       //Motor_OpenLoop_Vdq_Control(1, 0, g_foc_state.elec_angle, 12.0f);
     } 
     else 
     {
@@ -169,8 +170,8 @@ void Motor_CurrentLoop_Enable(uint8_t enable)
 //   CURRENT_LOOP_BW_HZ  — 电流环带宽 (Hz)，越大响应越快但越容易振荡
 //                        云台电机推荐 200~500，高速电机 500~2000
 //   KI_DAMPING          — 积分阻尼系数 (0.5~1.0)，<1.0 可减少超调
-#define CURRENT_LOOP_BW_HZ   200.0f   // 电流环带宽 (Hz)
-#define KI_DAMPING           0.7f     // 积分阻尼 (0.3=柔和, 0.6=较快, 1.0=理论值)
+#define CURRENT_LOOP_BW_HZ   300.0f   // 电流环带宽 (Hz)
+#define KI_DAMPING           0.6f     // 积分阻尼 (0.3=柔和, 0.6=较快, 1.0=理论值)
 
 void Motor_CurrentLoop_AutoTunePID(float resistance, float inductance, float bus_voltage)
 {
@@ -304,5 +305,5 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
         iw_filtered += ADC_FILTER_ALPHA * ((float)iw_raw - iw_filtered);
     }
 
-    Motor_CurrentLoop_Run((uint16_t)iw_filtered, (uint16_t)iu_filtered);
+    Motor_CurrentLoop_Run((uint16_t)iu_filtered, (uint16_t)iw_filtered);
 }

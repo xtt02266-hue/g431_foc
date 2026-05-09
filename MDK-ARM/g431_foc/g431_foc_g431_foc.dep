@@ -1271,9 +1271,9 @@ I (../user/inc/motor_current_loop.h)(0x69FDDCCD)
 I (../user/inc/pid.h)(0x69FDD4E4)
 I (../user/inc/motor_publicdata.h)(0x69FC58B9)
 I (../user/inc/motor_identify.h)(0x69FD9037)
-I (../user/inc/svpwm.h)(0x69FDCC5F)
+I (../user/inc/svpwm.h)(0x69FF456D)
 I (../user/inc/vofa_usart.h)(0x69FD9DE3)
-F (..\user\src\motor_current_loop.c)(0x69FE0588)(--c99 -c --cpu Cortex-M4.fp.sp -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc/Legacy -I ../Drivers/CMSIS/Device/ST/STM32G4xx/Include -I ../Drivers/CMSIS/Include -I ../user/inc-I.\RTE\_g431_foc-IF:\Keil5\packs\ARM\CMSIS\5.9.0\CMSIS\Core\Include-IF:\Keil5\packs\Keil\STM32G4xx_DFP\1.5.0\Drivers\CMSIS\Device\ST\STM32G4xx\Include-D__UVISION_VERSION="539" -D_RTE_ -DSTM32G431xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32G431xx-o g431_foc\motor_current_loop.o --omf_browse g431_foc\motor_current_loop.crf --depend g431_foc\motor_current_loop.d)
+F (..\user\src\motor_current_loop.c)(0x69FF49F3)(--c99 -c --cpu Cortex-M4.fp.sp -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc/Legacy -I ../Drivers/CMSIS/Device/ST/STM32G4xx/Include -I ../Drivers/CMSIS/Include -I ../user/inc-I.\RTE\_g431_foc-IF:\Keil5\packs\ARM\CMSIS\5.9.0\CMSIS\Core\Include-IF:\Keil5\packs\Keil\STM32G4xx_DFP\1.5.0\Drivers\CMSIS\Device\ST\STM32G4xx\Include-D__UVISION_VERSION="539" -D_RTE_ -DSTM32G431xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32G431xx-o g431_foc\motor_current_loop.o --omf_browse g431_foc\motor_current_loop.crf --depend g431_foc\motor_current_loop.d)
 I (../user/inc/motor_current_loop.h)(0x69FDDCCD)
 I (F:\Keil5\ARM\armcc\include\stdint.h)(0x5E8E3CC2)
 I (../user/inc/pid.h)(0x69FDD4E4)
@@ -1314,10 +1314,10 @@ I (../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_tim.h)(0x69DA3581)
 I (../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_tim_ex.h)(0x69DA3581)
 I (../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_uart.h)(0x69DA3581)
 I (../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_uart_ex.h)(0x69DA3580)
-I (../user/inc/svpwm.h)(0x69FDCC5F)
+I (../user/inc/svpwm.h)(0x69FF456D)
 I (../user/inc/as5600.h)(0x69FDA408)
 I (F:\Keil5\ARM\armcc\include\math.h)(0x5E8E3CC2)
-F (..\user\src\motor_identify.c)(0x69FE06C7)(--c99 -c --cpu Cortex-M4.fp.sp -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc/Legacy -I ../Drivers/CMSIS/Device/ST/STM32G4xx/Include -I ../Drivers/CMSIS/Include -I ../user/inc-I.\RTE\_g431_foc-IF:\Keil5\packs\ARM\CMSIS\5.9.0\CMSIS\Core\Include-IF:\Keil5\packs\Keil\STM32G4xx_DFP\1.5.0\Drivers\CMSIS\Device\ST\STM32G4xx\Include-D__UVISION_VERSION="539" -D_RTE_ -DSTM32G431xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32G431xx-o g431_foc\motor_identify.o --omf_browse g431_foc\motor_identify.crf --depend g431_foc\motor_identify.d)
+F (..\user\src\motor_identify.c)(0x69FF48D1)(--c99 -c --cpu Cortex-M4.fp.sp -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc/Legacy -I ../Drivers/CMSIS/Device/ST/STM32G4xx/Include -I ../Drivers/CMSIS/Include -I ../user/inc-I.\RTE\_g431_foc-IF:\Keil5\packs\ARM\CMSIS\5.9.0\CMSIS\Core\Include-IF:\Keil5\packs\Keil\STM32G4xx_DFP\1.5.0\Drivers\CMSIS\Device\ST\STM32G4xx\Include-D__UVISION_VERSION="539" -D_RTE_ -DSTM32G431xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32G431xx-o g431_foc\motor_identify.o --omf_browse g431_foc\motor_identify.crf --depend g431_foc\motor_identify.d)
 I (../user/inc/motor_identify.h)(0x69FD9037)
 I (F:\Keil5\ARM\armcc\include\stdint.h)(0x5E8E3CC2)
 I (../user/inc/as5600.h)(0x69FDA408)
@@ -1365,7 +1365,7 @@ I (F:\Keil5\ARM\armcc\include\math.h)(0x5E8E3CC2)
 F (..\user\src\motor_publicdata.c)(0x69FC58B9)(--c99 -c --cpu Cortex-M4.fp.sp -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc/Legacy -I ../Drivers/CMSIS/Device/ST/STM32G4xx/Include -I ../Drivers/CMSIS/Include -I ../user/inc-I.\RTE\_g431_foc-IF:\Keil5\packs\ARM\CMSIS\5.9.0\CMSIS\Core\Include-IF:\Keil5\packs\Keil\STM32G4xx_DFP\1.5.0\Drivers\CMSIS\Device\ST\STM32G4xx\Include-D__UVISION_VERSION="539" -D_RTE_ -DSTM32G431xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32G431xx-o g431_foc\motor_publicdata.o --omf_browse g431_foc\motor_publicdata.crf --depend g431_foc\motor_publicdata.d)
 I (..\user\inc\motor_publicdata.h)(0x69FC58B9)
 I (F:\Keil5\ARM\armcc\include\stdint.h)(0x5E8E3CC2)
-F (..\user\src\motor_system.c)(0x69FE0805)(--c99 -c --cpu Cortex-M4.fp.sp -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc/Legacy -I ../Drivers/CMSIS/Device/ST/STM32G4xx/Include -I ../Drivers/CMSIS/Include -I ../user/inc-I.\RTE\_g431_foc-IF:\Keil5\packs\ARM\CMSIS\5.9.0\CMSIS\Core\Include-IF:\Keil5\packs\Keil\STM32G4xx_DFP\1.5.0\Drivers\CMSIS\Device\ST\STM32G4xx\Include-D__UVISION_VERSION="539" -D_RTE_ -DSTM32G431xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32G431xx-o g431_foc\motor_system.o --omf_browse g431_foc\motor_system.crf --depend g431_foc\motor_system.d)
+F (..\user\src\motor_system.c)(0x69FF5050)(--c99 -c --cpu Cortex-M4.fp.sp -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc/Legacy -I ../Drivers/CMSIS/Device/ST/STM32G4xx/Include -I ../Drivers/CMSIS/Include -I ../user/inc-I.\RTE\_g431_foc-IF:\Keil5\packs\ARM\CMSIS\5.9.0\CMSIS\Core\Include-IF:\Keil5\packs\Keil\STM32G4xx_DFP\1.5.0\Drivers\CMSIS\Device\ST\STM32G4xx\Include-D__UVISION_VERSION="539" -D_RTE_ -DSTM32G431xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32G431xx-o g431_foc\motor_system.o --omf_browse g431_foc\motor_system.crf --depend g431_foc\motor_system.d)
 I (../user/inc/motor_system.h)(0x69FC94D4)
 I (F:\Keil5\ARM\armcc\include\stdint.h)(0x5E8E3CC2)
 I (../user/inc/motor_publicdata.h)(0x69FC58B9)
@@ -1414,7 +1414,7 @@ I (F:\Keil5\ARM\armcc\include\math.h)(0x5E8E3CC2)
 I (../user/inc/user_io.h)(0x69FC58B9)
 I (../user/inc/vofa_usart.h)(0x69FD9DE3)
 I (../user/inc/motor_identify.h)(0x69FD9037)
-I (../user/inc/svpwm.h)(0x69FDCC5F)
+I (../user/inc/svpwm.h)(0x69FF456D)
 F (..\user\src\oled.c)(0x69FC58B9)(--c99 -c --cpu Cortex-M4.fp.sp -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc/Legacy -I ../Drivers/CMSIS/Device/ST/STM32G4xx/Include -I ../Drivers/CMSIS/Include -I ../user/inc-I.\RTE\_g431_foc-IF:\Keil5\packs\ARM\CMSIS\5.9.0\CMSIS\Core\Include-IF:\Keil5\packs\Keil\STM32G4xx_DFP\1.5.0\Drivers\CMSIS\Device\ST\STM32G4xx\Include-D__UVISION_VERSION="539" -D_RTE_ -DSTM32G431xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32G431xx-o g431_foc\oled.o --omf_browse g431_foc\oled.crf --depend g431_foc\oled.d)
 I (../Core/Inc/gpio.h)(0x69DA35AE)
 I (../Core/Inc/main.h)(0x69DA35AF)
@@ -1455,7 +1455,7 @@ I (../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_tim_ex.h)(0x69DA3581)
 I (../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_uart.h)(0x69DA3581)
 I (../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_uart_ex.h)(0x69DA3580)
 I (..\user\inc\OLED_Font.h)(0x69FC58B9)
-F (..\user\src\pid.c)(0x69FDFBEC)(--c99 -c --cpu Cortex-M4.fp.sp -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc/Legacy -I ../Drivers/CMSIS/Device/ST/STM32G4xx/Include -I ../Drivers/CMSIS/Include -I ../user/inc-I.\RTE\_g431_foc-IF:\Keil5\packs\ARM\CMSIS\5.9.0\CMSIS\Core\Include-IF:\Keil5\packs\Keil\STM32G4xx_DFP\1.5.0\Drivers\CMSIS\Device\ST\STM32G4xx\Include-D__UVISION_VERSION="539" -D_RTE_ -DSTM32G431xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32G431xx-o g431_foc\pid.o --omf_browse g431_foc\pid.crf --depend g431_foc\pid.d)
+F (..\user\src\pid.c)(0x69FF4CC7)(--c99 -c --cpu Cortex-M4.fp.sp -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc/Legacy -I ../Drivers/CMSIS/Device/ST/STM32G4xx/Include -I ../Drivers/CMSIS/Include -I ../user/inc-I.\RTE\_g431_foc-IF:\Keil5\packs\ARM\CMSIS\5.9.0\CMSIS\Core\Include-IF:\Keil5\packs\Keil\STM32G4xx_DFP\1.5.0\Drivers\CMSIS\Device\ST\STM32G4xx\Include-D__UVISION_VERSION="539" -D_RTE_ -DSTM32G431xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32G431xx-o g431_foc\pid.o --omf_browse g431_foc\pid.crf --depend g431_foc\pid.d)
 I (../user/inc/pid.h)(0x69FDD4E4)
 I (F:\Keil5\ARM\armcc\include\math.h)(0x5E8E3CC2)
 I (../Drivers/CMSIS/Device/ST/STM32G4xx/Include/stm32g4xx.h)(0x69DA3581)
@@ -1577,9 +1577,9 @@ I (../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_uart_ex.h)(0x69DA3580)
 I (../Core/Inc/usart.h)(0x69FC73BB)
 I (../Core/Inc/main.h)(0x69DA35AF)
 I (F:\Keil5\ARM\armcc\include\string.h)(0x5E8E3CC2)
-F (..\user\inc\svpwm.h)(0x69FDCC5F)()
-F (..\user\src\svpwm.c)(0x69FDCC5F)(--c99 -c --cpu Cortex-M4.fp.sp -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc/Legacy -I ../Drivers/CMSIS/Device/ST/STM32G4xx/Include -I ../Drivers/CMSIS/Include -I ../user/inc-I.\RTE\_g431_foc-IF:\Keil5\packs\ARM\CMSIS\5.9.0\CMSIS\Core\Include-IF:\Keil5\packs\Keil\STM32G4xx_DFP\1.5.0\Drivers\CMSIS\Device\ST\STM32G4xx\Include-D__UVISION_VERSION="539" -D_RTE_ -DSTM32G431xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32G431xx-o g431_foc\svpwm.o --omf_browse g431_foc\svpwm.crf --depend g431_foc\svpwm.d)
-I (../user/inc/svpwm.h)(0x69FDCC5F)
+F (..\user\inc\svpwm.h)(0x69FF456D)()
+F (..\user\src\svpwm.c)(0x69FF48E6)(--c99 -c --cpu Cortex-M4.fp.sp -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc/Legacy -I ../Drivers/CMSIS/Device/ST/STM32G4xx/Include -I ../Drivers/CMSIS/Include -I ../user/inc-I.\RTE\_g431_foc-IF:\Keil5\packs\ARM\CMSIS\5.9.0\CMSIS\Core\Include-IF:\Keil5\packs\Keil\STM32G4xx_DFP\1.5.0\Drivers\CMSIS\Device\ST\STM32G4xx\Include-D__UVISION_VERSION="539" -D_RTE_ -DSTM32G431xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32G431xx-o g431_foc\svpwm.o --omf_browse g431_foc\svpwm.crf --depend g431_foc\svpwm.d)
+I (../user/inc/svpwm.h)(0x69FF456D)
 I (F:\Keil5\ARM\armcc\include\stdint.h)(0x5E8E3CC2)
 I (../Core/Inc/tim.h)(0x69FB489A)
 I (../Core/Inc/main.h)(0x69DA35AF)

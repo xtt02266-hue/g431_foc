@@ -14,6 +14,31 @@ static uint32_t g_identify_timer = 0;
 static uint16_t g_uvw_start_angle = 0;
 static float g_uvw_elec_angle = 0.0f;
 
+#define MOTOR_TWO_PI                 6.28318530718f
+#define MOTOR_HALF_PI                1.57079632679f
+#define MOTOR_OPEN_LOOP_ALIGN_ANGLE  0.0f
+/*
+ * Motor_OpenLoop_Drive(theta) generates phase voltages with sin(theta).
+ * In alpha-beta coordinates that voltage vector is theta - pi/2, while the
+ * closed-loop Park/InvPark convention uses theta = 0 on the +alpha axis.
+ */
+#define MOTOR_OPEN_LOOP_VECTOR_SHIFT (-MOTOR_HALF_PI)
+
+static float Motor_Identify_NormalizeAngle(float angle)
+{
+    while (angle >= MOTOR_TWO_PI)
+    {
+        angle -= MOTOR_TWO_PI;
+    }
+
+    while (angle < 0.0f)
+    {
+        angle += MOTOR_TWO_PI;
+    }
+
+    return angle;
+}
+
 void Motor_OpenLoop_Drive(float elec_angle, float amplitude)
 {
     // 幅值限幅 (中心点为500)
@@ -97,7 +122,7 @@ static void Identify_MeasureR(void)
     if (g_identify_timer > 500) // 等待500ms让系统稳定
     {
         // 临时固定相电阻值 (Ω)，典型云台电机约 5~15Ω
-        g_identified_params.resistance = 0.05f;
+        g_identified_params.resistance = 3.1f;
 
         g_identify_timer = 0;
         g_identify_state = IDENTIFY_STATE_MEASURE_L; // 测完电阻后，进入下一个状态：测电感
@@ -115,7 +140,7 @@ static void Identify_MeasureL(void)
     if (g_identify_timer > 500)
     {
         // 临时固定相电感值 (H)，典型云台电机约 0.1~1.0 mH
-        g_identified_params.inductance = 0.000005f;
+        g_identified_params.inductance = 0.0001f;
 
         g_identify_timer = 0;
         g_identify_state = IDENTIFY_STATE_UVW_AND_POLES; // 测完电感后，进入下一个状态：测相序与极对数
@@ -128,7 +153,7 @@ static void Identify_Align(void)
 {
     // 调用开环驱动函数，电气角度固定在 0 (0.0f)，幅值使用 200.0f
     // 这相当于用磁力把转子强行“吸附”在位置0，不让它动。
-    Motor_OpenLoop_Drive(0.0f, 200.0f);
+    Motor_OpenLoop_Drive(MOTOR_OPEN_LOOP_ALIGN_ANGLE, 200.0f);
     
     g_identify_timer++;
     // 等待 1500 毫秒 (1.5秒)，确保云台电机完全停止晃动，稳定在零点
@@ -136,17 +161,26 @@ static void Identify_Align(void)
     {
         // 极点吸固后，读取此刻的磁编码器角度作为机械零点
         // AS5600 读出的原始值是 0~4095，这里将其换算成国际标准单位：弧度 (0 ~ 2π)
-        g_identified_params.zero_angle_offset = (float)AS5600_ReadRawAngle() * (2.0f * 3.1415926f / 4096.0f);
+        float align_mech_angle = (float)AS5600_ReadRawAngle() * (MOTOR_TWO_PI / 4096.0f);
         
         // 记录完零点后，关闭电机输出电压
         Motor_OpenLoop_Drive(0.0f, 0.0f);
         
         // 关键：将辨识出的真实电机参数同步推送给 FOC 电流环结构！
         // 安全校验：pole_pairs 不能为 0，否则 FOC 角度计算永久失效
-        if (g_identified_params.pole_pairs == 0)
+
+        if (g_identified_params.uvw_dir == 0)
         {
-            g_identified_params.pole_pairs = 7;
+            g_identified_params.uvw_dir = 1;
         }
+
+        float elec_align_angle = MOTOR_OPEN_LOOP_ALIGN_ANGLE + MOTOR_OPEN_LOOP_VECTOR_SHIFT;
+        float mech_zero_offset = elec_align_angle /
+                                 ((float)g_identified_params.pole_pairs *
+                                  (float)g_identified_params.uvw_dir);
+        g_identified_params.zero_angle_offset = 
+            Motor_Identify_NormalizeAngle(align_mech_angle - mech_zero_offset);
+
         Motor_CurrentLoop_SetMotorIdentityParams(
             g_identified_params.pole_pairs,
             g_identified_params.zero_angle_offset,
@@ -217,14 +251,8 @@ static void Identify_UvwAndPoles(void)
         // 2. 计算极对数 (累积的机械角度 / 4096 = 机械圈数)
         float mech_turns = fabsf(g_accumulated_mech_angle) / 4096.0f; 
         
-        if (mech_turns > 0.01f) 
-        {
-            g_identified_params.pole_pairs = (uint16_t)roundf(4.0f / mech_turns);
-        }
-        else 
-        {
-            g_identified_params.pole_pairs = 7; // 安全兜底
-        }
+        g_identified_params.pole_pairs = (uint16_t)roundf(4.0f / mech_turns);
+   
 
         // 停止输出，状态流转
         Motor_OpenLoop_Drive(0.0f, 0.0f);

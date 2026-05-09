@@ -19,8 +19,8 @@ MotorSystem g_motor_system = {
 
 // 电位器原始值映射到 q 轴目标电流 (安培)。
 // ADC 范围 0~4095，中位 ≈ 2048 对应 0A，两端对应 ±MAX_CURRENT。
-#define POT_CURRENT_MAX   0.5f    // 最大 q 轴电流 (A)
-#define POT_DEADZONE      80U     // 中位死区 (±80 LSB)，避免微小漂移
+#define POT_CURRENT_MAX   0.3f    // 最大 q 轴电流 (A)
+#define POT_DEADZONE      100U     // 中位死区 (±80 LSB)，避免微小漂移
 
 static float Motor_MapPotToCurrent(uint16_t pot_raw)
 {
@@ -132,52 +132,43 @@ void Motor_ShowDebugInfo_OLED(void)
     if (id_state != IDENTIFY_STATE_DONE) {
         // 辨识进行中：显示状态编号 + 目标 q 电流
         OLED_ShowString(1, 1, "Idt");
-        //OLED_ShowString(1, 4, "Tq:");
-       // OLED_ShowSignedNum(1, 7, (int32_t)(g_foc_state.target_q * 1000.0f), 5);
+        OLED_ShowString(1, 4, "Tq:");
+        OLED_ShowSignedNum(1, 7, (int32_t)(g_foc_state.target_q * 1000.0f), 5);
         OLED_ShowNum(1, 14, id_state, 2);
     } else {
         // 辨识完成：显示 Run + 目标 q 电流
         OLED_ShowString(1, 1, "Run");
-        //OLED_ShowString(1, 4, "Tq:");
-        //OLED_ShowSignedNum(1, 7, (int32_t)(g_foc_state.target_q * 1000.0f), 5);
+        OLED_ShowSignedNum(1, 7, (int32_t)(g_foc_state.target_q * 1000.0f), 5);
     }
-if(0)  // 开启 OLED 诊断显示：d/q电流、ADC原始值、角度、电位器
+if(1)  // 开启 OLED 诊断显示：d/q电流、ADC原始值、角度、电位器
 {
     // 第2行：D 轴实际电流 (mA) + ADC U 相原始值
     OLED_ShowChar(2, 1, 'd');
     OLED_ShowSignedNum(2, 2, (int32_t)(g_foc_state.park.d * 1000.0f), 4);
-    OLED_ShowChar(2, 7, 'U');
-    OLED_ShowChar(2, 8, ':');
+    OLED_ShowString(2, 7, "U:");
     OLED_ShowNum(2, 9, g_foc_state.sample.iu_raw, 4);
 
     // 第3行：Q 轴实际电流 (mA) + ADC W 相原始值
     OLED_ShowChar(3, 1, 'q');
     OLED_ShowSignedNum(3, 2, (int32_t)(g_foc_state.park.q * 1000.0f), 4);
-    OLED_ShowChar(3, 7, 'W');
-    OLED_ShowChar(3, 8, ':');
-    OLED_ShowNum(3, 9, g_foc_state.sample.iw_raw, 4);
+    OLED_ShowString(3, 7, "A:");
+    OLED_ShowSignedNum(3, 9, (int32_t)(g_foc_state.park.q * 1000.0f), 4);
 
-    // 第4行：AS5600 角度 + 电位器原始值
-    OLED_ShowChar(4, 1, 'A');
-    OLED_ShowChar(4, 2, ':');
-    OLED_ShowNum(4, 3, AS5600_ReadRawAngle(), 4);
-    OLED_ShowChar(4, 8, 'P');
-    OLED_ShowChar(4, 9, ':');
-    OLED_ShowNum(4, 10, g_motor_publicdata.pot_raw, 4);
 }
     // 2. VOFA+ 诊断波形 (4 通道)
     //    CH0 vs CH1 对比看跟随，CH2 看PID输出，CH3 看是否有真实电流
-    float vofa_data[6];
+    float vofa_data[7];
     vofa_data[0] = g_foc_state.target_q;         // Q轴目标 (A)
     vofa_data[1] = g_foc_state.park.q;           // Q轴实际 (A)
     vofa_data[2] = g_foc_state.pi_q.output;      // PID 输出 Vq (V)
     vofa_data[3] = g_foc_state.park.d;      // U相实际电流 (A)
     vofa_data[4] = g_foc_state.sample.iw_a;      // W相实际电流 (A)
     vofa_data[5] = g_foc_state.sample.iu_a;      // U相实际电流 (A)
-    VOFA_JustFloat_Send(vofa_data, 6);
+    vofa_data[6]= -(g_foc_state.sample.iu_a + g_foc_state.sample.iw_a); // V相实际电流 (A)，理论上应该等于 -Iu -Iw
+    VOFA_JustFloat_Send(vofa_data, 7);
     // 适当的软件延时，刷新太快 OLED 会闪
     // 这里设定 50ms (即20Hz刷新率)，对 OLED 友好，对 VOFA 观察手动转动也足够
-    //HAL_Delay(1);
+    HAL_Delay(5);
 }
 
 
