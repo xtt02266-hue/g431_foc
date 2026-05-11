@@ -7,7 +7,7 @@
 // #include "motor_current_loop.h" // 后续可能需要调用开环输出电压/电流的接口
 
 static MotorIdentifyState g_identify_state = IDENTIFY_STATE_IDLE;
-static MotorIdentifiedParams g_identified_params = {0};
+MotorIdentifiedParams g_identified_params = {0};
 
 // 状态机等待计时器
 static uint32_t g_identify_timer = 0;
@@ -115,17 +115,47 @@ MotorIdentifiedParams Motor_Identify_GetResult(void)
 // 目的：算出电机的真实电阻。因为只有知道了电阻，后续强拖时才知道给多大的电压是安全的，避免电机烧毁。
 static void Identify_MeasureR(void)
 {
-    // FIXME: 在这里向电机施加一个已知的安全测试电压（比如给D轴加固定的低电压）。
-    // 然后读取ADC当前的相电流反馈，等待电流稳定。
-    // 当前使用临时固定值，后续替换为真实测量逻辑。
-    g_identify_timer++;
-    if (g_identify_timer > 500) // 等待500ms让系统稳定
-    {
-        // 临时固定相电阻值 (Ω)，典型云台电机约 5~15Ω
-        g_identified_params.resistance = 3.1f;
+    static float current_sum = 0.0f;
+    static int current_count = 0;
+    
+    // 云台电机内阻大，这里施加约2.4V的相电压测试 (假设母线12V)
+    // 幅值 200 对应占空比 200/1000
+    const float test_amplitude = 200.0f; 
+    const float bus_voltage = 12.0f; 
 
+    // 电压加载在 Alpha 轴 (也就是 U 相)，角度设为 MOTOR_HALF_PI (90度)
+    // 此时 U 相占空比最高，V/W 相占空比相等且较低。
+    Motor_OpenLoop_Drive(MOTOR_HALF_PI, test_amplitude);
+
+    g_identify_timer++;
+    
+    // 给系统 200ms 的时间让电流达到稳态（电感导致的电流爬升）
+    if (g_identify_timer > 200 && g_identify_timer <= 500)
+    {
+        // 累加稳态下的 U 相电流大小 (绝对值)
+        current_sum += fabsf(g_foc_state.sample.iu_a);
+        current_count++;
+    }
+    else if (g_identify_timer > 500) 
+    {
+        Motor_OpenLoop_Drive(0.0f, 0.0f); // 测试完毕，关闭输出
+        
+        float current_avg = current_sum / (float)current_count;
+        if (current_avg < 0.01f) current_avg = 0.01f; // 防止除以0
+        
+        // 计算 U 相实际施加的相电压 (与中心点的压差)
+        float test_voltage = (test_amplitude / 1000.0f) * bus_voltage;
+        
+        // 根据欧姆定律 R = U / I 计算相电阻
+        g_identified_params.resistance = test_voltage / current_avg;
+
+        // 清零静态变量，准备进入下个状态
+        current_sum = 0.0f;
+        current_count = 0;
         g_identify_timer = 0;
-        g_identify_state = IDENTIFY_STATE_MEASURE_L; // 测完电阻后，进入下一个状态：测电感
+        
+        // 测完电阻后，进入测电感状态
+        g_identify_state = IDENTIFY_STATE_MEASURE_L; 
     }
 }
 
@@ -133,18 +163,24 @@ static void Identify_MeasureR(void)
 // 目的：测出电感(L)大小，主要是为了后面的“电流环”能自动算出 PI 控制器的参数。
 static void Identify_MeasureL(void)
 {
-    // FIXME: 通常的做法是给电机施加一个高频的方波电压，看电流上升的速度(斜率)。
-    // 电感 L = 电压 U / (电流变化量 di / 时间变化量 dt)
-    // 当前使用临时固定值，后续替换为真实测量逻辑。
-    g_identify_timer++;
-    if (g_identify_timer > 500)
-    {
-        // 临时固定相电感值 (H)，典型云台电机约 0.1~1.0 mH
-        g_identified_params.inductance = 0.0001f;
+    // 由于云台电机时间常数极窄（<1ms），很难在 1ms 调度周期内完成斜率抓取。
+    // 在工程中对于这种电机，最好的策略是测准电阻后，电感直接给厂家的标称值。
+    // 商家给的线间电感为 1.2mH，FOC所需要的相电感 = 1.2 / 2 = 0.6mH = 0.0006H
 
-        g_identify_timer = 0;
-        g_identify_state = IDENTIFY_STATE_UVW_AND_POLES; // 测完电感后，进入下一个状态：测相序与极对数
+    g_identify_timer++;
+
+    // 等待 50ms (防止测电阻时的滞留电流影响后续极对数辨识的稳定性)
+    if (g_identify_timer <= 50)
+    {
+        Motor_OpenLoop_Drive(0.0f, 0.0f);
+        return;
     }
+
+    // 强行赋理论相电感值 0.6mH
+    g_identified_params.inductance = 0.0006f;
+
+    g_identify_timer = 0;
+    g_identify_state = IDENTIFY_STATE_UVW_AND_POLES; // 进入测相序极对数
 }
 
 // 3. 对齐转子到电角度零点 (获取电角度偏差 Offset)
@@ -201,7 +237,9 @@ static uint16_t g_last_raw_angle = 0;         // 上一次循环的编码器角�
 
 static void Identify_UvwAndPoles(void)
 {
-    const float target_elec_angle = 4.0f * 2.0f * 3.1415926f; // 目标转过 4 个电周期
+    // 为了防止电机转动过多造成绕线或机械干涉，将目标改为了转过 1.5 个电周期
+    // 只要超过 1.0 个电周期 (确保跨越一次完整磁极)，除出来的值配合 roundf 四舍五入就足够准确了。
+    const float target_elec_angle = 1.5f * 2.0f * 3.1415926f; 
     const uint32_t lock_time = 500; // 预对齐锁定时间：500个计时周期 (通常为 500ms)
     
     // ================= 阶段 1：静态预对齐 =================
@@ -251,7 +289,8 @@ static void Identify_UvwAndPoles(void)
         // 2. 计算极对数 (累积的机械角度 / 4096 = 机械圈数)
         float mech_turns = fabsf(g_accumulated_mech_angle) / 4096.0f; 
         
-        g_identified_params.pole_pairs = (uint16_t)roundf(4.0f / mech_turns);
+        // 我们上面转了 1.5 个电周期，所以分子换成 1.5f
+        g_identified_params.pole_pairs = (uint16_t)roundf(1.5f / mech_turns);
    
 
         // 停止输出，状态流转

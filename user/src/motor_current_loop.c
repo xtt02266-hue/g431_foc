@@ -7,7 +7,7 @@
     // 一阶低通滤波：滤除 PWM 开关噪声和 ADC 采样毛刺
     // alpha 越大滤波越弱（响应越快），越小滤波越强（越平滑）
     // 20kHz 采样下，alpha=0.15 对应截止频率约 500Hz
-#define ADC_FILTER_ALPHA  0.2f
+#define ADC_FILTER_ALPHA  0.35f
 
 // 电流环/FOC 全局运行状态与参数。
 MotorCurrentLoopState g_foc_state = {0};
@@ -42,7 +42,7 @@ void Motor_CurrentLoop_Run(uint16_t iu_raw, uint16_t iw_raw)
     uint16_t raw_mech_angle = AS5600_ReadRawAngle();
     
     // 将 AS5600 的计数转换成真实机械弧度 (0 ~ 2π)
-    float mech_angle = (float)raw_mech_angle * (6.2831853f / 4096.0f);
+    float mech_angle = (float)raw_mech_angle * 0.001534;//(6.2831853f / 4096.0f);
     
     // 减去在辨识阶段标定好、并传进来的绝对机械零点偏置
     float mech_offset = mech_angle - g_foc_state.params.zero_angle_offset;
@@ -170,8 +170,8 @@ void Motor_CurrentLoop_Enable(uint8_t enable)
 //   CURRENT_LOOP_BW_HZ  — 电流环带宽 (Hz)，越大响应越快但越容易振荡
 //                        云台电机推荐 200~500，高速电机 500~2000
 //   KI_DAMPING          — 积分阻尼系数 (0.5~1.0)，<1.0 可减少超调
-#define CURRENT_LOOP_BW_HZ   300.0f   // 电流环带宽 (Hz)
-#define KI_DAMPING           0.6f     // 积分阻尼 (0.3=柔和, 0.6=较快, 1.0=理论值)
+#define CURRENT_LOOP_BW_HZ   250.0f   // 电流环带宽 (Hz)
+#define KI_DAMPING           1.0f     // 积分阻尼 (0.3=柔和, 0.6=较快, 1.0=理论值)
 
 void Motor_CurrentLoop_AutoTunePID(float resistance, float inductance, float bus_voltage)
 {

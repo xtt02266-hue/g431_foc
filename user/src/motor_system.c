@@ -19,7 +19,7 @@ MotorSystem g_motor_system = {
 
 // 电位器原始值映射到 q 轴目标电流 (安培)。
 // ADC 范围 0~4095，中位 ≈ 2048 对应 0A，两端对应 ±MAX_CURRENT。
-#define POT_CURRENT_MAX   0.3f    // 最大 q 轴电流 (A)
+#define POT_CURRENT_MAX   0.5f    // 最大 q 轴电流 (A)
 #define POT_DEADZONE      100U     // 中位死区 (±80 LSB)，避免微小漂移
 
 static float Motor_MapPotToCurrent(uint16_t pot_raw)
@@ -137,10 +137,10 @@ void Motor_ShowDebugInfo_OLED(void)
         OLED_ShowNum(1, 14, id_state, 2);
     } else {
         // 辨识完成：显示 Run + 目标 q 电流
-        OLED_ShowString(1, 1, "Run");
-        OLED_ShowSignedNum(1, 7, (int32_t)(g_foc_state.target_q * 1000.0f), 5);
+      //  OLED_ShowString(1, 1, "Run");
+       // OLED_ShowSignedNum(1, 7, (int32_t)(g_foc_state.target_q * 1000.0f), 5);
     }
-if(1)  // 开启 OLED 诊断显示：d/q电流、ADC原始值、角度、电位器
+if(0)  // 开启 OLED 诊断显示：d/q电流、ADC原始值、角度、电位器
 {
     // 第2行：D 轴实际电流 (mA) + ADC U 相原始值
     OLED_ShowChar(2, 1, 'd');
@@ -168,7 +168,7 @@ if(1)  // 开启 OLED 诊断显示：d/q电流、ADC原始值、角度、电位�
     VOFA_JustFloat_Send(vofa_data, 7);
     // 适当的软件延时，刷新太快 OLED 会闪
     // 这里设定 50ms (即20Hz刷新率)，对 OLED 友好，对 VOFA 观察手动转动也足够
-    HAL_Delay(5);
+   // HAL_Delay(1);
 }
 
 

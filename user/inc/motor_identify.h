@@ -25,6 +25,9 @@ typedef struct
     int8_t uvw_dir;            // UVW 相序方向: 1=正向, -1=反向
 } MotorIdentifiedParams;
 
+// 辨识结果全局变量（用于调试器直接观察）。
+extern MotorIdentifiedParams g_identified_params;
+
 // 启动辨识流程序列。
 void Motor_Identify_Start(void);
 

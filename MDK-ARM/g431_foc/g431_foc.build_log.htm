@@ -22,16 +22,28 @@ Dialog DLL:      TCM.DLL V1.56.4.0
  
 <h2>Project:</h2>
 C:\Users\25934\Desktop\g431_foc\g431_foc\MDK-ARM\g431_foc.uvprojx
-Project File Date:  05/08/2026
+Project File Date:  05/11/2026
 
 <h2>Output:</h2>
 *** Using Compiler 'V5.06 update 7 (build 960)', folder: 'F:\Keil5\ARM\armcc\Bin'
 Build target 'g431_foc'
 compiling motor_system.c...
+compiling motor_current_loop.c...
+..\user\src\motor_current_loop.c(45): warning:  #1035-D: single-precision operand implicitly converted to double-precision
+      float mech_angle = (float)raw_mech_angle * 0.001534;//(6.2831853f / 4096.0f);
+..\user\src\motor_current_loop.c: 1 warning, 0 errors
+compiling motor_identify.c...
+..\user\src\motor_identify.c(14): warning:  #177-D: variable "g_uvw_start_angle"  was declared but never referenced
+  static uint16_t g_uvw_start_angle = 0;
+..\user\src\motor_identify.c: 1 warning, 0 errors
+compiling hardware_init.c...
+..\user\src\hardware_init.c(102): warning:  #223-D: function "AS5600_RequestRead_DMA" declared implicitly
+      AS5600_RequestRead_DMA();
+..\user\src\hardware_init.c: 1 warning, 0 errors
 linking...
-Program Size: Code=31984 RO-data=2124 RW-data=68 ZI-data=3132  
+Program Size: Code=39548 RO-data=2124 RW-data=84 ZI-data=3132  
 FromELF: creating hex file...
-"g431_foc\g431_foc.axf" - 0 Error(s), 0 Warning(s).
+"g431_foc\g431_foc.axf" - 0 Error(s), 3 Warning(s).
 
 <h2>Software Packages used:</h2>
 
@@ -55,7 +67,7 @@ Package Vendor: Keil
 
    * Component: ARM::CMSIS:CORE@5.6.0
       Include file:  CMSIS/Core/Include/tz_context.h
-Build Time Elapsed:  00:00:08
+Build Time Elapsed:  00:00:06
 </pre>
 </body>
 </html>
