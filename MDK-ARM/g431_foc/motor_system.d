@@ -1,7 +1,6 @@
 g431_foc\motor_system.o: ..\user\src\motor_system.c
 g431_foc\motor_system.o: ../user/inc/motor_system.h
 g431_foc\motor_system.o: F:\Keil5\ARM\armcc\Bin\..\include\stdint.h
-g431_foc\motor_system.o: ../user/inc/motor_publicdata.h
 g431_foc\motor_system.o: ../user/inc/motor_current_loop.h
 g431_foc\motor_system.o: ../user/inc/pid.h
 g431_foc\motor_system.o: ../user/inc/as5600.h

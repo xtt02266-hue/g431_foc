@@ -1,5 +1,4 @@
 #include "motor_system.h"
-#include "motor_publicdata.h"
 #include "motor_current_loop.h"
 #include "as5600.h"
 #include "oled.h"
@@ -10,11 +9,9 @@
 #include "motor_identify.h"
 #include "svpwm.h"
 
-// 电机系统运行状态与目标值缓存。
+// 电机系统运行状态。
 MotorSystem g_motor_system = {
     .state = MOTOR_STATE_STOPPED,
-    .pot_raw = 0U,
-    .target = 0U,
 };
 
 // 电位器原始值映射到 q 轴目标电流 (安培)。
@@ -47,7 +44,6 @@ static float Motor_MapPotToCurrent(uint16_t pot_raw)
 void Motor_System_Init(void)
 {
     g_motor_system.state = MOTOR_STATE_STOPPED;
-    g_motor_system.pot_raw = g_motor_publicdata.pot_raw;
 
     // 初始目标电流归零
     g_foc_state.target_q = 0.0f;
@@ -57,10 +53,8 @@ void Motor_System_Init(void)
 // 周期任务：更新电位器输入，映射为 q 轴目标电流。
 void Motor_System_Task(void)
 {
-    g_motor_system.pot_raw = g_motor_publicdata.pot_raw;
-
     // 电位器 → q 轴电流目标 (A)，D 轴目标保持 0（Id=0 控制）
-    g_foc_state.target_q = Motor_MapPotToCurrent(g_motor_system.pot_raw);
+    g_foc_state.target_q = Motor_MapPotToCurrent(Pot_ReadRaw());
     g_foc_state.target_d = 0.0f;
 }
 

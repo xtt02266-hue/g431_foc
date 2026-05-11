@@ -1,7 +1,9 @@
 #include "user_io.h"
 #include "adc.h"
 #include "gpio.h"
-#include "motor_publicdata.h"
+
+// 暴露给 DMA 的全局变量，存放电位器最新的 ADC 值
+volatile uint16_t g_user_pot_raw = 0;
 
 // PC4 外部电位器：ADC2 + DMA 循环采样。
 #define POT_ADC_HANDLE (&hadc2)
@@ -26,7 +28,7 @@ HAL_StatusTypeDef UserIO_StartDma(void)
 // 返回 12 位 ADC 原始值（DMA 持续更新）。
 uint16_t Pot_ReadRaw(void)
 {
-    return g_motor_publicdata.pot_raw;
+    return g_user_pot_raw;
 }
 
 // 引脚高电平返回 1，低电平返回 0。

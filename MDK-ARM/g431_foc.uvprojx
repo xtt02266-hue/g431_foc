@@ -1304,11 +1304,6 @@
               <FilePath>..\user\inc\motor_identify.h</FilePath>
             </File>
             <File>
-              <FileName>motor_publicdata.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\user\inc\motor_publicdata.h</FilePath>
-            </File>
-            <File>
               <FileName>motor_system.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\user\inc\motor_system.h</FilePath>
@@ -1352,11 +1347,6 @@
               <FileName>motor_identify.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\user\src\motor_identify.c</FilePath>
-            </File>
-            <File>
-              <FileName>motor_publicdata.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\user\src\motor_publicdata.c</FilePath>
             </File>
             <File>
               <FileName>motor_system.c</FileName>

@@ -45,7 +45,6 @@ g431_foc\hardware_init.o: ../Core/Inc/i2c.h
 g431_foc\hardware_init.o: ../user/inc/user_io.h
 g431_foc\hardware_init.o: ../user/inc/motor_current_loop.h
 g431_foc\hardware_init.o: ../user/inc/pid.h
-g431_foc\hardware_init.o: ../user/inc/motor_publicdata.h
 g431_foc\hardware_init.o: ../user/inc/motor_identify.h
 g431_foc\hardware_init.o: ../user/inc/svpwm.h
 g431_foc\hardware_init.o: ../user/inc/vofa_usart.h

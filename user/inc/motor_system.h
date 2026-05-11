@@ -16,8 +16,6 @@ typedef enum
 typedef struct
 {
     MotorState state;
-    uint16_t pot_raw;
-    uint16_t target;
 } MotorSystem;
 
 // 电机系统全局实例。

@@ -36,7 +36,6 @@
 "g431_foc\hardware_init.o"
 "g431_foc\motor_current_loop.o"
 "g431_foc\motor_identify.o"
-"g431_foc\motor_publicdata.o"
 "g431_foc\motor_system.o"
 "g431_foc\oled.o"
 "g431_foc\pid.o"

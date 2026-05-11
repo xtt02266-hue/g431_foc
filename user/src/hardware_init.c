@@ -5,7 +5,6 @@
 #include "i2c.h"
 #include "user_io.h"
 #include "motor_current_loop.h"
-#include "motor_publicdata.h"
 #include "motor_identify.h"
 #include "svpwm.h"
 #include "vofa_usart.h" // 包含 VOFA 系列函数
@@ -61,7 +60,7 @@ void hardware_init(void)
     // 1. 启动常规通道 DMA 搬运（读取电位器等慢速信号）
     // 为了避免单数据高频循环转换导致 DMA 中断风暴卡死，这里不使用 HAL_ADC_Start_DMA 附带的软件中断。
     // 使用寄存器直接启动 ADC 和 DMA 请求。由于 CubeMX 配置了 DMA 循环模式，这就可以实现纯硬件后台搬运。
-    HAL_DMA_Start(hadc2.DMA_Handle, (uint32_t)&hadc2.Instance->DR, (uint32_t)&g_motor_publicdata.pot_raw, 1U);
+    HAL_DMA_Start(hadc2.DMA_Handle, (uint32_t)&hadc2.Instance->DR, (uint32_t)&g_user_pot_raw, 1U);
     SET_BIT(hadc2.Instance->CFGR, ADC_CFGR_DMACFG); // 设为 DMA 循环模式
     SET_BIT(hadc2.Instance->CFGR, ADC_CFGR_DMAEN);  // 开启 ADC2 的 DMA 请求功能
     HAL_ADC_Start(&hadc2);                          // 开启 ADC2

@@ -4,6 +4,9 @@
 #include <stdint.h>
 #include "stm32g4xx_hal.h"
 
+// 供硬件初始化模块 DMA 配置使用
+extern volatile uint16_t g_user_pot_raw;
+
 // 启动电位器 ADC 的 DMA 采样。
 HAL_StatusTypeDef UserIO_StartDma(void);
 
