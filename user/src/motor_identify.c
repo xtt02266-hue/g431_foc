@@ -118,10 +118,10 @@ static void Identify_MeasureR(void)
     static float current_sum = 0.0f;
     static int current_count = 0;
     
-    // 云台电机内阻大，这里施加约2.4V的相电压测试 (假设母线12V)
+    // 云台电机内阻大，这里施加约2.4V的相电压测试 (假设母线是SYSTEM_BUS_VOLTAGE)
     // 幅值 200 对应占空比 200/1000
     const float test_amplitude = 200.0f; 
-    const float bus_voltage = 12.0f; 
+    const float bus_voltage = SYSTEM_BUS_VOLTAGE; 
 
     // 电压加载在 Alpha 轴 (也就是 U 相)，角度设为 MOTOR_HALF_PI (90度)
     // 此时 U 相占空比最高，V/W 相占空比相等且较低。

@@ -104,7 +104,7 @@ void PID_AutoTune_CurrentLoop(PID_Controller *pid, float resistance, float induc
     
     float kp = inductance * wc;                     // 比例增益 (V/A)
     float ki = resistance * wc;                     // 积分增益 (V/(A·s))
-    float kd = 0.3f;                                // 电流环一般不用微分
+    float kd = 0.1f;                                // 电流环一般不用微分
     
     // SVPWM 最大不失真相电压 = Vbus/√3 ≈ Vbus × 0.577
     float v_max = bus_voltage * 0.57735f * 0.95f;

@@ -1,4 +1,5 @@
 #include "motor_current_loop.h"
+#include "motor_system.h"
 #include "adc.h"
 #include "svpwm.h"
 #include "as5600.h"
@@ -7,7 +8,7 @@
     // 一阶低通滤波：滤除 PWM 开关噪声和 ADC 采样毛刺
     // alpha 越大滤波越弱（响应越快），越小滤波越强（越平滑）
     // 20kHz 采样下，alpha=0.15 对应截止频率约 500Hz
-#define ADC_FILTER_ALPHA  0.35f
+#define ADC_FILTER_ALPHA  0.3f
 
 // 电流环/FOC 全局运行状态与参数。
 MotorCurrentLoopState g_foc_state = {0};
@@ -97,8 +98,8 @@ void Motor_CurrentLoop_Run(uint16_t iu_raw, uint16_t iw_raw)
         v_ab = Motor_CurrentLoop_InvPark(v_dq, g_foc_state.sin_theta, g_foc_state.cos_theta);
 
         // 9. SVPWM 生成：将 V_alpha/V_beta 转换为三相占空比，写入 TIM1 CCR
-        SVPWM_SetVoltage(v_ab.alpha, v_ab.beta, 12.0f);  // 第三个参数：母线电压(V)
-       //Motor_OpenLoop_Vdq_Control(1, 0, g_foc_state.elec_angle, 12.0f);
+        SVPWM_SetVoltage(v_ab.alpha, v_ab.beta, SYSTEM_BUS_VOLTAGE);  // 第三个参数：母线电压(V)
+       //Motor_OpenLoop_Vdq_Control(1, 0, g_foc_state.elec_angle, SYSTEM_BUS_VOLTAGE);
     } 
     else 
     {
@@ -170,8 +171,9 @@ void Motor_CurrentLoop_Enable(uint8_t enable)
 //   CURRENT_LOOP_BW_HZ  — 电流环带宽 (Hz)，越大响应越快但越容易振荡
 //                        云台电机推荐 200~500，高速电机 500~2000
 //   KI_DAMPING          — 积分阻尼系数 (0.5~1.0)，<1.0 可减少超调
-#define CURRENT_LOOP_BW_HZ   250.0f   // 电流环带宽 (Hz)
-#define KI_DAMPING           1.0f     // 积分阻尼 (0.3=柔和, 0.6=较快, 1.0=理论值)
+#define CURRENT_LOOP_BW_HZ   200.0f   // 电流环带宽 (Hz)
+#define KI_DAMPING           0.8f     // 积分阻尼 (0.3=柔和, 0.6=较快, 1.0=理论值)
+#define KP_DAMPING           1.0f     
 
 void Motor_CurrentLoop_AutoTunePID(float resistance, float inductance, float bus_voltage)
 {
@@ -180,7 +182,7 @@ void Motor_CurrentLoop_AutoTunePID(float resistance, float inductance, float bus
     float dt = 0.00005f;  // 20kHz 采样
     float wc = 2.0f * 3.1415926f * CURRENT_LOOP_BW_HZ;
 
-    float kp = inductance * wc;                      // 比例 (V/A)
+    float kp = inductance * wc * KP_DAMPING;                      // 比例 (V/A)
     float ki = resistance * wc * KI_DAMPING;          // 积分 (V/(A·s))，阻尼抑制超调
     float kd = 0.0f;
 

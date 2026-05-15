@@ -3,7 +3,12 @@ g431_foc\motor_system.o: ../user/inc/motor_system.h
 g431_foc\motor_system.o: F:\Keil5\ARM\armcc\Bin\..\include\stdint.h
 g431_foc\motor_system.o: ../user/inc/motor_current_loop.h
 g431_foc\motor_system.o: ../user/inc/pid.h
-g431_foc\motor_system.o: ../user/inc/as5600.h
+g431_foc\motor_system.o: ../user/inc/motor_speed_loop.h
+g431_foc\motor_system.o: ../Core/Inc/main.h
+g431_foc\motor_system.o: ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal.h
+g431_foc\motor_system.o: ../Core/Inc/stm32g4xx_hal_conf.h
+g431_foc\motor_system.o: ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_rcc.h
+g431_foc\motor_system.o: ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_def.h
 g431_foc\motor_system.o: ../Drivers/CMSIS/Device/ST/STM32G4xx/Include/stm32g4xx.h
 g431_foc\motor_system.o: ../Drivers/CMSIS/Device/ST/STM32G4xx/Include/stm32g431xx.h
 g431_foc\motor_system.o: ../Drivers/CMSIS/Include/core_cm4.h
@@ -13,10 +18,6 @@ g431_foc\motor_system.o: ../Drivers/CMSIS/Include/cmsis_armcc.h
 g431_foc\motor_system.o: ../Drivers/CMSIS/Include/mpu_armv7.h
 g431_foc\motor_system.o: ../Drivers/CMSIS/Device/ST/STM32G4xx/Include/system_stm32g4xx.h
 g431_foc\motor_system.o: ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal.h
-g431_foc\motor_system.o: ../Core/Inc/stm32g4xx_hal_conf.h
-g431_foc\motor_system.o: ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_rcc.h
-g431_foc\motor_system.o: ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_def.h
-g431_foc\motor_system.o: ../Drivers/CMSIS/Device/ST/STM32G4xx/Include/stm32g4xx.h
 g431_foc\motor_system.o: ../Drivers/STM32G4xx_HAL_Driver/Inc/Legacy/stm32_hal_legacy.h
 g431_foc\motor_system.o: F:\Keil5\ARM\armcc\Bin\..\include\stddef.h
 g431_foc\motor_system.o: ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_rcc_ex.h
@@ -40,9 +41,9 @@ g431_foc\motor_system.o: ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_tim.h
 g431_foc\motor_system.o: ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_tim_ex.h
 g431_foc\motor_system.o: ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_uart.h
 g431_foc\motor_system.o: ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_uart_ex.h
+g431_foc\motor_system.o: ../user/inc/as5600.h
 g431_foc\motor_system.o: ../user/inc/oled.h
 g431_foc\motor_system.o: ../Core/Inc/tim.h
-g431_foc\motor_system.o: ../Core/Inc/main.h
 g431_foc\motor_system.o: F:\Keil5\ARM\armcc\Bin\..\include\math.h
 g431_foc\motor_system.o: ../user/inc/user_io.h
 g431_foc\motor_system.o: ../user/inc/vofa_usart.h

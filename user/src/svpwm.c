@@ -1,4 +1,5 @@
 #include "svpwm.h"
+#include "motor_system.h"
 #include "tim.h"
 #include <math.h>
 #include <stddef.h>
@@ -32,7 +33,7 @@ void SVPWM_Init(void)
     g_svpwm.duty_c = 0.5f;
     g_svpwm.v_alpha = 0.0f;
     g_svpwm.v_beta = 0.0f;
-    g_svpwm.v_bus   = 12.0f;   // 默认 12V 母线
+    g_svpwm.v_bus   = SYSTEM_BUS_VOLTAGE;   // 默认 SYSTEM_BUS_VOLTAGE 母线
     g_svpwm.mod_index = 0.0f;
     g_svpwm.enabled = 0;
 
@@ -52,7 +53,7 @@ void SVPWM_SetVoltage(float v_alpha, float v_beta, float v_bus)
     // 记录输入（供外部调试查看）
     g_svpwm.v_alpha = v_alpha;
     g_svpwm.v_beta  = v_beta;
-    g_svpwm.v_bus   = (v_bus > 0.1f) ? v_bus : 12.0f;
+    g_svpwm.v_bus   = (v_bus > 0.1f) ? v_bus : SYSTEM_BUS_VOLTAGE;
 
     if (!g_svpwm.enabled)
     {

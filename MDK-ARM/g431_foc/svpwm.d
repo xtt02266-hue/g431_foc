@@ -1,6 +1,7 @@
 g431_foc\svpwm.o: ..\user\src\svpwm.c
 g431_foc\svpwm.o: ../user/inc/svpwm.h
 g431_foc\svpwm.o: F:\Keil5\ARM\armcc\Bin\..\include\stdint.h
+g431_foc\svpwm.o: ../user/inc/motor_system.h
 g431_foc\svpwm.o: ../Core/Inc/tim.h
 g431_foc\svpwm.o: ../Core/Inc/main.h
 g431_foc\svpwm.o: ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal.h

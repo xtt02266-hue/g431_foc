@@ -48,3 +48,5 @@ g431_foc\hardware_init.o: ../user/inc/pid.h
 g431_foc\hardware_init.o: ../user/inc/motor_identify.h
 g431_foc\hardware_init.o: ../user/inc/svpwm.h
 g431_foc\hardware_init.o: ../user/inc/vofa_usart.h
+g431_foc\hardware_init.o: ../user/inc/as5600.h
+g431_foc\hardware_init.o: ../user/inc/motor_system.h

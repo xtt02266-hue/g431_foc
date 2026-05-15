@@ -2,6 +2,7 @@ g431_foc\motor_current_loop.o: ..\user\src\motor_current_loop.c
 g431_foc\motor_current_loop.o: ../user/inc/motor_current_loop.h
 g431_foc\motor_current_loop.o: F:\Keil5\ARM\armcc\Bin\..\include\stdint.h
 g431_foc\motor_current_loop.o: ../user/inc/pid.h
+g431_foc\motor_current_loop.o: ../user/inc/motor_system.h
 g431_foc\motor_current_loop.o: ../Core/Inc/adc.h
 g431_foc\motor_current_loop.o: ../Core/Inc/main.h
 g431_foc\motor_current_loop.o: ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal.h
