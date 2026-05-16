@@ -1,6 +1,7 @@
 #include "motor_system.h"
 #include "motor_current_loop.h"
 #include "motor_speed_loop.h"
+#include "motor_position_loop.h"
 #include "as5600.h"
 #include "oled.h"
 #include "tim.h"
@@ -17,8 +18,8 @@ MotorSystem g_motor_system = {
 
 // 电位器原始值映射到目标速度 (单位: RPM)
 // 假设目标最高 1500 RPM
-#define POT_SPEED_MAX     1200.0f      // 最大速度设定 (RPM)
-#define POT_DEADZONE      100U         // 中位死区 (±100 LSB)，避免微小漂移
+#define POT_SPEED_MAX     300.0f      // 最大速度设定 (RPM)
+#define POT_DEADZONE      10U         // 中位死区 (±100 LSB)，避免微小漂移
 
 static float Motor_MapPotToSpeed(uint16_t pot_raw)
 {
@@ -53,9 +54,11 @@ void Motor_System_Init(void)
     // 初始化速度估计器 (这里使用 alpha=0.15f 的滤波强度，你可以自己调试)
     Motor_SpeedEstimator_Init(0.05f);
     
-    // 初始化速度环 PID (单位现在换成了 RPM 为输入，A 为输出)
-    // 根据具体电机特性调整。可以先用很小的 Kp 安全启动测试
-    Motor_SpeedLoop_Init(0.01f, 0.002f, 0.0001f, 1.1f); 
+    // 初始化速度环 PID (参数已移至 motor_speed_loop.h)
+    Motor_SpeedLoop_Init();
+
+    // 初始化位置环 PID
+    Motor_PositionLoop_Init();
 }
 
 // 周期任务：更新电位器输入，映射为速度，并计算速度环输出。
@@ -71,19 +74,37 @@ void Motor_System_Task(void)
     // 我们必须用系统辨识出的 uvw_dir (1 或 -1) 来把转速的正负号与电机电磁正方向统一，否则会导致 PID 变成正反馈（越差越使劲）！
     float current_rpm = raw_rpm * Motor_Identify_GetResult().uvw_dir;
     
-    // 2. 将电位器值直接映射到速度环 Target
-    float target_rpm = Motor_MapPotToSpeed(Pot_ReadRaw());
-    Motor_SpeedLoop_SetTarget(target_rpm);
+    // 2. 将电位器值直接映射为目标位置 (范围 0~4095)，并进行反向处理
+    float target_pos = 4095.0f - (float)Pot_ReadRaw();
     
-    // 3. FOC 闭环开始工作后，开始让速度环介入产生 Iq，否则 Iq 为 0
+    // 3. FOC 闭环开始工作后，开始让位置环介入产生速度，速度环介入产生 Iq
     if (Motor_Identify_GetState() == IDENTIFY_STATE_DONE)
     {
+        float actual_pos = (float)AS5600_ReadRawAngle();
+        
+        // 处理 0~4095 过零点“最短路径”问题，避免在 0 和 4095 之间来回疯抖
+        float pos_error = target_pos - actual_pos;
+        if (pos_error > 2048.0f) {
+            actual_pos += 4096.0f;
+        } else if (pos_error < -2048.0f) {
+            actual_pos -= 4096.0f;
+        }
+        
+        // 计算位置环，输出期望的机械转速
+        float target_mech_rpm = Motor_PositionLoop_Run(target_pos, actual_pos);
+        
+        // 将机械期望转速乘以 uvw_dir，转换为电磁期望转速，给到速度环，防止正反馈
+        float target_elec_rpm = target_mech_rpm * (float)Motor_Identify_GetResult().uvw_dir;
+        Motor_SpeedLoop_SetTarget(target_elec_rpm);
+        
+        // 计算速度环，输出期望电流
         g_foc_state.target_q = Motor_SpeedLoop_Update(current_rpm);
     }
     else
     {
         Motor_SpeedLoop_SetTarget(0.0f);
         PID_Reset(&speed_pid);
+        PID_Reset(&g_pi_pos);
         g_foc_state.target_q = 0.0f;
     }
     
@@ -210,8 +231,8 @@ if(0)  // 开启 OLED 诊断显示：d/q电流、ADC原始值、角度、电位�
     float vofa_data[7];
     vofa_data[0] = -speed_pid.target;             // 目标速度 (RPM)
     vofa_data[1] = speed_est.speed_rpm;          // 实际转速 (RPM)
-    vofa_data[2] = g_foc_state.target_q;         // Q轴目标电流 (由速度环输出而来)
-    vofa_data[3] = g_foc_state.park.q;           // Q轴实际电流
+    vofa_data[2] = g_pi_pos.target;              // 目标位置
+    vofa_data[3] = g_pi_pos.measure;             // 实际位置
     vofa_data[4] = g_foc_state.pi_q.output;      // PID 输出 Vq (V)
     vofa_data[5] = g_foc_state.sample.iu_a;      // U相实际电流 (A)
     vofa_data[6]= -(g_foc_state.sample.iu_a + g_foc_state.sample.iw_a); // V相实际电流 (A)，理论上应该等于 -Iu -Iw

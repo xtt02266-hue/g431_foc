@@ -41,6 +41,7 @@ g431_foc\motor_system.o: ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_tim.h
 g431_foc\motor_system.o: ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_tim_ex.h
 g431_foc\motor_system.o: ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_uart.h
 g431_foc\motor_system.o: ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_uart_ex.h
+g431_foc\motor_system.o: ../user/inc/motor_position_loop.h
 g431_foc\motor_system.o: ../user/inc/as5600.h
 g431_foc\motor_system.o: ../user/inc/oled.h
 g431_foc\motor_system.o: ../Core/Inc/tim.h

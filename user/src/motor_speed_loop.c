@@ -70,14 +70,16 @@ float Motor_SpeedEstimator_Update(uint16_t current_angle_raw, float dt_seconds) 
 
 /**
  * @brief 速度环初始化
- * @param kp 比例系数
- * @param ki 积分系数
- * @param kd 微分系数
- * @param max_current 最大输出电流(作为电流环的Iq限幅)
  */
-void Motor_SpeedLoop_Init(float kp, float ki, float kd, float max_current) {
+void Motor_SpeedLoop_Init(void) {
     // 调用底层的 PID 初始化
-    PID_Init(&speed_pid, kp, ki, kd, max_current, -max_current, SPEED_LOOP_DT);
+    PID_Init(&speed_pid, 
+             MOTOR_SPEED_PID_KP, 
+             MOTOR_SPEED_PID_KI, 
+             MOTOR_SPEED_PID_KD, 
+             MOTOR_SPEED_PID_OUT_MAX, 
+             MOTOR_SPEED_PID_OUT_MIN, 
+             SPEED_LOOP_DT);
 }
 
 /**

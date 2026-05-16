@@ -1363,12 +1363,12 @@ I (../user/inc/pid.h)(0x69FDD4E4)
 I (../Core/Inc/tim.h)(0x69FB489A)
 I (../Core/Inc/main.h)(0x69DA35AF)
 I (F:\Keil5\ARM\armcc\include\math.h)(0x5E8E3CC2)
-F (..\user\src\motor_system.c)(0x6A073C11)(--c99 -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ../Core/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc/Legacy -I ../Drivers/CMSIS/Device/ST/STM32G4xx/Include -I ../Drivers/CMSIS/Include -I ../user/inc-I.\RTE\_g431_foc-IF:\Keil5\packs\ARM\CMSIS\5.9.0\CMSIS\Core\Include-IF:\Keil5\packs\Keil\STM32G4xx_DFP\1.5.0\Drivers\CMSIS\Device\ST\STM32G4xx\Include-D__UVISION_VERSION="539" -D_RTE_ -DSTM32G431xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32G431xx-o g431_foc\motor_system.o --omf_browse g431_foc\motor_system.crf --depend g431_foc\motor_system.d)
+F (..\user\src\motor_system.c)(0x6A082D89)(--c99 -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ../Core/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc/Legacy -I ../Drivers/CMSIS/Device/ST/STM32G4xx/Include -I ../Drivers/CMSIS/Include -I ../user/inc-I.\RTE\_g431_foc-IF:\Keil5\packs\ARM\CMSIS\5.9.0\CMSIS\Core\Include-IF:\Keil5\packs\Keil\STM32G4xx_DFP\1.5.0\Drivers\CMSIS\Device\ST\STM32G4xx\Include-D__UVISION_VERSION="539" -D_RTE_ -DSTM32G431xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32G431xx-o g431_foc\motor_system.o --omf_browse g431_foc\motor_system.crf --depend g431_foc\motor_system.d)
 I (../user/inc/motor_system.h)(0x6A07359F)
 I (F:\Keil5\ARM\armcc\include\stdint.h)(0x5E8E3CC2)
 I (../user/inc/motor_current_loop.h)(0x6A015F83)
 I (../user/inc/pid.h)(0x69FDD4E4)
-I (../user/inc/motor_speed_loop.h)(0x6A07133E)
+I (../user/inc/motor_speed_loop.h)(0x6A082C00)
 I (../Core/Inc/main.h)(0x69DA35AF)
 I (../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal.h)(0x69DA3581)
 I (../Core/Inc/stm32g4xx_hal_conf.h)(0x69FC73BC)
@@ -1405,6 +1405,7 @@ I (../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_tim.h)(0x69DA3581)
 I (../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_tim_ex.h)(0x69DA3581)
 I (../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_uart.h)(0x69DA3581)
 I (../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_uart_ex.h)(0x69DA3580)
+I (../user/inc/motor_position_loop.h)(0x6A083266)
 I (../user/inc/as5600.h)(0x69FDA408)
 I (../user/inc/oled.h)(0x69FC58B9)
 I (../Core/Inc/tim.h)(0x69FB489A)
@@ -1617,9 +1618,9 @@ I (../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_tim_ex.h)(0x69DA3581)
 I (../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_uart.h)(0x69DA3581)
 I (../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_uart_ex.h)(0x69DA3580)
 I (F:\Keil5\ARM\armcc\include\math.h)(0x5E8E3CC2)
-F (..\user\inc\motor_speed_loop.h)(0x6A07133E)()
-F (..\user\src\motor_speed_loop.c)(0x6A0723A2)(--c99 -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ../Core/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc/Legacy -I ../Drivers/CMSIS/Device/ST/STM32G4xx/Include -I ../Drivers/CMSIS/Include -I ../user/inc-I.\RTE\_g431_foc-IF:\Keil5\packs\ARM\CMSIS\5.9.0\CMSIS\Core\Include-IF:\Keil5\packs\Keil\STM32G4xx_DFP\1.5.0\Drivers\CMSIS\Device\ST\STM32G4xx\Include-D__UVISION_VERSION="539" -D_RTE_ -DSTM32G431xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32G431xx-o g431_foc\motor_speed_loop.o --omf_browse g431_foc\motor_speed_loop.crf --depend g431_foc\motor_speed_loop.d)
-I (../user/inc/motor_speed_loop.h)(0x6A07133E)
+F (..\user\inc\motor_speed_loop.h)(0x6A082C00)()
+F (..\user\src\motor_speed_loop.c)(0x6A0829AC)(--c99 -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ../Core/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc/Legacy -I ../Drivers/CMSIS/Device/ST/STM32G4xx/Include -I ../Drivers/CMSIS/Include -I ../user/inc-I.\RTE\_g431_foc-IF:\Keil5\packs\ARM\CMSIS\5.9.0\CMSIS\Core\Include-IF:\Keil5\packs\Keil\STM32G4xx_DFP\1.5.0\Drivers\CMSIS\Device\ST\STM32G4xx\Include-D__UVISION_VERSION="539" -D_RTE_ -DSTM32G431xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32G431xx-o g431_foc\motor_speed_loop.o --omf_browse g431_foc\motor_speed_loop.crf --depend g431_foc\motor_speed_loop.d)
+I (../user/inc/motor_speed_loop.h)(0x6A082C00)
 I (../Core/Inc/main.h)(0x69DA35AF)
 I (../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal.h)(0x69DA3581)
 I (../Core/Inc/stm32g4xx_hal_conf.h)(0x69FC73BC)
@@ -1657,4 +1658,9 @@ I (../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_tim.h)(0x69DA3581)
 I (../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_tim_ex.h)(0x69DA3581)
 I (../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_uart.h)(0x69DA3581)
 I (../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_uart_ex.h)(0x69DA3580)
+I (../user/inc/pid.h)(0x69FDD4E4)
+F (..\user\inc\motor_position_loop.h)(0x6A083266)()
+F (..\user\src\motor_position_loop.c)(0x6A081FFF)(--c99 -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ../Core/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc -I ../Drivers/STM32G4xx_HAL_Driver/Inc/Legacy -I ../Drivers/CMSIS/Device/ST/STM32G4xx/Include -I ../Drivers/CMSIS/Include -I ../user/inc-I.\RTE\_g431_foc-IF:\Keil5\packs\ARM\CMSIS\5.9.0\CMSIS\Core\Include-IF:\Keil5\packs\Keil\STM32G4xx_DFP\1.5.0\Drivers\CMSIS\Device\ST\STM32G4xx\Include-D__UVISION_VERSION="539" -D_RTE_ -DSTM32G431xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32G431xx-o g431_foc\motor_position_loop.o --omf_browse g431_foc\motor_position_loop.crf --depend g431_foc\motor_position_loop.d)
+I (../user/inc/motor_position_loop.h)(0x6A083266)
+I (F:\Keil5\ARM\armcc\include\stdint.h)(0x5E8E3CC2)
 I (../user/inc/pid.h)(0x69FDD4E4)

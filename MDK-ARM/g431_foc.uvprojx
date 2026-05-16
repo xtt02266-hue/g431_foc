@@ -1393,6 +1393,16 @@
               <FileType>1</FileType>
               <FilePath>..\user\src\motor_speed_loop.c</FilePath>
             </File>
+            <File>
+              <FileName>motor_position_loop.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\inc\motor_position_loop.h</FilePath>
+            </File>
+            <File>
+              <FileName>motor_position_loop.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\src\motor_position_loop.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

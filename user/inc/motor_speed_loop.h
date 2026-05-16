@@ -17,9 +17,16 @@ typedef struct {
 extern PID_Controller speed_pid;
 extern MotorSpeedEstimator speed_est;
 
+/* 速度环宏定义：将 PID 参数暴露在头文件中 */
+#define MOTOR_SPEED_PID_KP          0.0048f
+#define MOTOR_SPEED_PID_KI          0.0028f
+#define MOTOR_SPEED_PID_KD          0.00002f
+#define MOTOR_SPEED_PID_OUT_MAX     1.1f    // 输出到电流环的最大 Iq_ref (A)
+#define MOTOR_SPEED_PID_OUT_MIN     -1.1f   // 输出到电流环的最小 Iq_ref (A)
+
 /* 函数声明 */
 // PID 相关
-void Motor_SpeedLoop_Init(float kp, float ki, float kd, float max_current);
+void Motor_SpeedLoop_Init(void);
 void Motor_SpeedLoop_SetTarget(float target_speed_rpm);
 float Motor_SpeedLoop_Update(float current_speed_rpm);
 
