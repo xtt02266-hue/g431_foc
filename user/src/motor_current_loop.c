@@ -7,7 +7,7 @@
 
     // 一阶低通滤波：滤除 PWM 开关噪声和 ADC 采样毛刺
     // alpha 越大滤波越弱（响应越快），越小滤波越强（越平滑）
-    // 20kHz 采样下，alpha=0.15 对应截止频率约 500Hz
+    // 20kHz 采样下，alpha=0.2 对应截止频率约 500Hz
 #define ADC_FILTER_ALPHA  0.3f
 
 // 电流环/FOC 全局运行状态与参数。

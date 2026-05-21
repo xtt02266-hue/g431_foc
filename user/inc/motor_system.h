@@ -19,10 +19,18 @@ typedef enum
     MOTOR_STATE_FAULT
 } MotorState;
 
+// 电机实时运行数据
+typedef struct
+{
+    float speed_rpm;       // 实时转速 (RPM)
+    uint16_t pot_raw;      // 电位器原始数值 (0-4095)
+} MotorRunData;
+
 // 电机系统关键变量。
 typedef struct
 {
     MotorState state;
+    MotorRunData run_data; // 实时的运行状态数据 (转速、电位器值等)
 } MotorSystem;
 
 // 电机系统全局实例。
@@ -34,5 +42,6 @@ void Motor_System_Init(void);
 void Motor_System_Task(void);
 // OLED上显示临时调试信息。
 void Motor_ShowDebugInfo_OLED(void);
+void Motor_SimulateSpring_Task(void);
 
 #endif

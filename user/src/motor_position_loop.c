@@ -29,6 +29,14 @@ void Motor_PositionLoop_Init(void)
  */
 float Motor_PositionLoop_Run(float target_position, float actual_position)
 {
+    // 处理 0~4095 过零点“最短路径”问题，避免在 0 和 4095 之间来回疯抖
+    float pos_error = target_position - actual_position;
+    if (pos_error > 2048.0f) {
+        actual_position += 4096.0f;
+    } else if (pos_error < -2048.0f) {
+        actual_position -= 4096.0f;
+    }
+
     // 设置PID的输入参数
     g_pi_pos.target = target_position;
     g_pi_pos.measure = actual_position;

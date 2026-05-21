@@ -18,9 +18,9 @@ extern PID_Controller speed_pid;
 extern MotorSpeedEstimator speed_est;
 
 /* 速度环宏定义：将 PID 参数暴露在头文件中 */
-#define MOTOR_SPEED_PID_KP          0.0048f
-#define MOTOR_SPEED_PID_KI          0.0028f
-#define MOTOR_SPEED_PID_KD          0.00002f
+#define MOTOR_SPEED_PID_KP          0.002f
+#define MOTOR_SPEED_PID_KI          0.005f
+#define MOTOR_SPEED_PID_KD          0.0f
 #define MOTOR_SPEED_PID_OUT_MAX     1.1f    // 输出到电流环的最大 Iq_ref (A)
 #define MOTOR_SPEED_PID_OUT_MIN     -1.1f   // 输出到电流环的最小 Iq_ref (A)
 
@@ -33,6 +33,9 @@ float Motor_SpeedLoop_Update(float current_speed_rpm);
 // 速度测算相关
 void Motor_SpeedEstimator_Init(float filter_alpha);
 float Motor_SpeedEstimator_Update(uint16_t current_angle_raw, float dt_seconds);
+
+// 弱磁控制 (Field Weakening)
+float Motor_SpeedLoop_FieldWeakening(float current_rpm);
 
 
 #endif /* __MOTOR_SPEED_LOOP_H */
