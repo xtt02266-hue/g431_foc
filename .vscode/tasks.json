@@ -1,0 +1,68 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "CMake: Build Debug",
+            "type": "shell",
+            "command": "D:\\software\\cmake-4.3.3-windows-x86_64\\bin\\cmake.exe",
+            "args": [
+                "--build",
+                "--preset",
+                "Debug"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "DAPLink: Flash Debug",
+            "type": "shell",
+            "command": "D:\\software\\embedded-tools\\Scripts\\pyocd.exe",
+            "args": [
+                "flash",
+                "--pack",
+                "C:\\Users\\25934\\AppData\\Local\\Arm\\Packs\\.Download\\Keil.STM32G4xx_DFP.2.0.0.pack",
+                "-t",
+                "stm32g431cbux",
+                "-M",
+                "under-reset",
+                "-f",
+                "800000",
+                "-u",
+                "507874000284",
+                "${workspaceFolder}\\build\\Debug\\g431_foc.elf"
+            ],
+            "dependsOn": [
+                "CMake: Build Debug"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "DAPLink: Flash Debug Probe 350",
+            "type": "shell",
+            "command": "D:\\software\\embedded-tools\\Scripts\\pyocd.exe",
+            "args": [
+                "flash",
+                "--pack",
+                "C:\\Users\\25934\\AppData\\Local\\Arm\\Packs\\.Download\\Keil.STM32G4xx_DFP.2.0.0.pack",
+                "-t",
+                "stm32g431cbux",
+                "-M",
+                "under-reset",
+                "-f",
+                "800000",
+                "-u",
+                "507874000350",
+                "${workspaceFolder}\\build\\Debug\\g431_foc.elf"
+            ],
+            "dependsOn": [
+                "CMake: Build Debug"
+            ],
+            "problemMatcher": []
+        }
+    ]
+}

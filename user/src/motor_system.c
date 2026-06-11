@@ -2,6 +2,8 @@
 #include "motor_current_loop.h"
 #include "motor_speed_loop.h"
 #include "motor_position_loop.h"
+#include "motor_feedforward.h"
+#include "motor_trajectory.h"
 #include "as5600.h"
 #include "oled.h"
 #include "tim.h"
@@ -16,29 +18,70 @@ MotorSystem g_motor_system = {
     .state = MOTOR_STATE_STOPPED,
 };
 
-// 电位器原始值映射到目标速度 (单位: RPM)
-#define POT_SPEED_MAX     300.0f      // 最大速度设定 (RPM)
-#define POT_DEADZONE      10U         // 中位死区 (±100 LSB)，避免微小漂移
-
-static float Motor_MapPotToSpeed(uint16_t pot_raw)
+// 调试用全局变量，用于 VOFA+ 波形观察，不参与控制逻辑。
+static float g_debug_pot_target_pos = 0.0f;       // 电位器目标位置
+static float g_debug_uvw_dir = 1.0f;              // UVW 方向系数 (1 或 -1)
+static float g_debug_friction_iq = 0.0f;           // 摩擦补偿电流 (A)
+static float g_debug_inertia_iq = 0.0f;            // 惯性补偿电流 (A)
+// 浮点数绝对值
+static float Motor_AbsFloat(float value)
 {
-    // 以中点 2048 为零点，计算偏差
-    int32_t offset = (int32_t)pot_raw - 2048;
+    return (value < 0.0f) ? -value : value;
+}
 
-    // 死区：中位附近强制输出 0，手感更好
-    if (offset > -(int32_t)POT_DEADZONE && offset < (int32_t)POT_DEADZONE) {
-        return 0.0f;
+// 浮点数限幅: 将 value 限制在 [min_value, max_value] 区间内
+static float Motor_MapPotTargetPosition(uint16_t pot_raw)
+{
+    // 当前硬件接法下 ADC 越大, 期望位置越小, 所以这里做 4095 - ADC 的反向映射.
+    return 4095.0f - (float)pot_raw;
+}
+
+static uint16_t Motor_SpeedEstimator_GetPeriodTicks(float rpm)
+{
+    float abs_rpm = Motor_AbsFloat(rpm);
+
+    if (abs_rpm >= SPEED_EST_HIGH_RPM_THRESHOLD) {
+        return SPEED_EST_MAX_PERIOD_TICKS;
+    } else if (abs_rpm >= SPEED_EST_MID_RPM_THRESHOLD) {
+        return SPEED_EST_HIGH_PERIOD_TICKS;
+    } else if (abs_rpm >= SPEED_EST_LOW_RPM_THRESHOLD) {
+        return SPEED_EST_MID_PERIOD_TICKS;
+    } else {
+        return SPEED_EST_LOW_PERIOD_TICKS;
+    }
+}
+
+// 自适应采样率速度估算器
+// 策略: 根据当前估算转速动态调整编码器采样间隔 (分频比)
+//   低速 (<50 RPM):  每 20ms 采样一次 (50Hz)，用更长窗口抑制量化噪声
+//   中速 (50~200):   每 5ms 采样一次 (200Hz)
+//   中高速 (200~500): 每 2ms 采样一次 (500Hz)
+//   高速 (>500 RPM): 每 1ms 采样一次 (1000Hz)，保证响应速度
+// 这样在低速时避免了 AS5600 12-bit 编码器因采样过快导致的量化抖动
+static float Motor_UpdateSpeedEstimatorAdaptive(void)
+{
+    static uint16_t ticks = 0;
+    static float dt_acc = 0.0f;
+
+    if (!speed_est.initialized) {
+        ticks = 0;
+        dt_acc = 0.0f;
+        g_motor_system.run_data.speed_rpm =
+            Motor_SpeedEstimator_Update(AS5600_ReadRawAngle(), MOTOR_SYSTEM_TASK_DT_SEC);
+        return g_motor_system.run_data.speed_rpm;
     }
 
-    // 线性映射：偏差 → 速度
-    // offset 范围约 ±2048，映射到 ±POT_SPEED_MAX
-    float speed = (float)offset * (POT_SPEED_MAX / 2048.0f);
+    ticks++;
+    dt_acc += MOTOR_SYSTEM_TASK_DT_SEC;
 
-    // 限幅
-    if (speed >  POT_SPEED_MAX) speed =  POT_SPEED_MAX;
-    if (speed < -POT_SPEED_MAX) speed = -POT_SPEED_MAX;
+    if (ticks >= Motor_SpeedEstimator_GetPeriodTicks(g_motor_system.run_data.speed_rpm)) {
+        g_motor_system.run_data.speed_rpm =
+            Motor_SpeedEstimator_Update(AS5600_ReadRawAngle(), dt_acc);
+        ticks = 0;
+        dt_acc = 0.0f;
+    }
 
-    return speed;
+    return g_motor_system.run_data.speed_rpm;
 }
 
 // 初始化系统状态与目标值。
@@ -54,7 +97,7 @@ void Motor_System_Init(void)
     // 参数为低通滤波系数 filter_alpha (0.001 ~ 1.0)
     // 越接近 0 (如 0.08f)：信号越平滑，抗噪声能力强，低速越稳，但响应会有滞后
     // 越接近 1 (如 0.80f)：几乎无滤波，对转速变化响应极快，但低速极容易受噪声抖动
-    Motor_SpeedEstimator_Init(0.25f);
+    Motor_SpeedEstimator_Init(0.4f);
     
     // 初始化速度环 PID (参数已移至 motor_speed_loop.h)
     Motor_SpeedLoop_Init();
@@ -63,98 +106,83 @@ void Motor_System_Init(void)
     Motor_PositionLoop_Init();
 }
 
-// 周期任务：更新电位器输入，映射为速度，并计算速度环输出。
+// 周期任务：读取电位器位置目标, 通过位置规划器生成速度目标, 再由速度环生成 Iq。
+// 调用频率: 1kHz (由 TIM2 中断驱动, dt = 1ms)
+// 控制链路: 电位器 → 位置环 → 速度环(仅前馈) → Iq → FOC → SVPWM → 电机
 void Motor_System_Task(void)
 {
-    // 定时器进入此函数为 1ms 一次，故 dt=0.001s
-    float dt = 0.001f;
-    // 1. 每 1ms 测算最新速度 (RPM)，传入 dt=0.001s
-    g_motor_system.run_data.speed_rpm = Motor_SpeedEstimator_Update(AS5600_ReadRawAngle(), dt);
+    // ========== 步骤 1: 速度估算 (自适应采样率) ==========
+    // 低速时用长窗口降噪，高速时用短窗口提高响应
+    g_motor_system.run_data.speed_rpm = Motor_UpdateSpeedEstimatorAdaptive();
     
     // 如果编码器接线/电机相序不同，编码器读数的正反方向可能会和 Iq 的正扭矩方向相反。
     // 我们必须用系统辨识出的 uvw_dir (1 或 -1) 来把转速的正负号与电机电磁正方向统一，否则会导致 PID 变成正反馈（越差越使劲）！
     float current_rpm = g_motor_system.run_data.speed_rpm * Motor_Identify_GetResult().uvw_dir;
     
-    // 2. 将电位器值直接映射为目标位置 (范围 0~4095)，并进行反向处理
+    // ========== 步骤 2: 读取电位器目标位置 ==========
+    // 电位器 ADC → 反向映射 (4095 - value) → 目标位置
     g_motor_system.run_data.pot_raw = Pot_ReadRaw();
-    float target_pos = 4095.0f - (float)g_motor_system.run_data.pot_raw;
+    float target_pos = Motor_MapPotTargetPosition(g_motor_system.run_data.pot_raw);
+    g_debug_pot_target_pos = target_pos;
     
     // 3. FOC 闭环开始工作后，开始让位置环介入产生速度，速度环介入产生 Iq
+    // 控制链路: 电位器目标 → 位置环 (P) → 目标机械转速 → 乘 uvw_dir → 目标电磁转速
+    //          → 速度环 (PI) → Iq 电流 → 摩擦前馈叠加 → 限幅 → FOC 电流环
     if (Motor_Identify_GetState() == IDENTIFY_STATE_DONE)
     {
         float actual_pos = (float)AS5600_ReadRawAngle();
+        float actual_mech_rpm = g_motor_system.run_data.speed_rpm;
+        Motor_Trajectory_Step(target_pos, actual_pos, actual_mech_rpm);
         
         // 计算位置环，输出期望的机械转速
-        float target_mech_rpm = Motor_PositionLoop_Run(target_pos, actual_pos);
+        float target_mech_rpm =
+            Motor_PositionLoop_Run(Motor_Trajectory_GetPosition(), actual_pos);
         
-        // 将机械期望转速乘以 uvw_dir，转换为电磁期望转速，给到速度环，防止正反馈
-        float target_elec_rpm = target_mech_rpm * (float)Motor_Identify_GetResult().uvw_dir;
-        Motor_SpeedLoop_SetTarget(target_elec_rpm);//位置环输出的目标速度直接传给速度环，位置环自动调节速度以达到目标位置
-        //Motor_SpeedLoop_SetTarget(Motor_MapPotToSpeed(g_motor_system.run_data.pot_raw));
-        
-        // 计算速度环，输出期望电流
-        g_foc_state.target_q = Motor_SpeedLoop_Update(current_rpm);
+        // 将机械期望转速乘以 uvw_dir，转换为电磁期望转速，给到速度环，防止正反馈。
+        // 摩擦补偿和惯性补偿也必须使用同一个电磁方向坐标系。
+        float uvw_dir = (float)Motor_Identify_GetResult().uvw_dir;
+        float target_elec_rpm = target_mech_rpm * uvw_dir;
+        g_debug_uvw_dir = uvw_dir;
+
+        // 位置环输出的目标速度直接传给速度环。
+        Motor_SpeedLoop_SetTarget(target_elec_rpm);
+
+        // 速度闭环 PID 输出基础 Iq。
+        float speed_loop_iq = Motor_SpeedLoop_Update(current_rpm);
+
+        // 由目标速度估算目标加速度，再计算两个前馈分量。
+        float target_accel_rpm_s = Motor_Trajectory_GetAccel() * uvw_dir;
+        float friction_iq = Motor_Feedforward_FrictionIq(target_elec_rpm);
+        float inertia_iq = Motor_Feedforward_InertiaIq(target_accel_rpm_s);
+
+        // 调试量，便于在 VOFA+ 中观察各分量。
+        g_debug_friction_iq = friction_iq;
+        g_debug_inertia_iq = inertia_iq;
+        // 正确的合成顺序：速度 PID + 摩擦前馈 + 惯性前馈，最后统一限流。
+        // 不要再用 target_q = friction_iq 覆盖速度 PID 输出。
+        g_foc_state.target_q =
+            Motor_Feedforward_ApplyIq(speed_loop_iq,
+                                      friction_iq,
+                                      inertia_iq,
+                                      MOTOR_SPEED_PID_OUT_MIN,
+                                      MOTOR_SPEED_PID_OUT_MAX);
     }
     else
     {
+        // 辨识未完成: 清零所有 PID 积分和电流输出，防止误动作
         Motor_SpeedLoop_SetTarget(0.0f);
         PID_Reset(&speed_pid);
         PID_Reset(&g_pi_pos);
+        Motor_Trajectory_Clear();
+        g_debug_uvw_dir = (float)Motor_Identify_GetResult().uvw_dir;
+        g_debug_friction_iq = 0.0f;
+        g_debug_inertia_iq = 0.0f;
         g_foc_state.target_q = 0.0f;
     }
     
-    // D 轴弱磁控制 (Field Weakening) 策略
-    g_foc_state.target_d = Motor_SpeedLoop_FieldWeakening(current_rpm);
-}
-
-// ---------------------------------------------------------
-// 模拟弹簧效果任务
-// ---------------------------------------------------------
-void Motor_SimulateSpring_Task(void)
-{
-    // 如果辨识未完成，不输出力矩
-    if (Motor_Identify_GetState() != IDENTIFY_STATE_DONE) {
-        g_foc_state.target_q = 0.0f;
-        g_foc_state.target_d = 0.0f;
-        return;
-    }
-
-    // 1. 获取转速 (用于计算阻尼力抵消震荡)
-    g_motor_system.run_data.speed_rpm = Motor_SpeedEstimator_Update(AS5600_ReadRawAngle(), 0.001f);
-    
-    // 2. 读取电位器值并映射为弹力系数 K 
-    // 电位器范围 0~4095，这里将其映射为 0.0 ~ 0.0005，你可以根据手感增大或减小该乘数
-    g_motor_system.run_data.pot_raw = Pot_ReadRaw();
-    float stiffness_k = (float)g_motor_system.run_data.pot_raw * (0.0005f / 4096.0f); 
-
-    // 3. 设定平衡点（弹簧原长位置在中间位置 2048）
-    float target_pos = 2048.0f;
-    float actual_pos = (float)AS5600_ReadRawAngle();
-
-    // 4. 计算位置偏差，处理一下过零点避免越界错乱
-    float pos_error = target_pos - actual_pos;
-    if (pos_error > 2048.0f) {
-        pos_error -= 4096.0f;
-    } else if (pos_error < -2048.0f) {
-        pos_error += 4096.0f;
-    }
-
-    // 5. 在【机械编码器坐标系】下计算目标扭矩 = 弹力 - 阻尼
-    // 注意：阻尼项必须使用原始的 speed_rpm 否则会导致正反馈震荡
-    float damping_b = 0.00015f; // 阻尼系数
-    float target_iq_mech = (stiffness_k * pos_error) - (damping_b * g_motor_system.run_data.speed_rpm);
-    
-    // 6. 乘以 uvw_dir 将机械扭矩转换为正确的电磁电流方向
-    float target_iq = target_iq_mech * Motor_Identify_GetResult().uvw_dir;
-
-    // 7. 限幅，防止力矩过大烧毁电机 (最大 1.2A)
-    float max_iq = 1.2f;
-    if (target_iq > max_iq) target_iq = max_iq;
-    if (target_iq < -max_iq) target_iq = -max_iq;
-
-    // 直接输出扭矩
-    g_foc_state.target_q = target_iq;
-    g_foc_state.target_d = 0.0f;
+    // D 轴弱磁控制 (Field Weakening) 策略 — 当前禁用
+    // 弱磁用于高速时主动注入负 Id 来压低反电动势，扩展转速范围
+    //g_foc_state.target_d = Motor_SpeedLoop_FieldWeakening(current_rpm);
 }
 
 // ---------------------------------------------------------
@@ -173,6 +201,12 @@ static void Motor_StatusLed_Task(void)
 
 // ---------------------------------------------------------
 // 定时器更新中断回调函数 (TIM2, 假设为 1000Hz / 1ms 周期)
+// 这是整个电机控制系统的"心跳"中断，所有实时控制逻辑在此统一调度:
+//   1. 辨识阶段: 执行开环辨识任务
+//   2. 辨识刚完成: 自动整定电流环 PI 参数 + 使能 SVPWM + 开启 FOC 闭环
+//   3. 正常运行时: 执行 Motor_System_Task (位置/速度/Iq 级联控制)
+//   4. 每 250ms 翻转一次状态 LED (2Hz 闪烁)
+// 注意: 中断中不得执行耗时操作 (如 OLED 刷新、VOFA 发送等)，那些应放在 main 循环中
 // ---------------------------------------------------------
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
@@ -183,7 +217,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         // 1. 如果正在校准，执行校准任务
         if (Motor_Identify_GetState() != IDENTIFY_STATE_DONE)
         {
-             Motor_Identify_Task();
+             Motor_Identify_Task();    // 开环辨识: 注入测试信号，测量 R/L/uvw_dir
         }
         // 2. 辨识刚完成时：自动整定 PID + 启用 FOC 闭环 + SVPWM 输出
         else
@@ -191,33 +225,29 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
              static uint8_t loop_was_enabled = 0;
              if (!loop_was_enabled)
              {
-                 loop_was_enabled = 1;
+                 loop_was_enabled = 1;  // 此标志确保初始化代码仅执行一次
 
                  // 根据辨识出的 R/L 自动计算电流环 PI 增益
                  MotorIdentifiedParams id = Motor_Identify_GetResult();
                  Motor_CurrentLoop_AutoTunePID(id.resistance, id.inductance, SYSTEM_BUS_VOLTAGE);
 
-                 g_svpwm.enabled = 1;                    // 使能 SVPWM 输出
-                 Motor_CurrentLoop_Enable(1);             // 使能 FOC 电流闭环
+                 g_svpwm.enabled = 1;                    // 使能 SVPWM 输出 (六路 PWM 开始输出)
+                 Motor_CurrentLoop_Enable(1);             // 使能 FOC 电流闭环 (ADC 注入通道触发)
              }
              // 闭环已接管 CCR，不再调用 Motor_OpenLoop_Drive（否则会覆盖 SVPWM 输出！）
         }
         
         // 调用系统普通任务 (1ms 周期刷新电位器和目标)
         Motor_System_Task();
-       //Motor_SimulateSpring_Task();
+       //Motor_SimulateSpring_Task();   // 弹簧模拟 (与位置控制互斥，二选一)
         // ================================================
         // ============ 状态灯 2Hz 闪烁 ============
         Motor_StatusLed_Task();
         // =========================================
         
-        // 其他需要在 1ms 下执行的逻辑，如按键扫描延时、速度环更新等
     }
 }
 
-// ---------------------------------------------------------
-// 综合测试任务：OLED 显示与 VOFA+ 上位机波形观察 (放在 main 的 while(1) 中调用)
-// ---------------------------------------------------------
 void Motor_ShowDebugInfo_OLED(void)
 {
     // 获取实时的 FOC 内部状态（电流、坐标变换后结果）
@@ -227,16 +257,17 @@ void Motor_ShowDebugInfo_OLED(void)
     // 1. OLED 界面显示关键调度状态
     if (id_state != IDENTIFY_STATE_DONE) {
         // 辨识进行中：显示状态编号 + 目标 q 电流
-        OLED_ShowString(1, 1, "Idt");
+        OLED_ShowString(1, 1, "Idt");     // "Idt" = Identify (辨识中)
         OLED_ShowString(1, 4, "Tq:");
-        OLED_ShowSignedNum(1, 7, (int32_t)(g_foc_state.target_q * 1000.0f), 5);
-        OLED_ShowNum(1, 14, id_state, 2);
+        OLED_ShowSignedNum(1, 7, (int32_t)(g_foc_state.target_q * 1000.0f), 5);  // 显示 mA 级
+        OLED_ShowNum(1, 14, id_state, 2);   // 辨识状态码
     } else {
-        // 辨识完成：显示 Run + 目标 q 电流
+        // 辨识完成：OLED 显示暂时关闭以节省 CPU
        // OLED_ShowString(1, 1, "Run");
         //OLED_ShowSignedNum(1, 7, (int32_t)(g_foc_state.target_q * 1000.0f), 5);
     }
 if(0)  // 开启 OLED 诊断显示：d/q电流、ADC原始值、角度、电位器
+       // 改为 if(1) 可开启详细诊断界面 (会增加 CPU 负载)
 {
     // 第2行：D 轴实际电流 (mA) + ADC U 相原始值
     OLED_ShowChar(2, 1, 'd');
@@ -251,17 +282,27 @@ if(0)  // 开启 OLED 诊断显示：d/q电流、ADC原始值、角度、电位�
     // OLED_ShowNum(3, 9, AS5600_ReadRawAngle(), 4); 
 
 }
-    // 2. VOFA+ 诊断波形 (4 通道 或者更多)
-    //    现在可以用来观察速度闭环参数。CH0 vs CH1 看速度跟随，CH2 vs CH3 看电流跟随
-    float vofa_data[7];
+    // 2. VOFA+ 诊断波形.
+    // 使用 VOFA+ 的 JustFloat 协议: 帧尾 4 字节 (0x00 0x00 0x80 0x7F)
+    // 上位机设置: 8 通道, 波特率匹配 USART 配置
+    // CH0: 速度环目标速度, RPM.
+    // CH1: 速度环实际速度, RPM.
+    // CH2: 电位器输入目标位置.
+    // CH3: 轨迹规划器生成的平滑规划位置.
+    // CH4: AS5600 实际编码器位置.
+    // CH5: 电位器原始 ADC.
+    // CH6: 轨迹规划器输出的速度命令, 单位 RPM.
+    // CH7: uvw_dir (1 或 -1), 用于判断编码器方向与电磁方向是否一致
+    float vofa_data[8];
     vofa_data[0] = speed_pid.target;             // 目标速度 (RPM)
     vofa_data[1] = speed_pid.measure;            // 实际转速 (RPM)
-    vofa_data[2] = g_pi_pos.target;              // 目标位置
-    vofa_data[3] = g_pi_pos.measure;             // 实际位置
-    vofa_data[4] = g_foc_state.pi_q.output;      // PID 输出 Vq (V)
-    vofa_data[5] = g_foc_state.sample.iu_a;      // U相实际电流 (A)
-    vofa_data[6]= -(g_foc_state.sample.iu_a + g_foc_state.sample.iw_a); // V相实际电流 (A)，理论上应该等于 -Iu -Iw
-    VOFA_JustFloat_Send(vofa_data, 7);
+    vofa_data[2] = g_debug_pot_target_pos;       // 电位器目标位置
+    vofa_data[3] = Motor_Trajectory_GetPosition(); // 轨迹规划位置
+    vofa_data[4] = (float)AS5600_ReadRawAngle(); // 编码器实时角度
+    vofa_data[5] = (float)g_motor_system.run_data.pot_raw; // 电位器原始 ADC
+    vofa_data[6] = Motor_Trajectory_GetVelocity(); // 轨迹规划速度
+    vofa_data[7] = g_debug_uvw_dir;              // UVW 方向系数
+    VOFA_JustFloat_Send(vofa_data, 8);
     // 适当的软件延时，刷新太快 OLED 会闪
     // 这里设定 50ms (即20Hz刷新率)，对 OLED 友好，对 VOFA 观察手动转动也足够
    // HAL_Delay(1);

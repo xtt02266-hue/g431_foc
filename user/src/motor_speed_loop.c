@@ -10,10 +10,10 @@ MotorSpeedEstimator speed_est;
 // 假设速度环控制周期为 1ms，与 motor_system 里的定时分频配平
 #define SPEED_LOOP_DT  0.001f
 
-// ======================= 速度测算部分 =======================
-
-#define SPEED_WINDOW_SIZE 10 // 建立一个 10ms 的滑动窗口
+// 缩小滑动窗口，降低速度反馈中的硬件级相位滞后！
+#define SPEED_WINDOW_SIZE 4 // 低速自适应采样时会拉长等效测速窗口，降低量化抖动
 static uint16_t angle_history[SPEED_WINDOW_SIZE];
+static float dt_history[SPEED_WINDOW_SIZE];
 static uint8_t history_idx = 0;
 
 /**
@@ -25,12 +25,16 @@ void Motor_SpeedEstimator_Init(float filter_alpha) {
     speed_est.speed_rpm = 0.0f;
     speed_est.filter_alpha = filter_alpha;
     speed_est.initialized = 0;
+    for (int i = 0; i < SPEED_WINDOW_SIZE; i++) {
+        angle_history[i] = 0;
+        dt_history[i] = 0.0f;
+    }
     history_idx = 0;
 }
 
 /**
  * @brief 更新并计算当前速度 (RPM)
- * 一定要在固定周期内调用（当前为 1ms）
+ * dt_seconds 必须传入距离上一次实际测速的累计时间
  */
 float Motor_SpeedEstimator_Update(uint16_t current_angle_raw, float dt_seconds) {
     if (dt_seconds <= 0.0f) return speed_est.speed_rpm;
@@ -39,6 +43,7 @@ float Motor_SpeedEstimator_Update(uint16_t current_angle_raw, float dt_seconds) 
     if (!speed_est.initialized) {
         for (int i = 0; i < SPEED_WINDOW_SIZE; i++) {
             angle_history[i] = current_angle_raw;
+            dt_history[i] = 0.0f;
         }
         history_idx = 0;
         
@@ -48,17 +53,18 @@ float Motor_SpeedEstimator_Update(uint16_t current_angle_raw, float dt_seconds) 
         return 0.0f;
     }
 
-    // 1. 获取 10ms (SPEED_WINDOW_SIZE 个周期) 前记录的历史角度
+    // 1. 获取 SPEED_WINDOW_SIZE 次实际测速前记录的历史角度
     uint16_t oldest_angle = angle_history[history_idx];
     
     // 2. 将当前最新角度存入历史缓冲区覆盖旧值，并推进索引
     angle_history[history_idx] = current_angle_raw;
+    dt_history[history_idx] = dt_seconds;
     history_idx++;
     if (history_idx >= SPEED_WINDOW_SIZE) {
         history_idx = 0;
     }
 
-    // 3. 计算 10ms 跨度下的原始数据增量
+    // 3. 计算测速窗口内的原始数据增量
     int32_t delta = (int32_t)current_angle_raw - (int32_t)oldest_angle;
     
     // 4. 处理编码器过零点 (0 -> 4095 或 4095 -> 0)
@@ -71,8 +77,11 @@ float Motor_SpeedEstimator_Update(uint16_t current_angle_raw, float dt_seconds) 
     speed_est.last_angle_raw = current_angle_raw;
     
     // 5. 计算机械瞬时速度
-    // 注意：这里的实际跨越时间为 SPEED_WINDOW_SIZE * dt_seconds (即 10 * 0.001s = 0.010s)
-    float actual_dt = SPEED_WINDOW_SIZE * dt_seconds;
+    float actual_dt = 0.0f;
+    for (int i = 0; i < SPEED_WINDOW_SIZE; i++) {
+        actual_dt += dt_history[i];
+    }
+    if (actual_dt <= 0.0f) return speed_est.speed_rpm;
     float instant_rpm = ((float)delta * 60.0f) / (4096.0f * actual_dt);
     
     // 6. 一阶低通滤波 (EMA)，进一步平滑
@@ -124,28 +133,26 @@ float Motor_SpeedLoop_Update(float current_speed_rpm) {
 
 
 /**
- * @brief  D �����ſ��� (Field Weakening) ����
- * @param  current_rpm ��ǰʵ��ת��
- * @retval ����õ���Ŀ�� D ����� (Id_ref)
+ * @brief  弱磁控制 (Field Weakening) 策略，根据当前转速调整 D 轴电流以实现更高的速度。
+ * @param  current_rpm 当前实际转速
+ * @retval 
  */
 float Motor_SpeedLoop_FieldWeakening(float current_rpm)
 {
-    // ����Ĳ��Էǳ��򵥣����� 1000 RPM ��ÿ���� 100 RPM��D ������ -0.1A����� -1.0A
+
     float fw_rpm_threshold = 1000.0f;
-    float fw_gain = 0.001f;  // (�� 0.1A / 100RPM)
-    float fw_max_current = -1.0f; // �޷�����ֹ���ŵ��������¶������ط�������ʧ���˴� (֮ǰ������д����0������˳���������޷�����)
+    float fw_gain = 0.001f;  
+    float fw_max_current = -1.0f; 
 
     float target_d = 0.0f;
     
-    // ȡ��ǰת�ٵľ���ֵ
     float abs_rpm = current_rpm;
     if (abs_rpm < 0.0f) abs_rpm = -abs_rpm;
     
     if (abs_rpm > fw_rpm_threshold)
     {
         target_d = -(abs_rpm - fw_rpm_threshold) * fw_gain;
-        
-        // �����Ǹ��������ж��Ƿ񳬳������ڣ���󸺵����޷�
+
         if (target_d < fw_max_current)
         {
             target_d = fw_max_current;
@@ -153,7 +160,6 @@ float Motor_SpeedLoop_FieldWeakening(float current_rpm)
     }
     else
     {
-        // �ٶȽϵ�ʱ�������ţ��������ת�ص����� (MTPA)
         target_d = 0.0f;
     }
     

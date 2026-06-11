@@ -1,0 +1,6 @@
+C:/Users/25934/Desktop/g431_foc/g431_foc/build/Debug/CMakeFiles/g431_foc.dir
+C:/Users/25934/Desktop/g431_foc/g431_foc/build/Debug/CMakeFiles/edit_cache.dir
+C:/Users/25934/Desktop/g431_foc/g431_foc/build/Debug/CMakeFiles/rebuild_cache.dir
+C:/Users/25934/Desktop/g431_foc/g431_foc/build/Debug/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir
+C:/Users/25934/Desktop/g431_foc/g431_foc/build/Debug/cmake/stm32cubemx/CMakeFiles/edit_cache.dir
+C:/Users/25934/Desktop/g431_foc/g431_foc/build/Debug/cmake/stm32cubemx/CMakeFiles/rebuild_cache.dir

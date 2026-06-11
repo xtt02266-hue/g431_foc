@@ -93,7 +93,6 @@ void hardware_init(void)
     SVPWM_Init();
 
     // 5. 启动 TIM2 (用于 1ms / 1000Hz 周期任务调度，如 AS5600 慢速读取、目标值更新等)
-    HAL_TIM_Base_Start_IT(&htim2);
 
     // 6. 启动串口接收 (与 VOFA+ 上位机通信)
     VOFA_Init(); 
@@ -109,4 +108,5 @@ void hardware_init(void)
 
     // 8. 启动电机参数自动辨识 (电阻/电感为临时固定值，极对数/相序/零点自动测量)
     Motor_Identify_Start();
+    HAL_TIM_Base_Start_IT(&htim2);
 }

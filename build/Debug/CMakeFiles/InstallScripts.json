@@ -1,0 +1,8 @@
+{
+	"InstallScripts" : 
+	[
+		"C:/Users/25934/Desktop/g431_foc/g431_foc/build/Debug/cmake_install.cmake",
+		"C:/Users/25934/Desktop/g431_foc/g431_foc/build/Debug/cmake/stm32cubemx/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

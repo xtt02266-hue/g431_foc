@@ -9,7 +9,8 @@
 #define RAW_ANGLE_HI RAW_Angle_Hi
 #define RAW_ANGLE_LO RAW_Angle_Lo
 // 7 位 I2C 从机地址（未包含读写位）。
-#define AS5600_Address 0x6c
+#define AS5600_7BIT_ADDRESS 0x36
+#define AS5600_Address      (AS5600_7BIT_ADDRESS << 1)
 // I2C 超时（ms）。
 #define I2C_TIMEOUT 10000U
 

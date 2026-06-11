@@ -1,0 +1,10 @@
+{
+    "cmake.cmakePath": "D:\\software\\cmake-4.3.3-windows-x86_64\\bin\\cmake.exe",
+    "cmake.generator": "Ninja",
+    "cmake.configureEnvironment": {
+        "PATH": "D:\\software\\embedded-tools\\Scripts;D:\\software\\cmake-4.3.3-windows-x86_64\\bin;${env:PATH}"
+    },
+    "cmake.buildEnvironment": {
+        "PATH": "D:\\software\\embedded-tools\\Scripts;D:\\software\\cmake-4.3.3-windows-x86_64\\bin;${env:PATH}"
+    }
+}
