@@ -53,6 +53,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     user/src/motor_speed_loop.c
     user/src/motor_system.c
     user/src/motor_trajectory.c
+    user/src/mt6826s.c
     user/src/oled.c
     user/src/pid.c
     user/src/svpwm.c

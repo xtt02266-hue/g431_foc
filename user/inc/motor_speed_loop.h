@@ -18,8 +18,8 @@ extern PID_Controller speed_pid;
 extern MotorSpeedEstimator speed_est;
 
 /* 速度环宏定义：将 PID 参数暴露在头文件中 */
-#define MOTOR_SPEED_PID_KP          0.0005f
-#define MOTOR_SPEED_PID_KI          0.00005f
+#define MOTOR_SPEED_PID_KP          0.001f
+#define MOTOR_SPEED_PID_KI          0.0006f
 #define MOTOR_SPEED_PID_KD          0.0f
 #define MOTOR_SPEED_PID_OUT_MAX     2.0f    // 输出到电流环的最大 Iq_ref (A)
 #define MOTOR_SPEED_PID_OUT_MIN     -2.0f   // 输出到电流环的最小 Iq_ref (A)

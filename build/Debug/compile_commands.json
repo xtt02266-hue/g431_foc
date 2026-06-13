@@ -133,6 +133,12 @@
 },
 {
   "directory": "C:/Users/25934/Desktop/g431_foc/g431_foc/build/Debug",
+  "command": "C:\\PROGRA~2\\ARMGNU~1\\112202~1.02\\bin\\AR19DD~1.EXE -DDEBUG -DSTM32G431xx -DUSE_HAL_DRIVER -IC:/Users/25934/Desktop/g431_foc/g431_foc/user/inc -IC:/Users/25934/Desktop/g431_foc/g431_foc/cmake/stm32cubemx/../../Core/Inc -IC:/Users/25934/Desktop/g431_foc/g431_foc/cmake/stm32cubemx/../../Drivers/STM32G4xx_HAL_Driver/Inc -IC:/Users/25934/Desktop/g431_foc/g431_foc/cmake/stm32cubemx/../../Drivers/STM32G4xx_HAL_Driver/Inc/Legacy -IC:/Users/25934/Desktop/g431_foc/g431_foc/cmake/stm32cubemx/../../Drivers/CMSIS/Device/ST/STM32G4xx/Include -IC:/Users/25934/Desktop/g431_foc/g431_foc/cmake/stm32cubemx/../../Drivers/CMSIS/Include  -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -O0 -g3 -std=gnu11 -o CMakeFiles\\g431_foc.dir\\user\\src\\mt6826s.c.obj -c C:\\Users\\25934\\Desktop\\g431_foc\\g431_foc\\user\\src\\mt6826s.c",
+  "file": "C:/Users/25934/Desktop/g431_foc/g431_foc/user/src/mt6826s.c",
+  "output": "C:/Users/25934/Desktop/g431_foc/g431_foc/build/Debug/CMakeFiles/g431_foc.dir/user/src/mt6826s.c.obj"
+},
+{
+  "directory": "C:/Users/25934/Desktop/g431_foc/g431_foc/build/Debug",
   "command": "C:\\PROGRA~2\\ARMGNU~1\\112202~1.02\\bin\\AR19DD~1.EXE -DDEBUG -DSTM32G431xx -DUSE_HAL_DRIVER -IC:/Users/25934/Desktop/g431_foc/g431_foc/user/inc -IC:/Users/25934/Desktop/g431_foc/g431_foc/cmake/stm32cubemx/../../Core/Inc -IC:/Users/25934/Desktop/g431_foc/g431_foc/cmake/stm32cubemx/../../Drivers/STM32G4xx_HAL_Driver/Inc -IC:/Users/25934/Desktop/g431_foc/g431_foc/cmake/stm32cubemx/../../Drivers/STM32G4xx_HAL_Driver/Inc/Legacy -IC:/Users/25934/Desktop/g431_foc/g431_foc/cmake/stm32cubemx/../../Drivers/CMSIS/Device/ST/STM32G4xx/Include -IC:/Users/25934/Desktop/g431_foc/g431_foc/cmake/stm32cubemx/../../Drivers/CMSIS/Include  -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -O0 -g3 -std=gnu11 -o CMakeFiles\\g431_foc.dir\\user\\src\\oled.c.obj -c C:\\Users\\25934\\Desktop\\g431_foc\\g431_foc\\user\\src\\oled.c",
   "file": "C:/Users/25934/Desktop/g431_foc/g431_foc/user/src/oled.c",
   "output": "C:/Users/25934/Desktop/g431_foc/g431_foc/build/Debug/CMakeFiles/g431_foc.dir/user/src/oled.c.obj"

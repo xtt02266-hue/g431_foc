@@ -9,6 +9,7 @@
 #include "svpwm.h"
 #include "vofa_usart.h" // 包含 VOFA 系列函数
 #include "as5600.h"
+#include "mt6826s.h"
 #include "motor_system.h"
 
 // OLED_Init 由显示驱动实现，这里做前置声明。
@@ -59,13 +60,8 @@ void hardware_init(void)
     HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
     HAL_ADCEx_Calibration_Start(&hadc2, ADC_SINGLE_ENDED);
 
-    // 1. 启动常规通道 DMA 搬运（读取电位器等慢速信号）
-    // 为了避免单数据高频循环转换导致 DMA 中断风暴卡死，这里不使用 HAL_ADC_Start_DMA 附带的软件中断。
-    // 使用寄存器直接启动 ADC 和 DMA 请求。由于 CubeMX 配置了 DMA 循环模式，这就可以实现纯硬件后台搬运。
-    HAL_DMA_Start(hadc2.DMA_Handle, (uint32_t)&hadc2.Instance->DR, (uint32_t)&g_user_pot_raw, 1U);
-    SET_BIT(hadc2.Instance->CFGR, ADC_CFGR_DMACFG); // 设为 DMA 循环模式
-    SET_BIT(hadc2.Instance->CFGR, ADC_CFGR_DMAEN);  // 开启 ADC2 的 DMA 请求功能
-    HAL_ADC_Start(&hadc2);                          // 开启 ADC2
+    UserIO_StartDma();
+
 
     // 2. 启动 TIM1 通道 4（用作 ADC 的触发信号 CC4）
     //此时不开启PWM输出（占空比全0），对运放偏置进行初始标定
@@ -96,6 +92,10 @@ void hardware_init(void)
 
     // 6. 启动串口接收 (与 VOFA+ 上位机通信)
     VOFA_Init(); 
+
+    // MT6826S is initialized for SPI readout testing only.
+    // The motor control chain still uses AS5600 until explicitly switched.
+    MT6826S_Init();
 
     // 7. 启动 I2C DMA (用于 AS5600 基于 DMA 的无阻塞读取逻辑)
     // 首次发起一次 AS5600 的 DMA 接收请求

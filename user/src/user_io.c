@@ -2,54 +2,56 @@
 #include "adc.h"
 #include "gpio.h"
 
-// 暴露给 DMA 的全局变量，存放电位器最新的 ADC 值
 volatile uint16_t g_user_pot_raw = 0;
 
-// PC4 外部电位器：ADC2 + DMA 循环采样。
 #define POT_ADC_HANDLE (&hadc2)
 
-// 外部按键：读取原始电平（无滤波）。
 #define BUTTON1_GPIO_PORT GPIOB
 #define BUTTON1_PIN GPIO_PIN_10
 #define BUTTON2_GPIO_PORT GPIOB
 #define BUTTON2_PIN GPIO_PIN_11
 
-// 状态灯：共阴极，PB6 高电平点亮。
 #define LED_GPIO_PORT GPIOB
 #define LED_PIN GPIO_PIN_6
 
-// 启动电位器 ADC 的 DMA 循环采样（实际上现改为在硬件初始化中底层手动启动无中断 DMA）
-// 为了保持接口兼容性，保留此函数，但当前可以为空。
 HAL_StatusTypeDef UserIO_StartDma(void)
 {
-    return HAL_OK;
+    HAL_StatusTypeDef status =
+        HAL_DMA_Start(POT_ADC_HANDLE->DMA_Handle,
+                      (uint32_t)&POT_ADC_HANDLE->Instance->DR,
+                      (uint32_t)&g_user_pot_raw,
+                      1U);
+
+    if (status != HAL_OK) {
+        return status;
+    }
+
+    SET_BIT(POT_ADC_HANDLE->Instance->CFGR, ADC_CFGR_DMACFG);
+    SET_BIT(POT_ADC_HANDLE->Instance->CFGR, ADC_CFGR_DMAEN);
+
+    return HAL_ADC_Start(POT_ADC_HANDLE);
 }
 
-// 返回 12 位 ADC 原始值（DMA 持续更新）。
 uint16_t Pot_ReadRaw(void)
 {
     return g_user_pot_raw;
 }
 
-// 引脚高电平返回 1，低电平返回 0。
 uint8_t Button1_ReadLevel(void)
 {
     return (HAL_GPIO_ReadPin(BUTTON1_GPIO_PORT, BUTTON1_PIN) == GPIO_PIN_SET) ? 1U : 0U;
 }
 
-// 引脚高电平返回 1，低电平返回 0。
 uint8_t Button2_ReadLevel(void)
 {
     return (HAL_GPIO_ReadPin(BUTTON2_GPIO_PORT, BUTTON2_PIN) == GPIO_PIN_SET) ? 1U : 0U;
 }
 
-// 控制灯亮灭；非 0 表示点亮（GPIO 高）。
 void Led_Set(uint8_t on)
 {
     HAL_GPIO_WritePin(LED_GPIO_PORT, LED_PIN, (on != 0U) ? GPIO_PIN_SET : GPIO_PIN_RESET);
 }
 
-// 反转 LED 状态。
 void Led_Toggle(void)
 {
     HAL_GPIO_TogglePin(LED_GPIO_PORT, LED_PIN);

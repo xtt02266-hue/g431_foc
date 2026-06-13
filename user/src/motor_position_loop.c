@@ -3,6 +3,23 @@
 // 位置环的 PID 控制器实例
 PID_Controller g_pi_pos;
 
+#define MOTOR_POSITION_COUNTS_PER_REV   4096.0f
+#define MOTOR_POSITION_HALF_REV_COUNTS  2048.0f
+
+static float Motor_PositionLoop_ShortestError(float target_position,
+                                              float actual_position)
+{
+    float error = target_position - actual_position;
+
+    if (error > MOTOR_POSITION_HALF_REV_COUNTS) {
+        error -= MOTOR_POSITION_COUNTS_PER_REV;
+    } else if (error < -MOTOR_POSITION_HALF_REV_COUNTS) {
+        error += MOTOR_POSITION_COUNTS_PER_REV;
+    }
+
+    return error;
+}
+
 /**
  * @brief  位置环初始化
  * @param  无
@@ -29,8 +46,12 @@ void Motor_PositionLoop_Init(void)
  */
 float Motor_PositionLoop_Run(float target_position, float actual_position)
 {
-    // 设置PID的输入参数
-    g_pi_pos.target = target_position;
+    float position_error =
+        Motor_PositionLoop_ShortestError(target_position,
+                                         actual_position);
+
+    // 让 PID 内部仍按 target - measure 工作，同时使用环形最短误差。
+    g_pi_pos.target = actual_position + position_error;
     g_pi_pos.measure = actual_position;
     
     // 执行PID计算 (计算结果储存在 g_pi_pos.output 内)

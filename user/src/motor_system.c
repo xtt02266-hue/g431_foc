@@ -12,6 +12,7 @@
 #include "vofa_usart.h"
 #include "motor_identify.h"
 #include "svpwm.h"
+#include "mt6826s.h"
 
 // 电机系统运行状态。
 MotorSystem g_motor_system = {
@@ -23,6 +24,8 @@ static float g_debug_pot_target_pos = 0.0f;       // 电位器目标位置
 static float g_debug_uvw_dir = 1.0f;              // UVW 方向系数 (1 或 -1)
 static float g_debug_friction_iq = 0.0f;           // 摩擦补偿电流 (A)
 static float g_debug_inertia_iq = 0.0f;            // 惯性补偿电流 (A)
+static float g_debug_speed_loop_iq = 0.0f;         // 速度环基础 Iq 输出 (A)
+static float g_debug_target_accel_rpm_s = 0.0f;    // 惯性补偿使用的目标加速度 (RPM/s)
 // 浮点数绝对值
 static float Motor_AbsFloat(float value)
 {
@@ -32,7 +35,6 @@ static float Motor_AbsFloat(float value)
 // 浮点数限幅: 将 value 限制在 [min_value, max_value] 区间内
 static float Motor_MapPotTargetPosition(uint16_t pot_raw)
 {
-    // 当前硬件接法下 ADC 越大, 期望位置越小, 所以这里做 4095 - ADC 的反向映射.
     return 4095.0f - (float)pot_raw;
 }
 
@@ -124,6 +126,7 @@ void Motor_System_Task(void)
     g_motor_system.run_data.pot_raw = Pot_ReadRaw();
     float target_pos = Motor_MapPotTargetPosition(g_motor_system.run_data.pot_raw);
     g_debug_pot_target_pos = target_pos;
+    g_foc_state.target_d = 0.0f;
     
     // 3. FOC 闭环开始工作后，开始让位置环介入产生速度，速度环介入产生 Iq
     // 控制链路: 电位器目标 → 位置环 (P) → 目标机械转速 → 乘 uvw_dir → 目标电磁转速
@@ -134,9 +137,16 @@ void Motor_System_Task(void)
         float actual_mech_rpm = g_motor_system.run_data.speed_rpm;
         Motor_Trajectory_Step(target_pos, actual_pos, actual_mech_rpm);
         
-        // 计算位置环，输出期望的机械转速
-        float target_mech_rpm =
+        // 位置环只输出位置误差修正量；轨迹规划器的速度作为前馈主项。
+        float position_correction_rpm =
             Motor_PositionLoop_Run(Motor_Trajectory_GetPosition(), actual_pos);
+        float target_mech_rpm =
+            Motor_Trajectory_GetVelocity() + position_correction_rpm;
+        if (target_mech_rpm > MOTOR_POSITION_PID_OUT_MAX) {
+            target_mech_rpm = MOTOR_POSITION_PID_OUT_MAX;
+        } else if (target_mech_rpm < MOTOR_POSITION_PID_OUT_MIN) {
+            target_mech_rpm = MOTOR_POSITION_PID_OUT_MIN;
+        }
         
         // 将机械期望转速乘以 uvw_dir，转换为电磁期望转速，给到速度环，防止正反馈。
         // 摩擦补偿和惯性补偿也必须使用同一个电磁方向坐标系。
@@ -152,20 +162,21 @@ void Motor_System_Task(void)
 
         // 由目标速度估算目标加速度，再计算两个前馈分量。
         float target_accel_rpm_s = Motor_Trajectory_GetAccel() * uvw_dir;
-        float friction_iq = Motor_Feedforward_FrictionIq(target_elec_rpm);
-        float inertia_iq = Motor_Feedforward_InertiaIq(target_accel_rpm_s);
+        MotorFeedforwardResult feedforward =
+            Motor_Feedforward_Calculate(speed_loop_iq,
+                                        target_elec_rpm,
+                                        target_accel_rpm_s,
+                                        MOTOR_SPEED_PID_OUT_MIN,
+                                        MOTOR_SPEED_PID_OUT_MAX);
 
         // 调试量，便于在 VOFA+ 中观察各分量。
-        g_debug_friction_iq = friction_iq;
-        g_debug_inertia_iq = inertia_iq;
+        g_debug_speed_loop_iq = feedforward.speed_loop_iq;
+        g_debug_friction_iq = feedforward.friction_iq;
+        g_debug_inertia_iq = feedforward.inertia_iq;
+        g_debug_target_accel_rpm_s = feedforward.accel_rpm_s;
         // 正确的合成顺序：速度 PID + 摩擦前馈 + 惯性前馈，最后统一限流。
         // 不要再用 target_q = friction_iq 覆盖速度 PID 输出。
-        g_foc_state.target_q =
-            Motor_Feedforward_ApplyIq(speed_loop_iq,
-                                      friction_iq,
-                                      inertia_iq,
-                                      MOTOR_SPEED_PID_OUT_MIN,
-                                      MOTOR_SPEED_PID_OUT_MAX);
+        g_foc_state.target_q = feedforward.output_iq;
     }
     else
     {
@@ -175,9 +186,12 @@ void Motor_System_Task(void)
         PID_Reset(&g_pi_pos);
         Motor_Trajectory_Clear();
         g_debug_uvw_dir = (float)Motor_Identify_GetResult().uvw_dir;
+        g_debug_speed_loop_iq = 0.0f;
         g_debug_friction_iq = 0.0f;
         g_debug_inertia_iq = 0.0f;
+        g_debug_target_accel_rpm_s = 0.0f;
         g_foc_state.target_q = 0.0f;
+        g_foc_state.target_d = 0.0f;
     }
     
     // D 轴弱磁控制 (Field Weakening) 策略 — 当前禁用
@@ -282,27 +296,20 @@ if(0)  // 开启 OLED 诊断显示：d/q电流、ADC原始值、角度、电位�
     // OLED_ShowNum(3, 9, AS5600_ReadRawAngle(), 4); 
 
 }
-    // 2. VOFA+ 诊断波形.
-    // 使用 VOFA+ 的 JustFloat 协议: 帧尾 4 字节 (0x00 0x00 0x80 0x7F)
-    // 上位机设置: 8 通道, 波特率匹配 USART 配置
-    // CH0: 速度环目标速度, RPM.
-    // CH1: 速度环实际速度, RPM.
-    // CH2: 电位器输入目标位置.
-    // CH3: 轨迹规划器生成的平滑规划位置.
-    // CH4: AS5600 实际编码器位置.
-    // CH5: 电位器原始 ADC.
-    // CH6: 轨迹规划器输出的速度命令, 单位 RPM.
-    // CH7: uvw_dir (1 或 -1), 用于判断编码器方向与电磁方向是否一致
-    float vofa_data[8];
-    vofa_data[0] = speed_pid.target;             // 目标速度 (RPM)
-    vofa_data[1] = speed_pid.measure;            // 实际转速 (RPM)
-    vofa_data[2] = g_debug_pot_target_pos;       // 电位器目标位置
-    vofa_data[3] = Motor_Trajectory_GetPosition(); // 轨迹规划位置
-    vofa_data[4] = (float)AS5600_ReadRawAngle(); // 编码器实时角度
-    vofa_data[5] = (float)g_motor_system.run_data.pot_raw; // 电位器原始 ADC
-    vofa_data[6] = Motor_Trajectory_GetVelocity(); // 轨迹规划速度
-    vofa_data[7] = g_debug_uvw_dir;              // UVW 方向系数
-    VOFA_JustFloat_Send(vofa_data, 8);
+
+    float vofa_data[11];
+    vofa_data[0] = Motor_Trajectory_GetPosition();  // CH0: 轨迹规划器目标位置 (counts)
+    vofa_data[1] = (float)AS5600_ReadRawAngle();     // CH1: 编码器实际位置 (counts)
+    vofa_data[2] = speed_pid.target;                 // CH2: 速度环目标转速 (电磁方向, RPM)
+    vofa_data[3] = speed_pid.measure;                // CH3: 速度环实测转速 (电磁方向, RPM)
+    vofa_data[4] = g_debug_speed_loop_iq*1000;            // CH4: 速度环 PID 基础输出 (mA)
+    vofa_data[5] = g_debug_friction_iq*1000;              // CH5: 摩擦前馈补偿电流 (mA)
+    vofa_data[6] = g_debug_inertia_iq*1000;               // CH6: 惯性前馈补偿电流 (mA)
+    vofa_data[7] = g_foc_state.target_q*1000;             // CH7: 最终输出到电流环的目标 Iq (mA)
+    vofa_data[8] = g_foc_state.park.q*1000;               // CH8: 实测 Q 轴电流 (mA)
+    vofa_data[9] = g_debug_target_accel_rpm_s;       // CH9: 轨迹规划加速度 (电磁方向, RPM/s)
+    vofa_data[10] = (float)MT6826S_ReadRawAngle15(); // CH10: 轨迹规划加速度 15-bit 机械角度 (0~32767)
+    VOFA_JustFloat_Send(vofa_data, 11);              // 通过串口发送 11 通道数据到 VOFA+ 上位机
     // 适当的软件延时，刷新太快 OLED 会闪
     // 这里设定 50ms (即20Hz刷新率)，对 OLED 友好，对 VOFA 观察手动转动也足够
    // HAL_Delay(1);
