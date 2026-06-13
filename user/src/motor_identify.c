@@ -14,8 +14,8 @@ static uint32_t g_identify_timer = 0;
 static uint16_t g_uvw_start_angle = 0;
 static float g_uvw_elec_angle = 0.0f;
 
-#define MOTOR_TWO_PI                 6.28318530718f
-#define MOTOR_HALF_PI                1.57079632679f
+#define MOTOR_TWO_PI                 6.2832f
+#define MOTOR_HALF_PI                1.5708f
 #define MOTOR_OPEN_LOOP_ALIGN_ANGLE  0.0f
 /*
  * Motor_OpenLoop_Drive(theta) generates phase voltages with sin(theta).

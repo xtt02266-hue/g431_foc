@@ -5335,6 +5335,8 @@ Discarded input sections
  .text          0x00000000        0x0 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
  .data          0x00000000        0x0 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
  .bss           0x00000000        0x0 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
+ .text.Motor_Trajectory_GetVelocity
+                0x00000000       0x1c CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
  .debug_macro   0x00000000      0xaa8 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
  .debug_macro   0x00000000       0x22 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
  .debug_macro   0x00000000       0x8e CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
@@ -6188,7 +6190,7 @@ LOAD c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/
                 0x08000000                g_pfnVectors
                 0x080001d8                . = ALIGN (0x4)
 
-.text           0x080001d8    0x103d8
+.text           0x080001d8    0x103b4
                 0x080001d8                . = ALIGN (0x4)
  *(.text)
  .text          0x080001d8      0x254 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_arm_muldf3.o)
@@ -7081,324 +7083,322 @@ LOAD c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/
  .text.Motor_PositionLoop_ShortestError
                 0x0800d45c       0x84 CMakeFiles/g431_foc.dir/user/src/motor_position_loop.c.obj
  .text.Motor_PositionLoop_Init
-                0x0800d4e0       0x5c CMakeFiles/g431_foc.dir/user/src/motor_position_loop.c.obj
+                0x0800d4e0       0x58 CMakeFiles/g431_foc.dir/user/src/motor_position_loop.c.obj
                 0x0800d4e0                Motor_PositionLoop_Init
  .text.Motor_PositionLoop_Run
-                0x0800d53c       0x54 CMakeFiles/g431_foc.dir/user/src/motor_position_loop.c.obj
-                0x0800d53c                Motor_PositionLoop_Run
+                0x0800d538       0x54 CMakeFiles/g431_foc.dir/user/src/motor_position_loop.c.obj
+                0x0800d538                Motor_PositionLoop_Run
  .text.Motor_SpeedEstimator_Init
-                0x0800d590       0x70 CMakeFiles/g431_foc.dir/user/src/motor_speed_loop.c.obj
-                0x0800d590                Motor_SpeedEstimator_Init
+                0x0800d58c       0x70 CMakeFiles/g431_foc.dir/user/src/motor_speed_loop.c.obj
+                0x0800d58c                Motor_SpeedEstimator_Init
  .text.Motor_SpeedEstimator_Update
-                0x0800d600      0x1b0 CMakeFiles/g431_foc.dir/user/src/motor_speed_loop.c.obj
-                0x0800d600                Motor_SpeedEstimator_Update
+                0x0800d5fc      0x1b0 CMakeFiles/g431_foc.dir/user/src/motor_speed_loop.c.obj
+                0x0800d5fc                Motor_SpeedEstimator_Update
  .text.Motor_SpeedLoop_Init
-                0x0800d7b0       0x38 CMakeFiles/g431_foc.dir/user/src/motor_speed_loop.c.obj
-                0x0800d7b0                Motor_SpeedLoop_Init
+                0x0800d7ac       0x38 CMakeFiles/g431_foc.dir/user/src/motor_speed_loop.c.obj
+                0x0800d7ac                Motor_SpeedLoop_Init
  .text.Motor_SpeedLoop_SetTarget
-                0x0800d7e8       0x20 CMakeFiles/g431_foc.dir/user/src/motor_speed_loop.c.obj
-                0x0800d7e8                Motor_SpeedLoop_SetTarget
+                0x0800d7e4       0x20 CMakeFiles/g431_foc.dir/user/src/motor_speed_loop.c.obj
+                0x0800d7e4                Motor_SpeedLoop_SetTarget
  .text.Motor_SpeedLoop_Update
-                0x0800d808       0x2c CMakeFiles/g431_foc.dir/user/src/motor_speed_loop.c.obj
-                0x0800d808                Motor_SpeedLoop_Update
+                0x0800d804       0x2c CMakeFiles/g431_foc.dir/user/src/motor_speed_loop.c.obj
+                0x0800d804                Motor_SpeedLoop_Update
  .text.Motor_AbsFloat
-                0x0800d834       0x34 CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
- .text.Motor_MapPotTargetPosition
-                0x0800d868       0x30 CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
+                0x0800d830       0x34 CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
  .text.Motor_SpeedEstimator_GetPeriodTicks
-                0x0800d898       0x70 CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
+                0x0800d864       0x70 CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
  .text.Motor_UpdateSpeedEstimatorAdaptive
-                0x0800d908       0xc8 CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
+                0x0800d8d4       0xc8 CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
  .text.Motor_System_Init
-                0x0800d9d0       0x40 CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
-                0x0800d9d0                Motor_System_Init
+                0x0800d99c       0x40 CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
+                0x0800d99c                Motor_System_Init
  .text.Motor_System_Task
-                0x0800da10      0x23c CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
-                0x0800da10                Motor_System_Task
+                0x0800d9dc      0x1f0 CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
+                0x0800d9dc                Motor_System_Task
  .text.Motor_StatusLed_Task
-                0x0800dc4c       0x2c CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
+                0x0800dbcc       0x2c CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
  .text.HAL_TIM_PeriodElapsedCallback
-                0x0800dc78       0x78 CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
-                0x0800dc78                HAL_TIM_PeriodElapsedCallback
+                0x0800dbf8       0x78 CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
+                0x0800dbf8                HAL_TIM_PeriodElapsedCallback
  .text.Motor_ShowDebugInfo_OLED
-                0x0800dcf0      0x12c CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
-                0x0800dcf0                Motor_ShowDebugInfo_OLED
+                0x0800dc70      0x190 CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
+                0x0800dc70                Motor_ShowDebugInfo_OLED
  .text.Motor_Trajectory_AbsFloat
-                0x0800de1c       0x34 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
+                0x0800de00       0x34 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
  .text.Motor_Trajectory_ClampFloat
-                0x0800de50       0x52 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
- *fill*         0x0800dea2        0x2 
+                0x0800de34       0x52 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
+ *fill*         0x0800de86        0x2 
  .text.Motor_Trajectory_WrapPosition
-                0x0800dea4       0x68 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
+                0x0800de88       0x68 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
  .text.Motor_Trajectory_ShortestPositionError
-                0x0800df0c       0x84 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
+                0x0800def0       0x84 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
+ .text.Motor_Trajectory_SignFloat
+                0x0800df74       0x4c CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
  .text.Motor_Trajectory_MoveTowardFloat
-                0x0800df90       0x98 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
- .text.Motor_Trajectory_FilterTarget
-                0x0800e028       0x84 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
+                0x0800dfc0       0x98 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
  .text.Motor_Trajectory_Reset
-                0x0800e0ac       0x74 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
-                0x0800e0ac                Motor_Trajectory_Reset
+                0x0800e058       0x74 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
+                0x0800e058                Motor_Trajectory_Reset
  .text.Motor_Trajectory_Clear
-                0x0800e120       0x48 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
-                0x0800e120                Motor_Trajectory_Clear
+                0x0800e0cc       0x48 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
+                0x0800e0cc                Motor_Trajectory_Clear
  .text.Motor_Trajectory_Step
-                0x0800e168      0x22c CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
-                0x0800e168                Motor_Trajectory_Step
+                0x0800e114      0x25c CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
+                0x0800e114                Motor_Trajectory_Step
  .text.Motor_Trajectory_GetPosition
-                0x0800e394       0x1c CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
-                0x0800e394                Motor_Trajectory_GetPosition
- .text.Motor_Trajectory_GetVelocity
-                0x0800e3b0       0x1c CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
-                0x0800e3b0                Motor_Trajectory_GetVelocity
+                0x0800e370       0x1c CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
+                0x0800e370                Motor_Trajectory_GetPosition
  .text.Motor_Trajectory_GetAccel
-                0x0800e3cc       0x1c CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
-                0x0800e3cc                Motor_Trajectory_GetAccel
+                0x0800e38c       0x1c CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
+                0x0800e38c                Motor_Trajectory_GetAccel
+ .text.Motor_Trajectory_GetFilteredTarget
+                0x0800e3a8       0x1c CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
+                0x0800e3a8                Motor_Trajectory_GetFilteredTarget
  .text.MT6826S_Select
-                0x0800e3e8       0x14 CMakeFiles/g431_foc.dir/user/src/mt6826s.c.obj
+                0x0800e3c4       0x14 CMakeFiles/g431_foc.dir/user/src/mt6826s.c.obj
  .text.MT6826S_Unselect
-                0x0800e3fc       0x14 CMakeFiles/g431_foc.dir/user/src/mt6826s.c.obj
+                0x0800e3d8       0x14 CMakeFiles/g431_foc.dir/user/src/mt6826s.c.obj
  .text.MT6826S_Init
-                0x0800e410       0x70 CMakeFiles/g431_foc.dir/user/src/mt6826s.c.obj
-                0x0800e410                MT6826S_Init
+                0x0800e3ec       0x70 CMakeFiles/g431_foc.dir/user/src/mt6826s.c.obj
+                0x0800e3ec                MT6826S_Init
  .text.MT6826S_ReadRawAngle15
-                0x0800e480       0x78 CMakeFiles/g431_foc.dir/user/src/mt6826s.c.obj
-                0x0800e480                MT6826S_ReadRawAngle15
+                0x0800e45c       0x78 CMakeFiles/g431_foc.dir/user/src/mt6826s.c.obj
+                0x0800e45c                MT6826S_ReadRawAngle15
  .text.I2C_Delay
-                0x0800e4f8       0x4c CMakeFiles/g431_foc.dir/user/src/oled.c.obj
-                0x0800e4f8                I2C_Delay
+                0x0800e4d4       0x4c CMakeFiles/g431_foc.dir/user/src/oled.c.obj
+                0x0800e4d4                I2C_Delay
  .text.OLED_W_SCL
-                0x0800e544       0x28 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
-                0x0800e544                OLED_W_SCL
+                0x0800e520       0x28 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
+                0x0800e520                OLED_W_SCL
  .text.OLED_W_SDA
-                0x0800e56c       0x28 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
-                0x0800e56c                OLED_W_SDA
+                0x0800e548       0x28 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
+                0x0800e548                OLED_W_SDA
  .text.OLED_I2C_Init
-                0x0800e594       0x1a CMakeFiles/g431_foc.dir/user/src/oled.c.obj
-                0x0800e594                OLED_I2C_Init
+                0x0800e570       0x1a CMakeFiles/g431_foc.dir/user/src/oled.c.obj
+                0x0800e570                OLED_I2C_Init
  .text.OLED_I2C_Start
-                0x0800e5ae       0x20 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
-                0x0800e5ae                OLED_I2C_Start
+                0x0800e58a       0x20 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
+                0x0800e58a                OLED_I2C_Start
  .text.OLED_I2C_Stop
-                0x0800e5ce       0x1a CMakeFiles/g431_foc.dir/user/src/oled.c.obj
-                0x0800e5ce                OLED_I2C_Stop
+                0x0800e5aa       0x1a CMakeFiles/g431_foc.dir/user/src/oled.c.obj
+                0x0800e5aa                OLED_I2C_Stop
  .text.OLED_I2C_SendByte
-                0x0800e5e8       0x58 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
-                0x0800e5e8                OLED_I2C_SendByte
+                0x0800e5c4       0x58 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
+                0x0800e5c4                OLED_I2C_SendByte
  .text.OLED_WriteCommand
-                0x0800e640       0x2e CMakeFiles/g431_foc.dir/user/src/oled.c.obj
-                0x0800e640                OLED_WriteCommand
+                0x0800e61c       0x2e CMakeFiles/g431_foc.dir/user/src/oled.c.obj
+                0x0800e61c                OLED_WriteCommand
  .text.OLED_WriteData
-                0x0800e66e       0x2e CMakeFiles/g431_foc.dir/user/src/oled.c.obj
-                0x0800e66e                OLED_WriteData
+                0x0800e64a       0x2e CMakeFiles/g431_foc.dir/user/src/oled.c.obj
+                0x0800e64a                OLED_WriteData
  .text.OLED_SetCursor
-                0x0800e69c       0x46 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
-                0x0800e69c                OLED_SetCursor
+                0x0800e678       0x46 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
+                0x0800e678                OLED_SetCursor
  .text.OLED_Clear
-                0x0800e6e2       0x46 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
-                0x0800e6e2                OLED_Clear
+                0x0800e6be       0x46 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
+                0x0800e6be                OLED_Clear
  .text.OLED_ShowChar
-                0x0800e728       0xb4 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
-                0x0800e728                OLED_ShowChar
+                0x0800e704       0xb4 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
+                0x0800e704                OLED_ShowChar
  .text.OLED_ShowString
-                0x0800e7dc       0x4a CMakeFiles/g431_foc.dir/user/src/oled.c.obj
-                0x0800e7dc                OLED_ShowString
+                0x0800e7b8       0x4a CMakeFiles/g431_foc.dir/user/src/oled.c.obj
+                0x0800e7b8                OLED_ShowString
  .text.OLED_Pow
-                0x0800e826       0x32 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
-                0x0800e826                OLED_Pow
+                0x0800e802       0x32 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
+                0x0800e802                OLED_Pow
  .text.OLED_ShowNum
-                0x0800e858       0x7c CMakeFiles/g431_foc.dir/user/src/oled.c.obj
-                0x0800e858                OLED_ShowNum
+                0x0800e834       0x7c CMakeFiles/g431_foc.dir/user/src/oled.c.obj
+                0x0800e834                OLED_ShowNum
  .text.OLED_ShowSignedNum
-                0x0800e8d4       0xa8 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
-                0x0800e8d4                OLED_ShowSignedNum
+                0x0800e8b0       0xa8 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
+                0x0800e8b0                OLED_ShowSignedNum
  .text.OLED_Init
-                0x0800e97c       0xa0 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
-                0x0800e97c                OLED_Init
+                0x0800e958       0xa0 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
+                0x0800e958                OLED_Init
  .text.PID_Init
-                0x0800ea1c       0xa0 CMakeFiles/g431_foc.dir/user/src/pid.c.obj
-                0x0800ea1c                PID_Init
+                0x0800e9f8       0xa0 CMakeFiles/g431_foc.dir/user/src/pid.c.obj
+                0x0800e9f8                PID_Init
  .text.PID_Reset
-                0x0800eabc       0x3c CMakeFiles/g431_foc.dir/user/src/pid.c.obj
-                0x0800eabc                PID_Reset
+                0x0800ea98       0x3c CMakeFiles/g431_foc.dir/user/src/pid.c.obj
+                0x0800ea98                PID_Reset
  .text.PID_Calculate
-                0x0800eaf8      0x1c2 CMakeFiles/g431_foc.dir/user/src/pid.c.obj
-                0x0800eaf8                PID_Calculate
- .text.clamp    0x0800ecba       0x52 CMakeFiles/g431_foc.dir/user/src/svpwm.c.obj
+                0x0800ead4      0x1c2 CMakeFiles/g431_foc.dir/user/src/pid.c.obj
+                0x0800ead4                PID_Calculate
+ .text.clamp    0x0800ec96       0x52 CMakeFiles/g431_foc.dir/user/src/svpwm.c.obj
  .text.SVPWM_Init
-                0x0800ed0c       0x78 CMakeFiles/g431_foc.dir/user/src/svpwm.c.obj
-                0x0800ed0c                SVPWM_Init
+                0x0800ece8       0x78 CMakeFiles/g431_foc.dir/user/src/svpwm.c.obj
+                0x0800ece8                SVPWM_Init
  .text.SVPWM_SetVoltage
-                0x0800ed84      0x498 CMakeFiles/g431_foc.dir/user/src/svpwm.c.obj
-                0x0800ed84                SVPWM_SetVoltage
+                0x0800ed60      0x498 CMakeFiles/g431_foc.dir/user/src/svpwm.c.obj
+                0x0800ed60                SVPWM_SetVoltage
  .text.UserIO_StartDma
-                0x0800f21c       0x60 CMakeFiles/g431_foc.dir/user/src/user_io.c.obj
-                0x0800f21c                UserIO_StartDma
+                0x0800f1f8       0x60 CMakeFiles/g431_foc.dir/user/src/user_io.c.obj
+                0x0800f1f8                UserIO_StartDma
  .text.Pot_ReadRaw
-                0x0800f27c       0x18 CMakeFiles/g431_foc.dir/user/src/user_io.c.obj
-                0x0800f27c                Pot_ReadRaw
+                0x0800f258       0x18 CMakeFiles/g431_foc.dir/user/src/user_io.c.obj
+                0x0800f258                Pot_ReadRaw
  .text.Led_Toggle
-                0x0800f294       0x14 CMakeFiles/g431_foc.dir/user/src/user_io.c.obj
-                0x0800f294                Led_Toggle
+                0x0800f270       0x14 CMakeFiles/g431_foc.dir/user/src/user_io.c.obj
+                0x0800f270                Led_Toggle
  .text.VOFA_Init
-                0x0800f2a8       0x34 CMakeFiles/g431_foc.dir/user/src/vofa_usart.c.obj
-                0x0800f2a8                VOFA_Init
+                0x0800f284       0x34 CMakeFiles/g431_foc.dir/user/src/vofa_usart.c.obj
+                0x0800f284                VOFA_Init
  .text.HAL_UARTEx_RxEventCallback
-                0x0800f2dc       0x4c CMakeFiles/g431_foc.dir/user/src/vofa_usart.c.obj
-                0x0800f2dc                HAL_UARTEx_RxEventCallback
+                0x0800f2b8       0x4c CMakeFiles/g431_foc.dir/user/src/vofa_usart.c.obj
+                0x0800f2b8                HAL_UARTEx_RxEventCallback
  .text.VOFA_JustFloat_Send
-                0x0800f328       0x70 CMakeFiles/g431_foc.dir/user/src/vofa_usart.c.obj
-                0x0800f328                VOFA_JustFloat_Send
- .text.cosf     0x0800f398       0x70 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_cos.o)
-                0x0800f398                cosf
- .text.roundf   0x0800f408       0x4c c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_round.o)
-                0x0800f408                roundf
- .text.sinf     0x0800f454       0x74 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_sin.o)
-                0x0800f454                sinf
- .text.fmodf    0x0800f4c8       0x48 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-wf_fmod.o)
-                0x0800f4c8                fmodf
- .text.sqrtf    0x0800f510       0x44 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-wf_sqrt.o)
-                0x0800f510                sqrtf
+                0x0800f304       0x70 CMakeFiles/g431_foc.dir/user/src/vofa_usart.c.obj
+                0x0800f304                VOFA_JustFloat_Send
+ .text.cosf     0x0800f374       0x70 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_cos.o)
+                0x0800f374                cosf
+ .text.roundf   0x0800f3e4       0x4c c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_round.o)
+                0x0800f3e4                roundf
+ .text.sinf     0x0800f430       0x74 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_sin.o)
+                0x0800f430                sinf
+ .text.fmodf    0x0800f4a4       0x48 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-wf_fmod.o)
+                0x0800f4a4                fmodf
+ .text.sqrtf    0x0800f4ec       0x44 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-wf_sqrt.o)
+                0x0800f4ec                sqrtf
  .text.__ieee754_fmodf
-                0x0800f554      0x120 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_fmod.o)
-                0x0800f554                __ieee754_fmodf
+                0x0800f530      0x120 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_fmod.o)
+                0x0800f530                __ieee754_fmodf
  .text.__ieee754_rem_pio2f
-                0x0800f674      0x260 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_rem_pio2.o)
-                0x0800f674                __ieee754_rem_pio2f
+                0x0800f650      0x260 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_rem_pio2.o)
+                0x0800f650                __ieee754_rem_pio2f
  .text.__ieee754_sqrtf
-                0x0800f8d4        0x8 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_sqrt.o)
-                0x0800f8d4                __ieee754_sqrtf
+                0x0800f8b0        0x8 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_sqrt.o)
+                0x0800f8b0                __ieee754_sqrtf
  .text.__kernel_cosf
-                0x0800f8dc      0x104 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_cos.o)
-                0x0800f8dc                __kernel_cosf
+                0x0800f8b8      0x104 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_cos.o)
+                0x0800f8b8                __kernel_cosf
  .text.__kernel_rem_pio2f
-                0x0800f9e0      0x664 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_rem_pio2.o)
-                0x0800f9e0                __kernel_rem_pio2f
+                0x0800f9bc      0x664 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_rem_pio2.o)
+                0x0800f9bc                __kernel_rem_pio2f
  .text.__kernel_sinf
-                0x08010044       0x90 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_sin.o)
-                0x08010044                __kernel_sinf
- .text.fabsf    0x080100d4       0x10 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_fabs.o)
-                0x080100d4                fabsf
- .text.floorf   0x080100e4       0x90 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_floor.o)
-                0x080100e4                floorf
- .text.scalbnf  0x08010174       0xdc c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_scalbn.o)
-                0x08010174                scalbnf
+                0x08010020       0x90 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_sin.o)
+                0x08010020                __kernel_sinf
+ .text.fabsf    0x080100b0       0x10 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_fabs.o)
+                0x080100b0                fabsf
+ .text.floorf   0x080100c0       0x90 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_floor.o)
+                0x080100c0                floorf
+ .text.scalbnf  0x08010150       0xdc c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_scalbn.o)
+                0x08010150                scalbnf
  .text.__udivmoddi4
-                0x08010250      0x2c8 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_udivmoddi4.o)
-                0x08010250                __udivmoddi4
- .text.__errno  0x08010518        0xc c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-errno.o)
-                0x08010518                __errno
+                0x0801022c      0x2c8 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_udivmoddi4.o)
+                0x0801022c                __udivmoddi4
+ .text.__errno  0x080104f4        0xc c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-errno.o)
+                0x080104f4                __errno
  .text.__libc_init_array
-                0x08010524       0x48 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-init.o)
-                0x08010524                __libc_init_array
- .text.memcpy   0x0801056c       0x1c c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-memcpy-stub.o)
-                0x0801056c                memcpy
- .text.memset   0x08010588       0x10 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-memset.o)
-                0x08010588                memset
+                0x08010500       0x48 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-init.o)
+                0x08010500                __libc_init_array
+ .text.memcpy   0x08010548       0x1c c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-memcpy-stub.o)
+                0x08010548                memcpy
+ .text.memset   0x08010564       0x10 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-memset.o)
+                0x08010564                memset
  *(.glue_7)
- .glue_7        0x08010598        0x0 linker stubs
+ .glue_7        0x08010574        0x0 linker stubs
  *(.glue_7t)
- .glue_7t       0x08010598        0x0 linker stubs
+ .glue_7t       0x08010574        0x0 linker stubs
  *(.eh_frame)
- .eh_frame      0x08010598        0x0 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard/crtbegin.o
+ .eh_frame      0x08010574        0x0 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard/crtbegin.o
  *(.init)
- .init          0x08010598        0x4 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard/crti.o
-                0x08010598                _init
- .init          0x0801059c        0x8 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard/crtn.o
+ .init          0x08010574        0x4 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard/crti.o
+                0x08010574                _init
+ .init          0x08010578        0x8 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard/crtn.o
  *(.fini)
- .fini          0x080105a4        0x4 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard/crti.o
-                0x080105a4                _fini
- .fini          0x080105a8        0x8 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard/crtn.o
-                0x080105b0                . = ALIGN (0x4)
-                0x080105b0                _etext = .
+ .fini          0x08010580        0x4 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard/crti.o
+                0x08010580                _fini
+ .fini          0x08010584        0x8 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard/crtn.o
+                0x0801058c                . = ALIGN (0x4)
+                0x0801058c                _etext = .
 
-.vfp11_veneer   0x080105b0        0x0
- .vfp11_veneer  0x080105b0        0x0 linker stubs
+.vfp11_veneer   0x0801058c        0x0
+ .vfp11_veneer  0x0801058c        0x0 linker stubs
 
-.v4_bx          0x080105b0        0x0
- .v4_bx         0x080105b0        0x0 linker stubs
+.v4_bx          0x0801058c        0x0
+ .v4_bx         0x0801058c        0x0 linker stubs
 
-.iplt           0x080105b0        0x0
- .iplt          0x080105b0        0x0 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard/crtbegin.o
+.iplt           0x0801058c        0x0
+ .iplt          0x0801058c        0x0 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard/crtbegin.o
 
-.rodata         0x080105b0      0xa14
-                0x080105b0                . = ALIGN (0x4)
+.rodata         0x0801058c      0xa14
+                0x0801058c                . = ALIGN (0x4)
  *(.rodata)
- .rodata        0x080105b0        0x8 CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
+ .rodata        0x0801058c        0x8 CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
  *(.rodata*)
  .rodata.AHBPrescTable
-                0x080105b8       0x10 cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Core/Src/system_stm32g4xx.c.obj
-                0x080105b8                AHBPrescTable
+                0x08010594       0x10 cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Core/Src/system_stm32g4xx.c.obj
+                0x08010594                AHBPrescTable
  .rodata.APBPrescTable
-                0x080105c8        0x8 cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Core/Src/system_stm32g4xx.c.obj
-                0x080105c8                APBPrescTable
+                0x080105a4        0x8 cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Core/Src/system_stm32g4xx.c.obj
+                0x080105a4                APBPrescTable
  .rodata.UARTPrescTable
-                0x080105d0       0x18 cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_uart.c.obj
-                0x080105d0                UARTPrescTable
+                0x080105ac       0x18 cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_uart.c.obj
+                0x080105ac                UARTPrescTable
  .rodata.numerator.1
-                0x080105e8        0x8 cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_uart_ex.c.obj
+                0x080105c4        0x8 cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_uart_ex.c.obj
  .rodata.denominator.0
-                0x080105f0        0x8 cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_uart_ex.c.obj
+                0x080105cc        0x8 cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_uart_ex.c.obj
  .rodata.OLED_F8x16
-                0x080105f8      0x5f0 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
-                0x080105f8                OLED_F8x16
+                0x080105d4      0x5f0 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
+                0x080105d4                OLED_F8x16
  .rodata.vofa_tail
-                0x08010be8        0x4 CMakeFiles/g431_foc.dir/user/src/vofa_usart.c.obj
-                0x08010be8                vofa_tail
- .rodata.Zero   0x08010bec        0x8 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_fmod.o)
+                0x08010bc4        0x4 CMakeFiles/g431_foc.dir/user/src/vofa_usart.c.obj
+                0x08010bc4                vofa_tail
+ .rodata.Zero   0x08010bc8        0x8 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_fmod.o)
  .rodata.npio2_hw
-                0x08010bf4       0x80 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_rem_pio2.o)
+                0x08010bd0       0x80 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_rem_pio2.o)
  .rodata.two_over_pi
-                0x08010c74      0x318 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_rem_pio2.o)
- .rodata.PIo2   0x08010f8c       0x2c c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_rem_pio2.o)
+                0x08010c50      0x318 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_rem_pio2.o)
+ .rodata.PIo2   0x08010f68       0x2c c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_rem_pio2.o)
  .rodata.init_jk
-                0x08010fb8        0xc c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_rem_pio2.o)
-                0x08010fc4                . = ALIGN (0x4)
+                0x08010f94        0xc c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_rem_pio2.o)
+                0x08010fa0                . = ALIGN (0x4)
 
-.ARM.extab      0x08010fc4        0x0
-                0x08010fc4                . = ALIGN (0x4)
+.ARM.extab      0x08010fa0        0x0
+                0x08010fa0                . = ALIGN (0x4)
  *(.ARM.extab* .gnu.linkonce.armextab.*)
-                0x08010fc4                . = ALIGN (0x4)
+                0x08010fa0                . = ALIGN (0x4)
 
-.ARM            0x08010fc4        0x8
-                0x08010fc4                . = ALIGN (0x4)
-                0x08010fc4                __exidx_start = .
+.ARM            0x08010fa0        0x8
+                0x08010fa0                . = ALIGN (0x4)
+                0x08010fa0                __exidx_start = .
  *(.ARM.exidx*)
  .ARM.exidx.text.__udivmoddi4
-                0x08010fc4        0x8 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_udivmoddi4.o)
-                0x08010fcc                __exidx_end = .
-                0x08010fcc                . = ALIGN (0x4)
+                0x08010fa0        0x8 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_udivmoddi4.o)
+                0x08010fa8                __exidx_end = .
+                0x08010fa8                . = ALIGN (0x4)
 
-.rel.dyn        0x08010fcc        0x0
- .rel.iplt      0x08010fcc        0x0 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard/crtbegin.o
+.rel.dyn        0x08010fa8        0x0
+ .rel.iplt      0x08010fa8        0x0 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard/crtbegin.o
 
-.preinit_array  0x08010fcc        0x0
-                0x08010fcc                . = ALIGN (0x4)
-                0x08010fcc                PROVIDE (__preinit_array_start = .)
+.preinit_array  0x08010fa8        0x0
+                0x08010fa8                . = ALIGN (0x4)
+                0x08010fa8                PROVIDE (__preinit_array_start = .)
  *(.preinit_array*)
-                0x08010fcc                PROVIDE (__preinit_array_end = .)
-                0x08010fcc                . = ALIGN (0x4)
+                0x08010fa8                PROVIDE (__preinit_array_end = .)
+                0x08010fa8                . = ALIGN (0x4)
 
-.init_array     0x08010fcc        0x4
-                0x08010fcc                . = ALIGN (0x4)
-                0x08010fcc                PROVIDE (__init_array_start = .)
+.init_array     0x08010fa8        0x4
+                0x08010fa8                . = ALIGN (0x4)
+                0x08010fa8                PROVIDE (__init_array_start = .)
  *(SORT_BY_NAME(.init_array.*))
  *(.init_array*)
- .init_array    0x08010fcc        0x4 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard/crtbegin.o
-                0x08010fd0                PROVIDE (__init_array_end = .)
-                0x08010fd0                . = ALIGN (0x4)
+ .init_array    0x08010fa8        0x4 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard/crtbegin.o
+                0x08010fac                PROVIDE (__init_array_end = .)
+                0x08010fac                . = ALIGN (0x4)
 
-.fini_array     0x08010fd0        0x4
-                0x08010fd0                . = ALIGN (0x4)
+.fini_array     0x08010fac        0x4
+                0x08010fac                . = ALIGN (0x4)
                 [!provide]                PROVIDE (__fini_array_start = .)
  *(SORT_BY_NAME(.fini_array.*))
  *(.fini_array*)
- .fini_array    0x08010fd0        0x4 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard/crtbegin.o
+ .fini_array    0x08010fac        0x4 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard/crtbegin.o
                 [!provide]                PROVIDE (__fini_array_end = .)
-                0x08010fd4                . = ALIGN (0x4)
-                0x08010fd4                _sidata = LOADADDR (.data)
+                0x08010fb0                . = ALIGN (0x4)
+                0x08010fb0                _sidata = LOADADDR (.data)
 
-.data           0x20000000       0x74 load address 0x08010fd4
+.data           0x20000000       0x74 load address 0x08010fb0
                 0x20000000                . = ALIGN (0x4)
                 0x20000000                _sdata = .
  *(.data)
@@ -7424,16 +7424,16 @@ LOAD c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/
                 0x20000074                . = ALIGN (0x4)
 
 .tm_clone_table
-                0x20000074        0x0 load address 0x08011048
+                0x20000074        0x0 load address 0x08011024
  .tm_clone_table
                 0x20000074        0x0 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard/crtbegin.o
  .tm_clone_table
                 0x20000074        0x0 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard/crtend.o
 
-.igot.plt       0x20000074        0x0 load address 0x08011048
+.igot.plt       0x20000074        0x0 load address 0x08011024
  .igot.plt      0x20000074        0x0 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard/crtbegin.o
 
-.tdata          0x20000074        0x0 load address 0x08011048
+.tdata          0x20000074        0x0 load address 0x08011024
  *(.tdata .tdata.* .gnu.linkonce.td.*)
                 0x20000074                . = ALIGN (0x4)
                 0x20000074                _edata = .
@@ -7450,7 +7450,7 @@ LOAD c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/
                 [!provide]                PROVIDE (__data_source_end = __tdata_source_end)
                 [!provide]                PROVIDE (__data_source_size = (__data_source_end - __data_source))
 
-.tbss           0x20000074        0x0 load address 0x08011048
+.tbss           0x20000074        0x0 load address 0x08011024
                 0x20000074                _sbss = .
                 0x20000074                __bss_start__ = _sbss
  *(.tbss .tbss.*)
@@ -7467,7 +7467,7 @@ LOAD c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/
                 [!provide]                PROVIDE (__arm32_tls_tcb_offset = MAX (0x8, __tls_align))
                 [!provide]                PROVIDE (__arm64_tls_tcb_offset = MAX (0x10, __tls_align))
 
-.bss            0x20000074      0x824 load address 0x08011048
+.bss            0x20000074      0x824 load address 0x08011024
  *(.bss)
  *(.bss*)
  .bss.completed.1
@@ -7588,13 +7588,13 @@ LOAD c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/
  .bss.loop_was_enabled.0
                 0x2000079e        0x1 CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
  *fill*         0x2000079f        0x1 
- .bss.g_traj_position
-                0x200007a0        0x4 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
- .bss.g_traj_velocity
-                0x200007a4        0x4 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
- .bss.g_traj_accel
-                0x200007a8        0x4 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
  .bss.g_traj_target_position
+                0x200007a0        0x4 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
+ .bss.g_traj_position
+                0x200007a4        0x4 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
+ .bss.g_traj_velocity
+                0x200007a8        0x4 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
+ .bss.g_traj_accel
                 0x200007ac        0x4 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
  .bss.g_traj_initialized
                 0x200007b0        0x1 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
@@ -7624,7 +7624,7 @@ LOAD c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/
                 [!provide]                PROVIDE (__bss_size = (__bss_end - __bss_start))
 
 ._user_heap_stack
-                0x20000898      0x600 load address 0x08011048
+                0x20000898      0x600 load address 0x08011024
                 0x20000898                . = ALIGN (0x8)
                 [!provide]                PROVIDE (end = .)
                 0x20000898                PROVIDE (_end = .)
@@ -7855,7 +7855,7 @@ LOAD linker stubs
  .comment       0x00000057       0x58 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-memset.o)
  .comment       0x00000057       0x58 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard/crtend.o
 
-.debug_info     0x00000000    0x2a4ae
+.debug_info     0x00000000    0x2a46a
  .debug_info    0x00000000      0x58e cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Core/Src/system_stm32g4xx.c.obj
  .debug_info    0x0000058e     0x2063 cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_adc.c.obj
  .debug_info    0x000025f1     0x1d80 cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_adc_ex.c.obj
@@ -7891,41 +7891,41 @@ LOAD linker stubs
  .debug_info    0x0002108c      0xe40 CMakeFiles/g431_foc.dir/user/src/motor_identify.c.obj
  .debug_info    0x00021ecc      0x22c CMakeFiles/g431_foc.dir/user/src/motor_position_loop.c.obj
  .debug_info    0x000220f8      0x41b CMakeFiles/g431_foc.dir/user/src/motor_speed_loop.c.obj
- .debug_info    0x00022513     0x11e0 CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
- .debug_info    0x000236f3      0x3bb CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
- .debug_info    0x00023aae      0xb7e CMakeFiles/g431_foc.dir/user/src/mt6826s.c.obj
- .debug_info    0x0002462c      0x606 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
- .debug_info    0x00024c32      0x31e CMakeFiles/g431_foc.dir/user/src/pid.c.obj
- .debug_info    0x00024f50      0xabb CMakeFiles/g431_foc.dir/user/src/svpwm.c.obj
- .debug_info    0x00025a0b      0xaad CMakeFiles/g431_foc.dir/user/src/user_io.c.obj
- .debug_info    0x000264b8      0xa8a CMakeFiles/g431_foc.dir/user/src/vofa_usart.c.obj
- .debug_info    0x00026f42      0x219 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_cos.o)
- .debug_info    0x0002715b      0x160 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_round.o)
- .debug_info    0x000272bb      0x224 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_sin.o)
- .debug_info    0x000274df      0x127 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-wf_fmod.o)
- .debug_info    0x00027606      0x10c c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-wf_sqrt.o)
- .debug_info    0x00027712      0x23c c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_fmod.o)
- .debug_info    0x0002794e      0x3fd c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_rem_pio2.o)
- .debug_info    0x00027d4b       0xc6 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_sqrt.o)
- .debug_info    0x00027e11      0x20e c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_cos.o)
- .debug_info    0x0002801f      0x3e7 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_rem_pio2.o)
- .debug_info    0x00028406      0x1e0 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_sin.o)
- .debug_info    0x000285e6      0x13e c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_fabs.o)
- .debug_info    0x00028724      0x18a c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_floor.o)
- .debug_info    0x000288ae      0x20d c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_scalbn.o)
- .debug_info    0x00028abb       0x25 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_arm_muldf3.o)
- .debug_info    0x00028ae0       0x25 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_arm_addsubdf3.o)
- .debug_info    0x00028b05       0x25 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_arm_truncdfsf2.o)
- .debug_info    0x00028b2a       0x24 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_aeabi_uldivmod.o)
- .debug_info    0x00028b4e      0x6e3 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_udivmoddi4.o)
- .debug_info    0x00029231       0x24 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_dvmd_tls.o)
- .debug_info    0x00029255      0x751 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-errno.o)
- .debug_info    0x000299a6      0x7fc c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-impure.o)
- .debug_info    0x0002a1a2      0x10b c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-init.o)
- .debug_info    0x0002a2ad      0x121 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-memcpy-stub.o)
- .debug_info    0x0002a3ce       0xe0 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-memset.o)
+ .debug_info    0x00022513     0x11af CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
+ .debug_info    0x000236c2      0x3a8 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
+ .debug_info    0x00023a6a      0xb7e CMakeFiles/g431_foc.dir/user/src/mt6826s.c.obj
+ .debug_info    0x000245e8      0x606 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
+ .debug_info    0x00024bee      0x31e CMakeFiles/g431_foc.dir/user/src/pid.c.obj
+ .debug_info    0x00024f0c      0xabb CMakeFiles/g431_foc.dir/user/src/svpwm.c.obj
+ .debug_info    0x000259c7      0xaad CMakeFiles/g431_foc.dir/user/src/user_io.c.obj
+ .debug_info    0x00026474      0xa8a CMakeFiles/g431_foc.dir/user/src/vofa_usart.c.obj
+ .debug_info    0x00026efe      0x219 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_cos.o)
+ .debug_info    0x00027117      0x160 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_round.o)
+ .debug_info    0x00027277      0x224 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_sin.o)
+ .debug_info    0x0002749b      0x127 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-wf_fmod.o)
+ .debug_info    0x000275c2      0x10c c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-wf_sqrt.o)
+ .debug_info    0x000276ce      0x23c c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_fmod.o)
+ .debug_info    0x0002790a      0x3fd c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_rem_pio2.o)
+ .debug_info    0x00027d07       0xc6 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_sqrt.o)
+ .debug_info    0x00027dcd      0x20e c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_cos.o)
+ .debug_info    0x00027fdb      0x3e7 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_rem_pio2.o)
+ .debug_info    0x000283c2      0x1e0 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_sin.o)
+ .debug_info    0x000285a2      0x13e c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_fabs.o)
+ .debug_info    0x000286e0      0x18a c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_floor.o)
+ .debug_info    0x0002886a      0x20d c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_scalbn.o)
+ .debug_info    0x00028a77       0x25 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_arm_muldf3.o)
+ .debug_info    0x00028a9c       0x25 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_arm_addsubdf3.o)
+ .debug_info    0x00028ac1       0x25 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_arm_truncdfsf2.o)
+ .debug_info    0x00028ae6       0x24 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_aeabi_uldivmod.o)
+ .debug_info    0x00028b0a      0x6e3 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_udivmoddi4.o)
+ .debug_info    0x000291ed       0x24 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_dvmd_tls.o)
+ .debug_info    0x00029211      0x751 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-errno.o)
+ .debug_info    0x00029962      0x7fc c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-impure.o)
+ .debug_info    0x0002a15e      0x10b c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-init.o)
+ .debug_info    0x0002a269      0x121 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-memcpy-stub.o)
+ .debug_info    0x0002a38a       0xe0 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-memset.o)
 
-.debug_abbrev   0x00000000     0x6d0c
+.debug_abbrev   0x00000000     0x6cd6
  .debug_abbrev  0x00000000      0x11a cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Core/Src/system_stm32g4xx.c.obj
  .debug_abbrev  0x0000011a      0x2d3 cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_adc.c.obj
  .debug_abbrev  0x000003ed      0x2ee cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_adc_ex.c.obj
@@ -7961,39 +7961,39 @@ LOAD linker stubs
  .debug_abbrev  0x000042c2      0x2c1 CMakeFiles/g431_foc.dir/user/src/motor_identify.c.obj
  .debug_abbrev  0x00004583      0x135 CMakeFiles/g431_foc.dir/user/src/motor_position_loop.c.obj
  .debug_abbrev  0x000046b8      0x1a0 CMakeFiles/g431_foc.dir/user/src/motor_speed_loop.c.obj
- .debug_abbrev  0x00004858      0x2f5 CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
- .debug_abbrev  0x00004b4d      0x11b CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
- .debug_abbrev  0x00004c68      0x1ee CMakeFiles/g431_foc.dir/user/src/mt6826s.c.obj
- .debug_abbrev  0x00004e56      0x216 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
- .debug_abbrev  0x0000506c      0x113 CMakeFiles/g431_foc.dir/user/src/pid.c.obj
- .debug_abbrev  0x0000517f      0x23f CMakeFiles/g431_foc.dir/user/src/svpwm.c.obj
- .debug_abbrev  0x000053be      0x21c CMakeFiles/g431_foc.dir/user/src/user_io.c.obj
- .debug_abbrev  0x000055da      0x1e7 CMakeFiles/g431_foc.dir/user/src/vofa_usart.c.obj
- .debug_abbrev  0x000057c1      0x151 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_cos.o)
- .debug_abbrev  0x00005912       0xe7 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_round.o)
- .debug_abbrev  0x000059f9      0x15a c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_sin.o)
- .debug_abbrev  0x00005b53       0xc8 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-wf_fmod.o)
- .debug_abbrev  0x00005c1b       0xc6 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-wf_sqrt.o)
- .debug_abbrev  0x00005ce1      0x129 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_fmod.o)
- .debug_abbrev  0x00005e0a      0x194 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_rem_pio2.o)
- .debug_abbrev  0x00005f9e       0x6d c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_sqrt.o)
- .debug_abbrev  0x0000600b      0x100 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_cos.o)
- .debug_abbrev  0x0000610b      0x169 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_rem_pio2.o)
- .debug_abbrev  0x00006274      0x107 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_sin.o)
- .debug_abbrev  0x0000637b       0xd4 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_fabs.o)
- .debug_abbrev  0x0000644f       0xf9 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_floor.o)
- .debug_abbrev  0x00006548      0x116 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_scalbn.o)
- .debug_abbrev  0x0000665e       0x14 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_arm_muldf3.o)
- .debug_abbrev  0x00006672       0x14 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_arm_addsubdf3.o)
- .debug_abbrev  0x00006686       0x14 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_arm_truncdfsf2.o)
- .debug_abbrev  0x0000669a       0x14 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_aeabi_uldivmod.o)
- .debug_abbrev  0x000066ae      0x16a c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_udivmoddi4.o)
- .debug_abbrev  0x00006818       0x14 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_dvmd_tls.o)
- .debug_abbrev  0x0000682c      0x15e c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-errno.o)
- .debug_abbrev  0x0000698a      0x15a c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-impure.o)
- .debug_abbrev  0x00006ae4       0xc9 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-init.o)
- .debug_abbrev  0x00006bad       0xc1 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-memcpy-stub.o)
- .debug_abbrev  0x00006c6e       0x9e c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-memset.o)
+ .debug_abbrev  0x00004858      0x2da CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
+ .debug_abbrev  0x00004b32      0x100 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
+ .debug_abbrev  0x00004c32      0x1ee CMakeFiles/g431_foc.dir/user/src/mt6826s.c.obj
+ .debug_abbrev  0x00004e20      0x216 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
+ .debug_abbrev  0x00005036      0x113 CMakeFiles/g431_foc.dir/user/src/pid.c.obj
+ .debug_abbrev  0x00005149      0x23f CMakeFiles/g431_foc.dir/user/src/svpwm.c.obj
+ .debug_abbrev  0x00005388      0x21c CMakeFiles/g431_foc.dir/user/src/user_io.c.obj
+ .debug_abbrev  0x000055a4      0x1e7 CMakeFiles/g431_foc.dir/user/src/vofa_usart.c.obj
+ .debug_abbrev  0x0000578b      0x151 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_cos.o)
+ .debug_abbrev  0x000058dc       0xe7 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_round.o)
+ .debug_abbrev  0x000059c3      0x15a c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_sin.o)
+ .debug_abbrev  0x00005b1d       0xc8 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-wf_fmod.o)
+ .debug_abbrev  0x00005be5       0xc6 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-wf_sqrt.o)
+ .debug_abbrev  0x00005cab      0x129 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_fmod.o)
+ .debug_abbrev  0x00005dd4      0x194 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_rem_pio2.o)
+ .debug_abbrev  0x00005f68       0x6d c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_sqrt.o)
+ .debug_abbrev  0x00005fd5      0x100 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_cos.o)
+ .debug_abbrev  0x000060d5      0x169 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_rem_pio2.o)
+ .debug_abbrev  0x0000623e      0x107 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_sin.o)
+ .debug_abbrev  0x00006345       0xd4 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_fabs.o)
+ .debug_abbrev  0x00006419       0xf9 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_floor.o)
+ .debug_abbrev  0x00006512      0x116 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_scalbn.o)
+ .debug_abbrev  0x00006628       0x14 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_arm_muldf3.o)
+ .debug_abbrev  0x0000663c       0x14 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_arm_addsubdf3.o)
+ .debug_abbrev  0x00006650       0x14 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_arm_truncdfsf2.o)
+ .debug_abbrev  0x00006664       0x14 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_aeabi_uldivmod.o)
+ .debug_abbrev  0x00006678      0x16a c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_udivmoddi4.o)
+ .debug_abbrev  0x000067e2       0x14 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_dvmd_tls.o)
+ .debug_abbrev  0x000067f6      0x15e c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-errno.o)
+ .debug_abbrev  0x00006954      0x15a c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-impure.o)
+ .debug_abbrev  0x00006aae       0xc9 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-init.o)
+ .debug_abbrev  0x00006b77       0xc1 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-memcpy-stub.o)
+ .debug_abbrev  0x00006c38       0x9e c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-memset.o)
 
 .debug_aranges  0x00000000     0x2278
  .debug_aranges
@@ -8067,9 +8067,9 @@ LOAD linker stubs
  .debug_aranges
                 0x00001c48       0x48 CMakeFiles/g431_foc.dir/user/src/motor_speed_loop.c.obj
  .debug_aranges
-                0x00001c90       0x60 CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
+                0x00001c90       0x58 CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
  .debug_aranges
-                0x00001cf0       0x78 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
+                0x00001ce8       0x80 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
  .debug_aranges
                 0x00001d68       0x40 CMakeFiles/g431_foc.dir/user/src/mt6826s.c.obj
  .debug_aranges
@@ -8134,7 +8134,7 @@ LOAD linker stubs
                 0x00002258       0x20 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-memset.o)
 
 .debug_rnglists
-                0x00000000     0x1ab3
+                0x00000000     0x1ab2
  .debug_rnglists
                 0x00000000       0x1a cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Core/Src/system_stm32g4xx.c.obj
  .debug_rnglists
@@ -8206,61 +8206,61 @@ LOAD linker stubs
  .debug_rnglists
                 0x000015f6       0x33 CMakeFiles/g431_foc.dir/user/src/motor_speed_loop.c.obj
  .debug_rnglists
-                0x00001629       0x46 CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
+                0x00001629       0x40 CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
  .debug_rnglists
-                0x0000166f       0x59 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
+                0x00001669       0x5e CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
  .debug_rnglists
-                0x000016c8       0x2b CMakeFiles/g431_foc.dir/user/src/mt6826s.c.obj
+                0x000016c7       0x2b CMakeFiles/g431_foc.dir/user/src/mt6826s.c.obj
  .debug_rnglists
-                0x000016f3       0x83 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
+                0x000016f2       0x83 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
  .debug_rnglists
-                0x00001776       0x28 CMakeFiles/g431_foc.dir/user/src/pid.c.obj
+                0x00001775       0x28 CMakeFiles/g431_foc.dir/user/src/pid.c.obj
  .debug_rnglists
-                0x0000179e       0x26 CMakeFiles/g431_foc.dir/user/src/svpwm.c.obj
+                0x0000179d       0x26 CMakeFiles/g431_foc.dir/user/src/svpwm.c.obj
  .debug_rnglists
-                0x000017c4       0x31 CMakeFiles/g431_foc.dir/user/src/user_io.c.obj
+                0x000017c3       0x31 CMakeFiles/g431_foc.dir/user/src/user_io.c.obj
  .debug_rnglists
-                0x000017f5       0x37 CMakeFiles/g431_foc.dir/user/src/vofa_usart.c.obj
+                0x000017f4       0x37 CMakeFiles/g431_foc.dir/user/src/vofa_usart.c.obj
  .debug_rnglists
-                0x0000182c       0x1f c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_cos.o)
+                0x0000182b       0x1f c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_cos.o)
  .debug_rnglists
-                0x0000184b       0x1f c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_round.o)
+                0x0000184a       0x1f c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_round.o)
  .debug_rnglists
-                0x0000186a       0x1f c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_sin.o)
+                0x00001869       0x1f c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_sin.o)
  .debug_rnglists
-                0x00001889       0x13 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-wf_fmod.o)
+                0x00001888       0x13 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-wf_fmod.o)
  .debug_rnglists
-                0x0000189c       0x13 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-wf_sqrt.o)
+                0x0000189b       0x13 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-wf_sqrt.o)
  .debug_rnglists
-                0x000018af       0x3b c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_fmod.o)
+                0x000018ae       0x3b c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_fmod.o)
  .debug_rnglists
-                0x000018ea       0x31 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_rem_pio2.o)
+                0x000018e9       0x31 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_rem_pio2.o)
  .debug_rnglists
-                0x0000191b       0x13 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_sqrt.o)
+                0x0000191a       0x13 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_sqrt.o)
  .debug_rnglists
-                0x0000192e       0x14 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_cos.o)
+                0x0000192d       0x14 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_cos.o)
  .debug_rnglists
-                0x00001942       0x14 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_rem_pio2.o)
+                0x00001941       0x14 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_rem_pio2.o)
  .debug_rnglists
-                0x00001956       0x14 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_sin.o)
+                0x00001955       0x14 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_sin.o)
  .debug_rnglists
-                0x0000196a       0x13 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_fabs.o)
+                0x00001969       0x13 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_fabs.o)
  .debug_rnglists
-                0x0000197d       0x20 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_floor.o)
+                0x0000197c       0x20 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_floor.o)
  .debug_rnglists
-                0x0000199d       0x38 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_scalbn.o)
+                0x0000199c       0x38 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_scalbn.o)
  .debug_rnglists
-                0x000019d5       0x92 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_udivmoddi4.o)
+                0x000019d4       0x92 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_udivmoddi4.o)
  .debug_rnglists
-                0x00001a67       0x13 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-errno.o)
+                0x00001a66       0x13 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-errno.o)
  .debug_rnglists
-                0x00001a7a       0x13 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-init.o)
+                0x00001a79       0x13 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-init.o)
  .debug_rnglists
-                0x00001a8d       0x13 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-memcpy-stub.o)
+                0x00001a8c       0x13 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-memcpy-stub.o)
  .debug_rnglists
-                0x00001aa0       0x13 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-memset.o)
+                0x00001a9f       0x13 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-memset.o)
 
-.debug_macro    0x00000000    0x23f7d
+.debug_macro    0x00000000    0x23f71
  .debug_macro   0x00000000      0x21f cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Core/Src/system_stm32g4xx.c.obj
  .debug_macro   0x0000021f      0xaa8 cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Core/Src/system_stm32g4xx.c.obj
  .debug_macro   0x00000cc7       0x2e cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Core/Src/system_stm32g4xx.c.obj
@@ -8353,17 +8353,17 @@ LOAD linker stubs
  .debug_macro   0x00022acc      0x36a CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
  .debug_macro   0x00022e36       0x3a CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
  .debug_macro   0x00022e70       0x28 CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
- .debug_macro   0x00022e98       0xbe CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
- .debug_macro   0x00022f56      0x259 CMakeFiles/g431_foc.dir/user/src/mt6826s.c.obj
- .debug_macro   0x000231af      0x23d CMakeFiles/g431_foc.dir/user/src/oled.c.obj
- .debug_macro   0x000233ec      0x2bf CMakeFiles/g431_foc.dir/user/src/pid.c.obj
- .debug_macro   0x000236ab       0x56 CMakeFiles/g431_foc.dir/user/src/pid.c.obj
- .debug_macro   0x00023701      0x2fe CMakeFiles/g431_foc.dir/user/src/svpwm.c.obj
- .debug_macro   0x000239ff      0x271 CMakeFiles/g431_foc.dir/user/src/user_io.c.obj
- .debug_macro   0x00023c70      0x2fd CMakeFiles/g431_foc.dir/user/src/vofa_usart.c.obj
- .debug_macro   0x00023f6d       0x10 CMakeFiles/g431_foc.dir/user/src/vofa_usart.c.obj
+ .debug_macro   0x00022e98       0xb2 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
+ .debug_macro   0x00022f4a      0x259 CMakeFiles/g431_foc.dir/user/src/mt6826s.c.obj
+ .debug_macro   0x000231a3      0x23d CMakeFiles/g431_foc.dir/user/src/oled.c.obj
+ .debug_macro   0x000233e0      0x2bf CMakeFiles/g431_foc.dir/user/src/pid.c.obj
+ .debug_macro   0x0002369f       0x56 CMakeFiles/g431_foc.dir/user/src/pid.c.obj
+ .debug_macro   0x000236f5      0x2fe CMakeFiles/g431_foc.dir/user/src/svpwm.c.obj
+ .debug_macro   0x000239f3      0x271 CMakeFiles/g431_foc.dir/user/src/user_io.c.obj
+ .debug_macro   0x00023c64      0x2fd CMakeFiles/g431_foc.dir/user/src/vofa_usart.c.obj
+ .debug_macro   0x00023f61       0x10 CMakeFiles/g431_foc.dir/user/src/vofa_usart.c.obj
 
-.debug_line     0x00000000    0x299ec
+.debug_line     0x00000000    0x299f3
  .debug_line    0x00000000      0x6f9 cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Core/Src/system_stm32g4xx.c.obj
  .debug_line    0x000006f9     0x1ecf cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_adc.c.obj
  .debug_line    0x000025c8     0x1942 cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_adc_ex.c.obj
@@ -8397,43 +8397,43 @@ LOAD linker stubs
  .debug_line    0x0001fbdb      0xb11 CMakeFiles/g431_foc.dir/user/src/motor_current_loop.c.obj
  .debug_line    0x000206ec      0x184 CMakeFiles/g431_foc.dir/user/src/motor_feedforward.c.obj
  .debug_line    0x00020870      0xa29 CMakeFiles/g431_foc.dir/user/src/motor_identify.c.obj
- .debug_line    0x00021299      0x282 CMakeFiles/g431_foc.dir/user/src/motor_position_loop.c.obj
- .debug_line    0x0002151b      0x871 CMakeFiles/g431_foc.dir/user/src/motor_speed_loop.c.obj
- .debug_line    0x00021d8c      0xa71 CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
- .debug_line    0x000227fd      0x42b CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
- .debug_line    0x00022c28      0x77d CMakeFiles/g431_foc.dir/user/src/mt6826s.c.obj
- .debug_line    0x000233a5      0xad1 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
- .debug_line    0x00023e76      0x8e6 CMakeFiles/g431_foc.dir/user/src/pid.c.obj
- .debug_line    0x0002475c      0x92f CMakeFiles/g431_foc.dir/user/src/svpwm.c.obj
- .debug_line    0x0002508b      0x785 CMakeFiles/g431_foc.dir/user/src/user_io.c.obj
- .debug_line    0x00025810      0x846 CMakeFiles/g431_foc.dir/user/src/vofa_usart.c.obj
- .debug_line    0x00026056      0x25c c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_cos.o)
- .debug_line    0x000262b2      0x201 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_round.o)
- .debug_line    0x000264b3      0x25c c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_sin.o)
- .debug_line    0x0002670f      0x1e7 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-wf_fmod.o)
- .debug_line    0x000268f6      0x1e6 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-wf_sqrt.o)
- .debug_line    0x00026adc      0x355 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_fmod.o)
- .debug_line    0x00026e31      0x507 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_rem_pio2.o)
- .debug_line    0x00027338       0x9b c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_sqrt.o)
- .debug_line    0x000273d3      0x24a c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_cos.o)
- .debug_line    0x0002761d      0xa1c c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_rem_pio2.o)
- .debug_line    0x00028039      0x1e9 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_sin.o)
- .debug_line    0x00028222      0x1da c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_fabs.o)
- .debug_line    0x000283fc      0x2aa c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_floor.o)
- .debug_line    0x000286a6      0x291 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_scalbn.o)
- .debug_line    0x00028937       0xf5 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_arm_muldf3.o)
- .debug_line    0x00028a2c      0x16f c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_arm_addsubdf3.o)
- .debug_line    0x00028b9b       0x76 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_arm_truncdfsf2.o)
- .debug_line    0x00028c11       0x4e c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_aeabi_uldivmod.o)
- .debug_line    0x00028c5f      0x5e5 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_udivmoddi4.o)
- .debug_line    0x00029244       0x4a c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_dvmd_tls.o)
- .debug_line    0x0002928e      0x17d c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-errno.o)
- .debug_line    0x0002940b      0x15b c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-impure.o)
- .debug_line    0x00029566      0x17f c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-init.o)
- .debug_line    0x000296e5      0x191 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-memcpy-stub.o)
- .debug_line    0x00029876      0x176 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-memset.o)
+ .debug_line    0x00021299      0x281 CMakeFiles/g431_foc.dir/user/src/motor_position_loop.c.obj
+ .debug_line    0x0002151a      0x871 CMakeFiles/g431_foc.dir/user/src/motor_speed_loop.c.obj
+ .debug_line    0x00021d8b      0xa66 CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
+ .debug_line    0x000227f1      0x43e CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
+ .debug_line    0x00022c2f      0x77d CMakeFiles/g431_foc.dir/user/src/mt6826s.c.obj
+ .debug_line    0x000233ac      0xad1 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
+ .debug_line    0x00023e7d      0x8e6 CMakeFiles/g431_foc.dir/user/src/pid.c.obj
+ .debug_line    0x00024763      0x92f CMakeFiles/g431_foc.dir/user/src/svpwm.c.obj
+ .debug_line    0x00025092      0x785 CMakeFiles/g431_foc.dir/user/src/user_io.c.obj
+ .debug_line    0x00025817      0x846 CMakeFiles/g431_foc.dir/user/src/vofa_usart.c.obj
+ .debug_line    0x0002605d      0x25c c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_cos.o)
+ .debug_line    0x000262b9      0x201 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_round.o)
+ .debug_line    0x000264ba      0x25c c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_sin.o)
+ .debug_line    0x00026716      0x1e7 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-wf_fmod.o)
+ .debug_line    0x000268fd      0x1e6 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-wf_sqrt.o)
+ .debug_line    0x00026ae3      0x355 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_fmod.o)
+ .debug_line    0x00026e38      0x507 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_rem_pio2.o)
+ .debug_line    0x0002733f       0x9b c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_sqrt.o)
+ .debug_line    0x000273da      0x24a c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_cos.o)
+ .debug_line    0x00027624      0xa1c c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_rem_pio2.o)
+ .debug_line    0x00028040      0x1e9 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_sin.o)
+ .debug_line    0x00028229      0x1da c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_fabs.o)
+ .debug_line    0x00028403      0x2aa c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_floor.o)
+ .debug_line    0x000286ad      0x291 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_scalbn.o)
+ .debug_line    0x0002893e       0xf5 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_arm_muldf3.o)
+ .debug_line    0x00028a33      0x16f c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_arm_addsubdf3.o)
+ .debug_line    0x00028ba2       0x76 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_arm_truncdfsf2.o)
+ .debug_line    0x00028c18       0x4e c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_aeabi_uldivmod.o)
+ .debug_line    0x00028c66      0x5e5 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_udivmoddi4.o)
+ .debug_line    0x0002924b       0x4a c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_dvmd_tls.o)
+ .debug_line    0x00029295      0x17d c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-errno.o)
+ .debug_line    0x00029412      0x15b c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-impure.o)
+ .debug_line    0x0002956d      0x17f c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-init.o)
+ .debug_line    0x000296ec      0x191 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-memcpy-stub.o)
+ .debug_line    0x0002987d      0x176 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-memset.o)
 
-.debug_str      0x00000000    0xe3ba8
+.debug_str      0x00000000    0xe3b14
  .debug_str     0x00000000    0xd4d9a cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Core/Src/system_stm32g4xx.c.obj
                               0xd52d6 (size before relaxing)
  .debug_str     0x000d4d9a     0x1079 cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_adc.c.obj
@@ -8494,82 +8494,82 @@ LOAD linker stubs
                               0xd5826 (size before relaxing)
  .debug_str     0x000dd56c      0x425 CMakeFiles/g431_foc.dir/user/src/hardware_init.c.obj
                               0xd616d (size before relaxing)
- .debug_str     0x000dd991     0x3252 CMakeFiles/g431_foc.dir/user/src/motor_current_loop.c.obj
+ .debug_str     0x000dd991     0x3259 CMakeFiles/g431_foc.dir/user/src/motor_current_loop.c.obj
                               0xd8e2b (size before relaxing)
- .debug_str     0x000e0be3      0x208 CMakeFiles/g431_foc.dir/user/src/motor_feedforward.c.obj
-                               0x2ff6 (size before relaxing)
- .debug_str     0x000e0deb      0x395 CMakeFiles/g431_foc.dir/user/src/motor_identify.c.obj
-                              0xd8f1b (size before relaxing)
- .debug_str     0x000e1180      0x1bb CMakeFiles/g431_foc.dir/user/src/motor_position_loop.c.obj
-                               0x3ef5 (size before relaxing)
- .debug_str     0x000e133b      0x29e CMakeFiles/g431_foc.dir/user/src/motor_speed_loop.c.obj
+ .debug_str     0x000e0bea      0x209 CMakeFiles/g431_foc.dir/user/src/motor_feedforward.c.obj
+                               0x2ff7 (size before relaxing)
+ .debug_str     0x000e0df3      0x387 CMakeFiles/g431_foc.dir/user/src/motor_identify.c.obj
+                              0xd8f0d (size before relaxing)
+ .debug_str     0x000e117a      0x1bd CMakeFiles/g431_foc.dir/user/src/motor_position_loop.c.obj
+                               0x3ef7 (size before relaxing)
+ .debug_str     0x000e1337      0x296 CMakeFiles/g431_foc.dir/user/src/motor_speed_loop.c.obj
                               0xd53ed (size before relaxing)
- .debug_str     0x000e15d9      0x3c7 CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
-                              0xd9402 (size before relaxing)
- .debug_str     0x000e19a0      0x3da CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
-                               0x42c3 (size before relaxing)
- .debug_str     0x000e1d7a       0xcb CMakeFiles/g431_foc.dir/user/src/mt6826s.c.obj
+ .debug_str     0x000e15cd      0x39a CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
+                              0xd93d7 (size before relaxing)
+ .debug_str     0x000e1967      0x37f CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
+                               0x4279 (size before relaxing)
+ .debug_str     0x000e1ce6       0xcb CMakeFiles/g431_foc.dir/user/src/mt6826s.c.obj
                               0xd591a (size before relaxing)
- .debug_str     0x000e1e45      0x147 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
+ .debug_str     0x000e1db1      0x147 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
                               0xd5306 (size before relaxing)
- .debug_str     0x000e1f8c       0x97 CMakeFiles/g431_foc.dir/user/src/pid.c.obj
+ .debug_str     0x000e1ef8       0x97 CMakeFiles/g431_foc.dir/user/src/pid.c.obj
                               0xd8042 (size before relaxing)
- .debug_str     0x000e2023      0x10c CMakeFiles/g431_foc.dir/user/src/svpwm.c.obj
+ .debug_str     0x000e1f8f      0x10c CMakeFiles/g431_foc.dir/user/src/svpwm.c.obj
                               0xd8802 (size before relaxing)
- .debug_str     0x000e212f      0x116 CMakeFiles/g431_foc.dir/user/src/user_io.c.obj
+ .debug_str     0x000e209b      0x116 CMakeFiles/g431_foc.dir/user/src/user_io.c.obj
                               0xd58b6 (size before relaxing)
- .debug_str     0x000e2245      0x108 CMakeFiles/g431_foc.dir/user/src/vofa_usart.c.obj
+ .debug_str     0x000e21b1      0x108 CMakeFiles/g431_foc.dir/user/src/vofa_usart.c.obj
                               0xd7e89 (size before relaxing)
- .debug_str     0x000e234d      0x1bc c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_cos.o)
+ .debug_str     0x000e22b9      0x1bc c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_cos.o)
                                 0x27e (size before relaxing)
- .debug_str     0x000e2509      0x114 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_round.o)
+ .debug_str     0x000e2475      0x114 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_round.o)
                                 0x27b (size before relaxing)
- .debug_str     0x000e261d       0x59 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_sin.o)
+ .debug_str     0x000e2589       0x59 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_sin.o)
                                 0x27e (size before relaxing)
- .debug_str     0x000e2676       0x72 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-wf_fmod.o)
+ .debug_str     0x000e25e2       0x72 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-wf_fmod.o)
                                 0x22d (size before relaxing)
- .debug_str     0x000e26e8       0x6a c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-wf_sqrt.o)
+ .debug_str     0x000e2654       0x6a c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-wf_sqrt.o)
                                 0x22d (size before relaxing)
- .debug_str     0x000e2752       0x5f c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_fmod.o)
+ .debug_str     0x000e26be       0x5f c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_fmod.o)
                                 0x264 (size before relaxing)
- .debug_str     0x000e27b1       0xd5 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_rem_pio2.o)
+ .debug_str     0x000e271d       0xd5 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_rem_pio2.o)
                                 0x2de (size before relaxing)
- .debug_str     0x000e2886       0x61 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_sqrt.o)
+ .debug_str     0x000e27f2       0x61 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_sqrt.o)
                                 0x234 (size before relaxing)
- .debug_str     0x000e28e7       0x59 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_cos.o)
+ .debug_str     0x000e2853       0x59 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_cos.o)
                                 0x25c (size before relaxing)
- .debug_str     0x000e2940       0x96 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_rem_pio2.o)
+ .debug_str     0x000e28ac       0x96 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_rem_pio2.o)
                                 0x277 (size before relaxing)
- .debug_str     0x000e29d6       0x59 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_sin.o)
+ .debug_str     0x000e2942       0x59 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_sin.o)
                                 0x25c (size before relaxing)
- .debug_str     0x000e2a2f       0x5a c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_fabs.o)
+ .debug_str     0x000e299b       0x5a c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_fabs.o)
                                 0x24b (size before relaxing)
- .debug_str     0x000e2a89       0x67 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_floor.o)
+ .debug_str     0x000e29f5       0x67 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_floor.o)
                                 0x26a (size before relaxing)
- .debug_str     0x000e2af0      0x19c c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_scalbn.o)
+ .debug_str     0x000e2a5c      0x19c c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_scalbn.o)
                                 0x28b (size before relaxing)
- .debug_str     0x000e2c8c       0x87 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_arm_muldf3.o)
+ .debug_str     0x000e2bf8       0x87 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_arm_muldf3.o)
                                  0x93 (size before relaxing)
- .debug_str     0x000e2d13       0x93 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_arm_addsubdf3.o)
- .debug_str     0x000e2d13       0x93 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_arm_truncdfsf2.o)
- .debug_str     0x000e2d13        0x8 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_aeabi_uldivmod.o)
+ .debug_str     0x000e2c7f       0x93 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_arm_addsubdf3.o)
+ .debug_str     0x000e2c7f       0x93 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_arm_truncdfsf2.o)
+ .debug_str     0x000e2c7f        0x8 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_aeabi_uldivmod.o)
                                  0x8e (size before relaxing)
- .debug_str     0x000e2d1b      0x590 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_udivmoddi4.o)
+ .debug_str     0x000e2c87      0x590 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_udivmoddi4.o)
                                 0x6a4 (size before relaxing)
- .debug_str     0x000e32ab        0xc c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_dvmd_tls.o)
+ .debug_str     0x000e3217        0xc c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_dvmd_tls.o)
                                  0x92 (size before relaxing)
- .debug_str     0x000e32b7      0x484 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-errno.o)
+ .debug_str     0x000e3223      0x484 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-errno.o)
                                 0x573 (size before relaxing)
- .debug_str     0x000e373b      0x131 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-impure.o)
+ .debug_str     0x000e36a7      0x131 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-impure.o)
                                 0x5ca (size before relaxing)
- .debug_str     0x000e386c      0x142 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-init.o)
+ .debug_str     0x000e37d8      0x142 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-init.o)
                                 0x277 (size before relaxing)
- .debug_str     0x000e39ae      0x10b c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-memcpy-stub.o)
+ .debug_str     0x000e391a      0x10b c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-memcpy-stub.o)
                                 0x23b (size before relaxing)
- .debug_str     0x000e3ab9       0xef c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-memset.o)
+ .debug_str     0x000e3a25       0xef c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-memset.o)
                                 0x218 (size before relaxing)
 
-.debug_frame    0x00000000     0x8618
+.debug_frame    0x00000000     0x8628
  .debug_frame   0x00000000       0x58 cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Core/Src/system_stm32g4xx.c.obj
  .debug_frame   0x00000058      0xacc cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_adc.c.obj
  .debug_frame   0x00000b24      0x81c cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_adc_ex.c.obj
@@ -8604,37 +8604,37 @@ LOAD linker stubs
  .debug_frame   0x000074e0      0x16c CMakeFiles/g431_foc.dir/user/src/motor_identify.c.obj
  .debug_frame   0x0000764c       0x80 CMakeFiles/g431_foc.dir/user/src/motor_position_loop.c.obj
  .debug_frame   0x000076cc       0xf0 CMakeFiles/g431_foc.dir/user/src/motor_speed_loop.c.obj
- .debug_frame   0x000077bc      0x158 CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
- .debug_frame   0x00007914      0x1c4 CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
- .debug_frame   0x00007ad8       0xb0 CMakeFiles/g431_foc.dir/user/src/mt6826s.c.obj
- .debug_frame   0x00007b88      0x2b0 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
- .debug_frame   0x00007e38       0xac CMakeFiles/g431_foc.dir/user/src/pid.c.obj
- .debug_frame   0x00007ee4       0xb0 CMakeFiles/g431_foc.dir/user/src/svpwm.c.obj
- .debug_frame   0x00007f94       0xcc CMakeFiles/g431_foc.dir/user/src/user_io.c.obj
- .debug_frame   0x00008060      0x104 CMakeFiles/g431_foc.dir/user/src/vofa_usart.c.obj
- .debug_frame   0x00008164       0x34 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_cos.o)
- .debug_frame   0x00008198       0x20 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_round.o)
- .debug_frame   0x000081b8       0x34 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_sin.o)
- .debug_frame   0x000081ec       0x44 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-wf_fmod.o)
- .debug_frame   0x00008230       0x44 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-wf_sqrt.o)
- .debug_frame   0x00008274       0x3c c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_fmod.o)
- .debug_frame   0x000082b0       0x3c c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_rem_pio2.o)
- .debug_frame   0x000082ec       0x20 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_sqrt.o)
- .debug_frame   0x0000830c       0x20 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_cos.o)
- .debug_frame   0x0000832c       0x5c c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_rem_pio2.o)
- .debug_frame   0x00008388       0x20 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_sin.o)
- .debug_frame   0x000083a8       0x20 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_fabs.o)
- .debug_frame   0x000083c8       0x20 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_floor.o)
- .debug_frame   0x000083e8       0x3c c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_scalbn.o)
- .debug_frame   0x00008424       0x30 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_arm_muldf3.o)
- .debug_frame   0x00008454       0xac c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_arm_addsubdf3.o)
- .debug_frame   0x00008500       0x24 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_arm_truncdfsf2.o)
- .debug_frame   0x00008524       0x2c c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_aeabi_uldivmod.o)
- .debug_frame   0x00008550       0x34 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_udivmoddi4.o)
- .debug_frame   0x00008584       0x20 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-errno.o)
- .debug_frame   0x000085a4       0x2c c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-init.o)
- .debug_frame   0x000085d0       0x28 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-memcpy-stub.o)
- .debug_frame   0x000085f8       0x20 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-memset.o)
+ .debug_frame   0x000077bc      0x130 CMakeFiles/g431_foc.dir/user/src/motor_system.c.obj
+ .debug_frame   0x000078ec      0x1fc CMakeFiles/g431_foc.dir/user/src/motor_trajectory.c.obj
+ .debug_frame   0x00007ae8       0xb0 CMakeFiles/g431_foc.dir/user/src/mt6826s.c.obj
+ .debug_frame   0x00007b98      0x2b0 CMakeFiles/g431_foc.dir/user/src/oled.c.obj
+ .debug_frame   0x00007e48       0xac CMakeFiles/g431_foc.dir/user/src/pid.c.obj
+ .debug_frame   0x00007ef4       0xb0 CMakeFiles/g431_foc.dir/user/src/svpwm.c.obj
+ .debug_frame   0x00007fa4       0xcc CMakeFiles/g431_foc.dir/user/src/user_io.c.obj
+ .debug_frame   0x00008070      0x104 CMakeFiles/g431_foc.dir/user/src/vofa_usart.c.obj
+ .debug_frame   0x00008174       0x34 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_cos.o)
+ .debug_frame   0x000081a8       0x20 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_round.o)
+ .debug_frame   0x000081c8       0x34 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_sin.o)
+ .debug_frame   0x000081fc       0x44 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-wf_fmod.o)
+ .debug_frame   0x00008240       0x44 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-wf_sqrt.o)
+ .debug_frame   0x00008284       0x3c c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_fmod.o)
+ .debug_frame   0x000082c0       0x3c c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_rem_pio2.o)
+ .debug_frame   0x000082fc       0x20 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-ef_sqrt.o)
+ .debug_frame   0x0000831c       0x20 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_cos.o)
+ .debug_frame   0x0000833c       0x5c c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_rem_pio2.o)
+ .debug_frame   0x00008398       0x20 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-kf_sin.o)
+ .debug_frame   0x000083b8       0x20 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_fabs.o)
+ .debug_frame   0x000083d8       0x20 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_floor.o)
+ .debug_frame   0x000083f8       0x3c c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libm.a(lib_a-sf_scalbn.o)
+ .debug_frame   0x00008434       0x30 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_arm_muldf3.o)
+ .debug_frame   0x00008464       0xac c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_arm_addsubdf3.o)
+ .debug_frame   0x00008510       0x24 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_arm_truncdfsf2.o)
+ .debug_frame   0x00008534       0x2c c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_aeabi_uldivmod.o)
+ .debug_frame   0x00008560       0x34 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libgcc.a(_udivmoddi4.o)
+ .debug_frame   0x00008594       0x20 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-errno.o)
+ .debug_frame   0x000085b4       0x2c c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-init.o)
+ .debug_frame   0x000085e0       0x28 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-memcpy-stub.o)
+ .debug_frame   0x00008608       0x20 c:/progra~2/armgnu~1/112202~1.02/bin/../lib/gcc/arm-none-eabi/11.2.1/thumb/v7e-m+fp/hard\libg_nano.a(lib_a-memset.o)
 
 .debug_line_str
                 0x00000000       0xa7

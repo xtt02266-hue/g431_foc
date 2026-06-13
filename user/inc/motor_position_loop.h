@@ -5,9 +5,9 @@
 #include "pid.h"
 
 // 位置环相关的宏定义（根据实际情况调整）
-#define MOTOR_POSITION_PID_KP       1.2f
-#define MOTOR_POSITION_PID_KI       0.2f
-#define MOTOR_POSITION_PID_KD       0.02f
+#define MOTOR_POSITION_PID_KP       1.25f
+#define MOTOR_POSITION_PID_KI       0.32f
+#define MOTOR_POSITION_PID_KD       0.03f
 #define MOTOR_POSITION_PID_OUT_MAX  200.0f  // 输出到速度环的最大速度 (rad/s 或 rpm)
 #define MOTOR_POSITION_PID_OUT_MIN  -200.0f // 输出到速度环的最小速度
 
