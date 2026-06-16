@@ -8,14 +8,14 @@
 // 公式特性: 连续奇函数，零速附近平滑过渡，高速趋近固定增益
 //   v     — 目标电磁转速 (RPM)
 //   c     — 低速平滑系数，越大零速附近补偿越柔和
-#define MOTOR_FRICTION_COMP_GAIN_A     0.032f     // 摩擦补偿最大趋近电流 (A)
-#define MOTOR_FRICTION_COMP_C_RPM      15.0f     // 低速平滑系数 (RPM)
-#define MOTOR_FRICTION_COMP_LIMIT_A    0.03f    // 摩擦补偿单独限幅 (A)，防止低速推力过大
+#define MOTOR_FRICTION_COMP_GAIN_A     0.05f     // 摩擦补偿最大趋近电流 (A)
+#define MOTOR_FRICTION_COMP_C_RPM      12.0f     // 低速平滑系数 (RPM)
+#define MOTOR_FRICTION_COMP_LIMIT_A    0.05f    // 摩擦补偿单独限幅 (A)，防止低速推力过大
 
 // 惯性补偿：Iq_ff = gain * accel
 // accel 来自轨迹规划器输出的目标加速度 (RPM/s)
-#define MOTOR_INERTIA_COMP_GAIN_A_PER_RPM_S 0.000006f // 惯性补偿增益 A/(RPM/s)
-#define MOTOR_INERTIA_COMP_LIMIT_A     0.15f     // 惯性补偿单独限幅 (A)，防止加速度前馈过猛
+#define MOTOR_INERTIA_COMP_GAIN_A_PER_RPM_S 0.00001f // 惯性补偿增益 A/(RPM/s)
+#define MOTOR_INERTIA_COMP_LIMIT_A     0.25f     // 惯性补偿单独限幅 (A)，防止加速度前馈过猛
 
 // 浮点数绝对值 (内部工具函数)
 static float Motor_Feedforward_AbsFloat(float value)
@@ -103,7 +103,8 @@ MotorFeedforwardResult Motor_Feedforward_Calculate(float speed_loop_iq,
 {
     MotorFeedforwardResult result;
 
-    result.speed_loop_iq = speed_loop_iq;
+    result.speed_loop_iq = 0;
+    //speed_loop_iq;
     result.accel_rpm_s = target_accel_rpm_s;
     result.friction_iq =
         Motor_Feedforward_FrictionIq(target_speed_rpm);
