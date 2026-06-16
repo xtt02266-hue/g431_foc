@@ -1,0 +1,28 @@
+# Build output
+build/
+
+# IDE files
+MDK-ARM/
+Debug/
+
+# Compiled files
+*.o
+*.elf
+*.map
+*.hex
+*.bin
+*.lst
+*.crf
+*.d
+*.dep
+
+# Editor files
+*.uvguix.*
+*.uvoptx
+*.scvd
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
