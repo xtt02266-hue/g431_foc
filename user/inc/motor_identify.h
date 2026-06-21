@@ -37,6 +37,9 @@ MotorIdentifyState Motor_Identify_GetState(void);
 // 获取已辨识出的参数结果。
 MotorIdentifiedParams Motor_Identify_GetResult(void);
 
+// Load a previously validated result without running identification motion.
+void Motor_Identify_UseResult(const MotorIdentifiedParams *params);
+
 // 辨识系统周期调度任务（主循环或定时器中调用）。
 void Motor_Identify_Task(void);
 

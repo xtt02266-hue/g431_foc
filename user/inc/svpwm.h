@@ -28,6 +28,9 @@ void SVPWM_Init(void);
 // 调用后自动更新 TIM1 CCR1/CCR2/CCR3。
 void SVPWM_SetVoltage(float v_alpha, float v_beta, float v_bus);
 
+void SVPWM_Enable(void);
+uint8_t SVPWM_IsEnabled(void);
+
 void Motor_OpenLoop_Vdq_Control(float vd, float vq, float elec_angle, float v_bus);
 // 禁用 SVPWM 输出：三相均输出 50% 占空比（零电压矢量），电机无力。
 void SVPWM_Disable(void);

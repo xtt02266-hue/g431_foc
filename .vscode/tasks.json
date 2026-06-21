@@ -24,6 +24,8 @@
             "command": "D:\\software\\embedded-tools\\Scripts\\pyocd.exe",
             "args": [
                 "flash",
+                "-e",
+                "sector",
                 "--pack",
                 "C:\\Users\\25934\\AppData\\Local\\Arm\\Packs\\.Download\\Keil.STM32G4xx_DFP.2.0.0.pack",
                 "-t",
@@ -47,6 +49,8 @@
             "command": "D:\\software\\embedded-tools\\Scripts\\pyocd.exe",
             "args": [
                 "flash",
+                "-e",
+                "sector",
                 "--pack",
                 "C:\\Users\\25934\\AppData\\Local\\Arm\\Packs\\.Download\\Keil.STM32G4xx_DFP.2.0.0.pack",
                 "-t",

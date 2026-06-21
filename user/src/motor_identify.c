@@ -4,6 +4,7 @@
 #include "motor_current_loop.h"
 #include "tim.h"
 #include <math.h>
+#include <stddef.h>
 // #include "motor_current_loop.h" // 后续可能需要调用开环输出电压/电流的接口
 
 static MotorIdentifyState g_identify_state = IDENTIFY_STATE_IDLE;
@@ -11,8 +12,12 @@ MotorIdentifiedParams g_identified_params = {0};
 
 // 状态机等待计时器
 static uint32_t g_identify_timer = 0;
-static uint16_t g_uvw_start_angle = 0;
 static float g_uvw_elec_angle = 0.0f;
+static float g_r_current_sum = 0.0f;
+static uint32_t g_r_current_count = 0U;
+static float g_align_sin_sum = 0.0f;
+static float g_align_cos_sum = 0.0f;
+static uint32_t g_align_sample_count = 0U;
 
 #define MOTOR_TWO_PI                 6.2832f
 #define MOTOR_HALF_PI                1.5708f
@@ -23,6 +28,16 @@ static float g_uvw_elec_angle = 0.0f;
  * closed-loop Park/InvPark convention uses theta = 0 on the +alpha axis.
  */
 #define MOTOR_OPEN_LOOP_VECTOR_SHIFT (-MOTOR_HALF_PI)
+
+#define MOTOR_IDENTIFY_R_SETTLE_MS       400U
+#define MOTOR_IDENTIFY_R_SAMPLE_MS       600U
+#define MOTOR_IDENTIFY_L_COOLDOWN_MS     100U
+#define MOTOR_IDENTIFY_UVW_LOCK_MS       1000U
+#define MOTOR_IDENTIFY_UVW_CYCLES        3.0f
+#define MOTOR_IDENTIFY_UVW_STEP_RAD      0.025f
+#define MOTOR_IDENTIFY_ALIGN_SETTLE_MS   2000U
+#define MOTOR_IDENTIFY_ALIGN_SAMPLE_MS   500U
+#define MOTOR_IDENTIFY_MAX_POLE_PAIRS    64U
 
 static float Motor_Identify_NormalizeAngle(float angle)
 {
@@ -37,6 +52,13 @@ static float Motor_Identify_NormalizeAngle(float angle)
     }
 
     return angle;
+}
+
+static void Motor_Identify_Fail(void)
+{
+    Motor_OpenLoop_Drive(0.0f, 0.0f);
+    g_identify_timer = 0U;
+    g_identify_state = IDENTIFY_STATE_ERROR;
 }
 
 void Motor_OpenLoop_Drive(float elec_angle, float amplitude)
@@ -69,9 +91,17 @@ void Motor_Identify_Start(void)
         g_identify_state == IDENTIFY_STATE_DONE ||
         g_identify_state == IDENTIFY_STATE_ERROR)
     {
+        g_identified_params = (MotorIdentifiedParams){0};
+        g_identify_timer = 0U;
+        g_uvw_elec_angle = 0.0f;
+        g_r_current_sum = 0.0f;
+        g_r_current_count = 0U;
+        g_align_sin_sum = 0.0f;
+        g_align_cos_sum = 0.0f;
+        g_align_sample_count = 0U;
+
         // 优先测量电阻，为后续提供安全的对齐电压估算
         g_identify_state = IDENTIFY_STATE_MEASURE_R;
-        g_identify_timer = 0;
     }
 }
 
@@ -105,6 +135,20 @@ MotorIdentifiedParams Motor_Identify_GetResult(void)
     return g_identified_params;
 }
 
+void Motor_Identify_UseResult(const MotorIdentifiedParams *params)
+{
+    if (params == NULL) {
+        return;
+    }
+
+    g_identified_params = *params;
+    Motor_CurrentLoop_SetMotorIdentityParams(params->pole_pairs,
+                                             params->zero_angle_offset,
+                                             params->uvw_dir);
+    g_identify_timer = 0U;
+    g_identify_state = IDENTIFY_STATE_DONE;
+}
+
 // =========================================================
 // 状态机具体实现：云台电机参数辨识
 // 由于云台电机内阻大、电感小、极对数多，且容易发热，
@@ -115,9 +159,6 @@ MotorIdentifiedParams Motor_Identify_GetResult(void)
 // 目的：算出电机的真实电阻。因为只有知道了电阻，后续强拖时才知道给多大的电压是安全的，避免电机烧毁。
 static void Identify_MeasureR(void)
 {
-    static float current_sum = 0.0f;
-    static int current_count = 0;
-    
     // 云台电机内阻大，这里施加约2.4V的相电压测试 (假设母线是SYSTEM_BUS_VOLTAGE)
     // 幅值 200 对应占空比 200/1000
     const float test_amplitude = 200.0f; 
@@ -129,19 +170,30 @@ static void Identify_MeasureR(void)
 
     g_identify_timer++;
     
-    // 给系统 200ms 的时间让电流达到稳态（电感导致的电流爬升）
-    if (g_identify_timer > 200 && g_identify_timer <= 500)
+    // Wait 400 ms, then average 600 current samples at 1 kHz.
+    if ((g_identify_timer > MOTOR_IDENTIFY_R_SETTLE_MS) &&
+        (g_identify_timer <= (MOTOR_IDENTIFY_R_SETTLE_MS +
+                              MOTOR_IDENTIFY_R_SAMPLE_MS)))
     {
         // 累加稳态下的 U 相电流大小 (绝对值)
-        current_sum += fabsf(g_foc_state.sample.iu_a);
-        current_count++;
+        g_r_current_sum += fabsf(g_foc_state.sample.iu_a);
+        g_r_current_count++;
     }
-    else if (g_identify_timer > 500) 
+    else if (g_identify_timer > (MOTOR_IDENTIFY_R_SETTLE_MS +
+                                 MOTOR_IDENTIFY_R_SAMPLE_MS))
     {
         Motor_OpenLoop_Drive(0.0f, 0.0f); // 测试完毕，关闭输出
         
-        float current_avg = current_sum / (float)current_count;
-        if (current_avg < 0.01f) current_avg = 0.01f; // 防止除以0
+        if (g_r_current_count == 0U) {
+            Motor_Identify_Fail();
+            return;
+        }
+
+        float current_avg = g_r_current_sum / (float)g_r_current_count;
+        if (current_avg < 0.01f) {
+            Motor_Identify_Fail();
+            return;
+        }
         
         // 计算 U 相实际施加的相电压 (与中心点的压差)
         float test_voltage = (test_amplitude / 1000.0f) * bus_voltage;
@@ -150,9 +202,9 @@ static void Identify_MeasureR(void)
         g_identified_params.resistance = test_voltage / current_avg;
 
         // 清零静态变量，准备进入下个状态
-        current_sum = 0.0f;
-        current_count = 0;
-        g_identify_timer = 0;
+        g_r_current_sum = 0.0f;
+        g_r_current_count = 0U;
+        g_identify_timer = 0U;
         
         // 测完电阻后，进入测电感状态
         g_identify_state = IDENTIFY_STATE_MEASURE_L; 
@@ -169,8 +221,8 @@ static void Identify_MeasureL(void)
 
     g_identify_timer++;
 
-    // 等待 50ms (防止测电阻时的滞留电流影响后续极对数辨识的稳定性)
-    if (g_identify_timer <= 50)
+    // Wait 100 ms so the resistance-test current has fully decayed.
+    if (g_identify_timer <= MOTOR_IDENTIFY_L_COOLDOWN_MS)
     {
         Motor_OpenLoop_Drive(0.0f, 0.0f);
         return;
@@ -192,12 +244,31 @@ static void Identify_Align(void)
     Motor_OpenLoop_Drive(MOTOR_OPEN_LOOP_ALIGN_ANGLE, 200.0f);
     
     g_identify_timer++;
-    // 等待 1500 毫秒 (1.5秒)，确保云台电机完全停止晃动，稳定在零点
-    if (g_identify_timer > 1500)
+    if ((g_identify_timer > MOTOR_IDENTIFY_ALIGN_SETTLE_MS) &&
+        (g_identify_timer <= (MOTOR_IDENTIFY_ALIGN_SETTLE_MS +
+                              MOTOR_IDENTIFY_ALIGN_SAMPLE_MS))) {
+        float sample_angle = (float)AS5600_ReadRawAngle() *
+                             (MOTOR_TWO_PI / 4096.0f);
+        g_align_sin_sum += sinf(sample_angle);
+        g_align_cos_sum += cosf(sample_angle);
+        g_align_sample_count++;
+    }
+
+    // Settle for 2 s, then circular-average the encoder for 500 ms.
+    if (g_identify_timer > (MOTOR_IDENTIFY_ALIGN_SETTLE_MS +
+                            MOTOR_IDENTIFY_ALIGN_SAMPLE_MS))
     {
         // 极点吸固后，读取此刻的磁编码器角度作为机械零点
         // AS5600 读出的原始值是 0~4095，这里将其换算成国际标准单位：弧度 (0 ~ 2π)
-        float align_mech_angle = (float)AS5600_ReadRawAngle() * (MOTOR_TWO_PI / 4096.0f);
+        float align_mech_angle;
+
+        if (g_align_sample_count == 0U) {
+            Motor_Identify_Fail();
+            return;
+        }
+
+        align_mech_angle = atan2f(g_align_sin_sum, g_align_cos_sum);
+        align_mech_angle = Motor_Identify_NormalizeAngle(align_mech_angle);
         
         // 记录完零点后，关闭电机输出电压
         Motor_OpenLoop_Drive(0.0f, 0.0f);
@@ -237,10 +308,10 @@ static uint16_t g_last_raw_angle = 0;         // 上一次循环的编码器角�
 
 static void Identify_UvwAndPoles(void)
 {
-    // 为了防止电机转动过多造成绕线或机械干涉，将目标改为了转过 1.5 个电周期
-    // 只要超过 1.0 个电周期 (确保跨越一次完整磁极)，除出来的值配合 roundf 四舍五入就足够准确了。
-    const float target_elec_angle = 1.5f * 2.0f * 3.1415926f; 
-    const uint32_t lock_time = 500; // 预对齐锁定时间：500个计时周期 (通常为 500ms)
+    // Traverse three electrical cycles at a slower rate for a more stable
+    // pole-pair estimate while keeping mechanical motion limited.
+    const float target_elec_angle = MOTOR_IDENTIFY_UVW_CYCLES * MOTOR_TWO_PI;
+    const uint32_t lock_time = MOTOR_IDENTIFY_UVW_LOCK_MS;
     
     // ================= 阶段 1：静态预对齐 =================
     if (g_identify_timer < lock_time)
@@ -249,7 +320,7 @@ static void Identify_UvwAndPoles(void)
         Motor_OpenLoop_Drive(0.0f, 200.0f);
         
         // 在锁定即将结束的前一刻，清零累加器，并记录此时真正的起始机械角度
-        if (g_identify_timer == lock_time - 1)
+        if (g_identify_timer == lock_time - 1U)
         {
             g_uvw_elec_angle = 0.0f;
             g_accumulated_mech_angle = 0.0f;
@@ -261,7 +332,7 @@ static void Identify_UvwAndPoles(void)
 
     // ================= 阶段 2：开环拖动与积分 =================
     // 每次循环让电角度略微往前推进 (相当于给定一个固定的开环速度)
-    g_uvw_elec_angle += 0.05f; 
+    g_uvw_elec_angle += MOTOR_IDENTIFY_UVW_STEP_RAD;
     Motor_OpenLoop_Drive(fmodf(g_uvw_elec_angle, 2.0f * 3.1415926f), 200.0f);
 
     // 1. 获取当前最新角度
@@ -289,8 +360,20 @@ static void Identify_UvwAndPoles(void)
         // 2. 计算极对数 (累积的机械角度 / 4096 = 机械圈数)
         float mech_turns = fabsf(g_accumulated_mech_angle) / 4096.0f; 
         
-        // 我们上面转了 1.5 个电周期，所以分子换成 1.5f
-        g_identified_params.pole_pairs = (uint16_t)roundf(1.5f / mech_turns);
+        // Electrical cycles divided by mechanical turns gives pole pairs.
+        if (mech_turns < 0.01f) {
+            Motor_Identify_Fail();
+            return;
+        }
+
+        g_identified_params.pole_pairs =
+            (uint16_t)roundf(MOTOR_IDENTIFY_UVW_CYCLES / mech_turns);
+
+        if ((g_identified_params.pole_pairs == 0U) ||
+            (g_identified_params.pole_pairs > MOTOR_IDENTIFY_MAX_POLE_PAIRS)) {
+            Motor_Identify_Fail();
+            return;
+        }
    
 
         // 停止输出，状态流转

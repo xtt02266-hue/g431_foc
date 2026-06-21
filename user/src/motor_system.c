@@ -8,16 +8,30 @@
 #include "oled.h"
 #include "tim.h"
 #include <math.h>
+#include <stddef.h>
 #include "user_io.h"
 #include "vofa_usart.h"
 #include "motor_identify.h"
 #include "svpwm.h"
 #include "mt6826s.h"
+#include "motor_music.h"
+#include "motor_parameters.h"
+#include "motor_sensorless.h"
+
+#define MOTOR_AS5600_MAX_SAMPLE_AGE_MS  10U
 
 // 电机系统运行状态。
 MotorSystem g_motor_system = {
-    .state = MOTOR_STATE_STOPPED,
+    .state = MOTOR_STATE_WAIT_PARAMETERS,
 };
+
+static volatile uint8_t g_run_requested = 1U;
+/* 故障采用锁存方式，传感器恢复后仍需调用 ClearFault。 */
+static volatile uint8_t g_fault_latched = 0U;
+
+static void Motor_System_ResetOuterLoops(void);
+static void Motor_System_ForceSafeStop(void);
+static void Motor_System_UpdateOperatingState(void);
 
 // 调试用全局变量，用于 VOFA+ 波形观察，不参与控制逻辑。
 static float g_debug_pot_target_pos = 0.0f;       // 电位器目标位置
@@ -84,7 +98,9 @@ static float Motor_UpdateSpeedEstimatorAdaptive(void)
 // 初始化系统状态与目标值。
 void Motor_System_Init(void)
 {
-    g_motor_system.state = MOTOR_STATE_STOPPED;
+    g_motor_system.state = MOTOR_STATE_WAIT_PARAMETERS;
+    g_run_requested = 1U;
+    g_fault_latched = 0U;
 
     // 初始目标电流归零
     g_foc_state.target_q = 0.0f;
@@ -101,6 +117,199 @@ void Motor_System_Init(void)
 
     // 初始化位置环 PID
     Motor_PositionLoop_Init();
+
+    // Music output is disabled until explicitly started.
+    Motor_Music_Init();
+
+    // Sensorless estimation is observation-only and disabled by default.
+    Motor_Sensorless_Init();
+}
+
+MotorState Motor_System_GetState(void)
+{
+    return g_motor_system.state;
+}
+
+uint8_t Motor_System_StartControl(void)
+{
+    if ((Motor_Parameters_IsReady() == 0U) ||
+        (g_fault_latched != 0U) ||
+        (AS5600_IsDataFresh(MOTOR_AS5600_MAX_SAMPLE_AGE_MS) == 0U)) {
+        return 0U;
+    }
+
+    g_run_requested = 1U;
+    return 1U;
+}
+
+void Motor_System_StopControl(void)
+{
+    uint32_t primask = __get_PRIMASK();
+
+    __disable_irq();
+    g_run_requested = 0U;
+    Motor_System_ForceSafeStop();
+    g_motor_system.state = MOTOR_STATE_STOPPED;
+    if (primask == 0U) {
+        __enable_irq();
+    }
+}
+
+uint8_t Motor_System_ClearFault(void)
+{
+    if ((Motor_Parameters_IsReady() == 0U) ||
+        (AS5600_IsDataFresh(MOTOR_AS5600_MAX_SAMPLE_AGE_MS) == 0U)) {
+        return 0U;
+    }
+
+    g_fault_latched = 0U;
+    return 1U;
+}
+
+uint8_t Motor_System_IdentifyAndSave(void)
+{
+    if ((Motor_Parameters_IsBusy() != 0U) ||
+        (AS5600_IsDataFresh(MOTOR_AS5600_MAX_SAMPLE_AGE_MS) == 0U)) {
+        return 0U;
+    }
+
+    g_fault_latched = 0U;
+    g_run_requested = 1U;
+    return Motor_Parameters_IdentifyAndSave();
+}
+
+uint8_t Motor_System_PlaySong(const MotorMusicNote *song,
+                              uint16_t note_count,
+                              uint16_t play_count)
+{
+    if ((song == NULL) || (note_count == 0U) || (play_count == 0U) ||
+        (Motor_Parameters_IsReady() == 0U) ||
+        (g_fault_latched != 0U) ||
+        (Motor_CurrentLoop_IsEnabled() == 0U)) {
+        return 0U;
+    }
+
+    Motor_Music_StartTimes(song, note_count, play_count);
+    return 1U;
+}
+
+uint8_t Motor_System_PlaySongLoop(const MotorMusicNote *song,
+                                  uint16_t note_count)
+{
+    if ((song == NULL) || (note_count == 0U) ||
+        (Motor_Parameters_IsReady() == 0U) ||
+        (g_fault_latched != 0U) ||
+        (Motor_CurrentLoop_IsEnabled() == 0U)) {
+        return 0U;
+    }
+
+    Motor_Music_Start(song, note_count, 1U);
+    return 1U;
+}
+
+void Motor_System_StopMusic(void)
+{
+    Motor_Music_Stop();
+}
+
+uint8_t Motor_System_EnableSensorlessObserver(uint8_t enable)
+{
+    if (enable == 0U) {
+        Motor_Sensorless_Enable(0U);
+        return 1U;
+    }
+
+    if ((g_motor_system.state != MOTOR_STATE_SENSORED_RUN) ||
+        (Motor_CurrentLoop_IsEnabled() == 0U)) {
+        return 0U;
+    }
+
+    Motor_Sensorless_Enable(1U);
+    return 1U;
+}
+
+static void Motor_System_ResetOuterLoops(void)
+{
+    /* 清掉位置/速度环历史量，避免功能切换后积分残留。 */
+    Motor_SpeedLoop_SetTarget(0.0f);
+    PID_Reset(&speed_pid);
+    PID_Reset(&g_pi_pos);
+    Motor_Trajectory_Clear();
+    g_foc_state.target_q = 0.0f;
+    g_foc_state.target_d = 0.0f;
+}
+
+static void Motor_System_ForceSafeStop(void)
+{
+    /* 所有功能统一从这里撤销转矩输出。 */
+    Motor_System_ResetOuterLoops();
+    if (Motor_Music_IsPlaying() != 0U) {
+        Motor_Music_Stop();
+    }
+    if (Motor_Sensorless_IsEnabled() != 0U) {
+        Motor_Sensorless_Enable(0U);
+    }
+    if (Motor_CurrentLoop_IsEnabled() != 0U) {
+        Motor_CurrentLoop_Enable(0U);
+    }
+    if (SVPWM_IsEnabled() != 0U) {
+        SVPWM_Disable();
+    }
+}
+
+static void Motor_System_UpdateOperatingState(void)
+{
+    MotorParametersStatus parameter_status = Motor_Parameters_GetStatus();
+
+    /* 辨识独占 PWM，运行闭环、音乐和无感观测都必须退出。 */
+    if (Motor_Parameters_IsBusy() != 0U) {
+        Motor_System_ForceSafeStop();
+        g_motor_system.state = MOTOR_STATE_IDENTIFYING;
+        return;
+    }
+
+    if (parameter_status == MOTOR_PARAMETERS_ERROR) {
+        g_fault_latched = 1U;
+    }
+
+    if (parameter_status == MOTOR_PARAMETERS_NO_DATA) {
+        Motor_System_ForceSafeStop();
+        g_motor_system.state = MOTOR_STATE_WAIT_PARAMETERS;
+        return;
+    }
+
+    /* AS5600 是当前实际换相角度源，数据过期必须立即停机。 */
+    if ((g_fault_latched != 0U) ||
+        (AS5600_IsDataFresh(MOTOR_AS5600_MAX_SAMPLE_AGE_MS) == 0U)) {
+        g_fault_latched = 1U;
+        Motor_System_ForceSafeStop();
+        g_motor_system.state = MOTOR_STATE_FAULT;
+        return;
+    }
+
+    if (g_run_requested == 0U) {
+        Motor_System_ForceSafeStop();
+        g_motor_system.state = MOTOR_STATE_STOPPED;
+        return;
+    }
+
+    /* 参数和传感器均有效后，统一完成整定与闭环使能。 */
+    if (Motor_CurrentLoop_IsEnabled() == 0U) {
+        MotorIdentifiedParams id = Motor_Identify_GetResult();
+
+        Motor_CurrentLoop_AutoTunePID(id.resistance,
+                                      id.inductance,
+                                      SYSTEM_BUS_VOLTAGE);
+        (void)Motor_Sensorless_ConfigureMotor(id.resistance,
+                                              id.inductance,
+                                              id.pole_pairs);
+        SVPWM_Enable();
+        Motor_CurrentLoop_Enable(1U);
+    }
+
+    g_motor_system.state = (Motor_Music_IsPlaying() != 0U)
+                               ? MOTOR_STATE_MUSIC
+                               : MOTOR_STATE_SENSORED_RUN;
 }
 
 // 周期任务：读取电位器位置目标, 通过位置规划器生成速度目标, 再由速度环生成 Iq。
@@ -108,13 +317,33 @@ void Motor_System_Init(void)
 // 控制链路: 电位器 → 位置环 → 速度环(仅前馈) → Iq → FOC → SVPWM → 电机
 void Motor_System_Task(void)
 {
+    static uint8_t music_was_active = 0U;
+#if MOTOR_MUSIC_AUTOPLAY_DEMO
+    static uint8_t demo_autoplay_checked = 0U;
+#endif
+
     // ========== 步骤 1: 速度估算 (自适应采样率) ==========
     // 低速时用长窗口降噪，高速时用短窗口提高响应
-    g_motor_system.run_data.speed_rpm = Motor_UpdateSpeedEstimatorAdaptive();
+    if (AS5600_IsDataFresh(MOTOR_AS5600_MAX_SAMPLE_AGE_MS) != 0U) {
+        g_motor_system.run_data.speed_rpm = Motor_UpdateSpeedEstimatorAdaptive();
+    } else {
+        g_motor_system.run_data.speed_rpm = 0.0f;
+    }
     
     // 如果编码器接线/电机相序不同，编码器读数的正反方向可能会和 Iq 的正扭矩方向相反。
     // 我们必须用系统辨识出的 uvw_dir (1 或 -1) 来把转速的正负号与电机电磁正方向统一，否则会导致 PID 变成正反馈（越差越使劲）！
-    float current_rpm = g_motor_system.run_data.speed_rpm * Motor_Identify_GetResult().uvw_dir;
+    int8_t identified_direction = Motor_Identify_GetResult().uvw_dir;
+    if ((identified_direction != 1) && (identified_direction != -1)) {
+        identified_direction = 1;
+    }
+    float current_rpm = g_motor_system.run_data.speed_rpm *
+                        (float)identified_direction;
+
+    if (current_rpm > 20.0f) {
+        Motor_Sensorless_SetDirection(1);
+    } else if (current_rpm < -20.0f) {
+        Motor_Sensorless_SetDirection(-1);
+    }
     
     // ========== 步骤 2: 读取电位器目标位置 ==========
     // 电位器 ADC DMA 原始值 → 反向映射 (4095 - raw) → 目标位置
@@ -123,11 +352,43 @@ void Motor_System_Task(void)
     float target_pos = 4095.0f - (float)g_motor_system.run_data.pot_raw;
     g_debug_pot_target_pos = target_pos;
     g_foc_state.target_d = 0.0f;
+
+#if MOTOR_MUSIC_AUTOPLAY_DEMO
+    if ((g_motor_system.state == MOTOR_STATE_SENSORED_RUN) &&
+        (demo_autoplay_checked == 0U)) {
+        demo_autoplay_checked = 1U;
+        Motor_Music_StartDemo();
+        g_motor_system.state = MOTOR_STATE_MUSIC;
+    }
+#endif
+
+    // Music mode owns only the q-axis current target. Pause the outer loops so
+    // position/speed control cannot fight the alternating audio torque.
+    if (g_motor_system.state == MOTOR_STATE_MUSIC) {
+        if (music_was_active == 0U) {
+            Motor_SpeedLoop_SetTarget(0.0f);
+            PID_Reset(&speed_pid);
+            PID_Reset(&g_pi_pos);
+            Motor_Trajectory_Clear();
+            music_was_active = 1U;
+        }
+
+        Motor_Music_Task1ms();
+        g_debug_speed_loop_iq = 0.0f;
+        g_debug_friction_iq = 0.0f;
+        g_debug_inertia_iq = 0.0f;
+        g_debug_target_accel_rpm_s = 0.0f;
+        g_foc_state.target_q = 0.0f;
+        g_foc_state.target_d = 0.0f;
+        return;
+    }
+
+    music_was_active = 0U;
     
     // 3. FOC 闭环开始工作后，开始让位置环介入产生速度，速度环介入产生 Iq
     // 控制链路: 电位器目标 → 位置环 (P) → 目标机械转速 → 乘 uvw_dir → 目标电磁转速
     //          → 速度环 (PI) → Iq 电流 → 摩擦前馈叠加 → 限幅 → FOC 电流环
-    if (Motor_Identify_GetState() == IDENTIFY_STATE_DONE)
+    if (g_motor_system.state == MOTOR_STATE_SENSORED_RUN)
     {
         float actual_pos = (float)AS5600_ReadRawAngle();
         float actual_mech_rpm = g_motor_system.run_data.speed_rpm;
@@ -220,32 +481,10 @@ static void Motor_StatusLed_Task(void)
 // ---------------------------------------------------------
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
-    
-     if (htim == &htim2)
+    if (htim == &htim2)
     {
-        // ============ 状态机主调度 ============
-        // 1. 如果正在校准，执行校准任务
-        if (Motor_Identify_GetState() != IDENTIFY_STATE_DONE)
-        {
-             Motor_Identify_Task();    // 开环辨识: 注入测试信号，测量 R/L/uvw_dir
-        }
-        // 2. 辨识刚完成时：自动整定 PID + 启用 FOC 闭环 + SVPWM 输出
-        else
-        {
-             static uint8_t loop_was_enabled = 0;
-             if (!loop_was_enabled)
-             {
-                 loop_was_enabled = 1;  // 此标志确保初始化代码仅执行一次
-
-                 // 根据辨识出的 R/L 自动计算电流环 PI 增益
-                 MotorIdentifiedParams id = Motor_Identify_GetResult();
-                 Motor_CurrentLoop_AutoTunePID(id.resistance, id.inductance, SYSTEM_BUS_VOLTAGE);
-
-                 g_svpwm.enabled = 1;                    // 使能 SVPWM 输出 (六路 PWM 开始输出)
-                 Motor_CurrentLoop_Enable(1);             // 使能 FOC 电流闭环 (ADC 注入通道触发)
-             }
-             // 闭环已接管 CCR，不再调用 Motor_OpenLoop_Drive（否则会覆盖 SVPWM 输出！）
-        }
+        Motor_Parameters_ControlTask1ms();
+        Motor_System_UpdateOperatingState();
         
         // 调用系统普通任务 (1ms 周期刷新电位器和目标)
         Motor_System_Task();
@@ -260,12 +499,27 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
 void Motor_ShowDebugInfo_OLED(void)
 {
+    static uint32_t last_refresh_ms = 0U;
+    uint32_t now = HAL_GetTick();
+
+    if ((uint32_t)(now - last_refresh_ms) < 20U) {
+        return;
+    }
+    last_refresh_ms = now;
+
     // 获取实时的 FOC 内部状态（电流、坐标变换后结果）
     // 注意：这里读取全局变量，如果有严谨强迫症可以加关中断，但对于只是观察调试没关系。
     MotorIdentifyState id_state = Motor_Identify_GetState();
+    MotorParametersStatus parameter_status = Motor_Parameters_GetStatus();
     
     // 1. OLED 界面显示关键调度状态
-    if (id_state != IDENTIFY_STATE_DONE) {
+    if (g_motor_system.state == MOTOR_STATE_FAULT) {
+        OLED_ShowString(1, 1, "Fault");
+    } else if (parameter_status == MOTOR_PARAMETERS_NO_DATA) {
+        OLED_ShowString(1, 1, "NoParam");
+    } else if (parameter_status == MOTOR_PARAMETERS_ERROR) {
+        OLED_ShowString(1, 1, "ParamErr");
+    } else if (parameter_status != MOTOR_PARAMETERS_READY) {
         // 辨识进行中：显示状态编号 + 目标 q 电流
         OLED_ShowString(1, 1, "Idt");     // "Idt" = Identify (辨识中)
         OLED_ShowString(1, 4, "Tq:");
@@ -293,7 +547,8 @@ if(0)  // 开启 OLED 诊断显示：d/q电流、ADC原始值、角度、电位�
 
 }
 
-    float vofa_data[15];
+    MotorSensorlessOutput sensorless = Motor_Sensorless_GetOutput();
+    float vofa_data[20];
     vofa_data[0] = 4095-Pot_ReadRaw();                   // CH0:  电位器原始 ADC (反向)
     vofa_data[1] = (float)AS5600_ReadRawAngle();         // CH1:  编码器实际位置 (counts)
     vofa_data[2] = speed_pid.target;                     // CH2:  速度环目标转速 (电磁方向, RPM)
@@ -301,7 +556,7 @@ if(0)  // 开启 OLED 诊断显示：d/q电流、ADC原始值、角度、电位�
     vofa_data[4] = g_debug_speed_loop_iq*1000;           // CH4:  速度环 PID 基础输出 (mA)
     vofa_data[5] = g_debug_friction_iq*1000;             // CH5:  摩擦前馈补偿电流 (mA)
     vofa_data[6] = g_debug_inertia_iq*1000;              // CH6:  惯性前馈补偿电流 (mA)
-    vofa_data[7] = g_foc_state.target_q*1000;            // CH7:  最终输出到电流环的目标 Iq (mA)
+    vofa_data[7] = g_foc_state.pi_q.target*1000;          // CH7:  实际送入电流环的目标 Iq (mA)
     vofa_data[8] = g_foc_state.park.q*1000;              // CH8:  实测 Q 轴电流 (mA)
     vofa_data[9] = g_debug_target_accel_rpm_s;           // CH9:  轨迹规划加速度 (电磁方向, RPM/s)
     vofa_data[10] = (float)MT6826S_ReadRawAngle15();     // CH10: MT6826S 15-bit 机械角度 (0~32767)
@@ -309,7 +564,12 @@ if(0)  // 开启 OLED 诊断显示：d/q电流、ADC原始值、角度、电位�
     vofa_data[12] = Motor_Trajectory_GetFilteredTarget();// CH12: 轨迹规划滤波后目标位置 (counts)
     vofa_data[13] = g_debug_pot_target_pos;              // CH13: 电位器反向映射目标位置 (counts)
     vofa_data[14] = Motor_Trajectory_GetPosition();      // CH14: 惯性前馈规划器内部位置 (不参与位置环)
-    VOFA_JustFloat_Send(vofa_data, 15);                  // 通过串口发送 15 通道数据到 VOFA+ 上位机
+    vofa_data[15] = sensorless.electrical_angle_rad;     // CH15: sensorless electrical angle (rad)
+    vofa_data[16] = sensorless.mechanical_speed_rpm;     // CH16: sensorless mechanical speed (RPM)
+    vofa_data[17] = sensorless.bemf_magnitude_volts;     // CH17: estimated back-EMF magnitude (V)
+    vofa_data[18] = (float)sensorless.valid;             // CH18: sensorless estimate valid flag
+    vofa_data[19] = (float)g_motor_system.state;          // CH19: system operating state
+    VOFA_JustFloat_Send(vofa_data, 20);
     // 适当的软件延时，刷新太快 OLED 会闪
     // 这里设定 50ms (即20Hz刷新率)，对 OLED 友好，对 VOFA 观察手动转动也足够
    // HAL_Delay(1);

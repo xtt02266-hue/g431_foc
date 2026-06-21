@@ -25,4 +25,10 @@ uint16_t AS5600_ReadRawAngle(void);
 // 检查 I2C 通信是否正常（1=正常, 0=故障）。
 uint8_t AS5600_IsI2cOk(void);
 
+/* 主循环后台任务：把可能阻塞的 I2C 恢复操作移出中断。 */
+void AS5600_BackgroundTask(void);
+
+/* 最近 max_age_ms 内收到过有效角度时返回 1。 */
+uint8_t AS5600_IsDataFresh(uint32_t max_age_ms);
+
 #endif

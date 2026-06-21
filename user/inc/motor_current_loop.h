@@ -120,6 +120,7 @@ void Motor_CurrentLoop_SetParams(MotorCurrentParams params);
 void Motor_CurrentLoop_SetMotorIdentityParams(uint16_t pole_pairs, float zero_angle_offset, int8_t uvw_dir);
 // FOC 闭环启停开关
 void Motor_CurrentLoop_Enable(uint8_t enable);
+uint8_t Motor_CurrentLoop_IsEnabled(void);
 // 根据辨识出的 R/L 自动整定电流环 PID（辨识完成后调用）
 void Motor_CurrentLoop_AutoTunePID(float resistance, float inductance, float bus_voltage);
 // 获取当前参数。

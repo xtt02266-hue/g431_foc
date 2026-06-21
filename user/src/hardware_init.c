@@ -11,6 +11,7 @@
 #include "as5600.h"
 #include "mt6826s.h"
 #include "motor_system.h"
+#include "motor_parameters.h"
 
 // OLED_Init 由显示驱动实现，这里做前置声明。
 void OLED_Init(void);
@@ -106,7 +107,7 @@ void hardware_init(void)
     
     Motor_System_Init();
 
-    // 8. 启动电机参数自动辨识 (电阻/电感为临时固定值，极对数/相序/零点自动测量)
-    Motor_Identify_Start();
+    // Load validated parameters from Flash. Never identify automatically.
+    Motor_Parameters_Init();
     HAL_TIM_Base_Start_IT(&htim2);
 }

@@ -103,8 +103,7 @@ MotorFeedforwardResult Motor_Feedforward_Calculate(float speed_loop_iq,
 {
     MotorFeedforwardResult result;
 
-    result.speed_loop_iq = 0;
-    //speed_loop_iq;
+    result.speed_loop_iq = speed_loop_iq;
     result.accel_rpm_s = target_accel_rpm_s;
     result.friction_iq =
         Motor_Feedforward_FrictionIq(target_speed_rpm);

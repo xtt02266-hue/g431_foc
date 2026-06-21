@@ -2,57 +2,117 @@
 #include "i2c.h"
 
 uint8_t as5600_rx_buffer[2] = {0};
-volatile uint16_t as5600_current_angle = 0;
-volatile uint8_t as5600_i2c_error = 0;  // 0=正常, 非0=I2C通信故障
+volatile uint16_t as5600_current_angle = 0U;
+volatile uint8_t as5600_i2c_error = 1U;
 
-// 请求 DMA 进行无阻塞读取
+static volatile uint8_t g_as5600_has_sample = 0U;
+static volatile uint8_t g_as5600_recovery_pending = 0U;
+static volatile uint32_t g_as5600_last_update_ms = 0U;
+
+/* 发起一次 DMA 读取，完成回调会自动继续下一次读取。 */
 void AS5600_RequestRead_DMA(void)
 {
-    // 如果 I2C 外设处于空闲状态，则发起 DMA 获取请求
-    if (HAL_I2C_GetState(&hi2c1) == HAL_I2C_STATE_READY)
-    {
-        // 推荐使用 Mem_Read_DMA，一步搞定发送寄存器地址和接收数据
-        HAL_I2C_Mem_Read_DMA(&hi2c1, AS5600_Address, RAW_ANGLE_HI, I2C_MEMADD_SIZE_8BIT, as5600_rx_buffer, 2);
+    if (HAL_I2C_GetState(&hi2c1) != HAL_I2C_STATE_READY) {
+        return;
+    }
+
+    if (HAL_I2C_Mem_Read_DMA(&hi2c1,
+                             AS5600_Address,
+                             RAW_ANGLE_HI,
+                             I2C_MEMADD_SIZE_8BIT,
+                             as5600_rx_buffer,
+                             2U) != HAL_OK) {
+        as5600_i2c_error = 1U;
+        g_as5600_recovery_pending = 1U;
     }
 }
 
-// 获取最新缓存的角度（原函数的无阻塞形式）
 uint16_t AS5600_ReadRawAngle(void)
 {
     return as5600_current_angle;
 }
 
-// 当 DMA 接收完成时，由 HAL 库自动调用此回调
 void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c)
 {
-    if (hi2c->Instance == I2C1)
-    {
-        // 解析 DMA 搬运过来的 2 字节数据
-        as5600_current_angle = (uint16_t)((as5600_rx_buffer[0] & 0x0F) << 8) | as5600_rx_buffer[1];
-        as5600_i2c_error = 0;  // 通信成功，清除错误标志
-        
-        // 读完一次立刻发起下一次请求，实现"后台永动机"式的持续角度刷新
-        AS5600_RequestRead_DMA();
+    if (hi2c->Instance != I2C1) {
+        return;
     }
+
+    as5600_current_angle =
+        (uint16_t)(((uint16_t)(as5600_rx_buffer[0] & 0x0FU) << 8U) |
+                   (uint16_t)as5600_rx_buffer[1]);
+    g_as5600_last_update_ms = HAL_GetTick();
+    g_as5600_has_sample = 1U;
+    g_as5600_recovery_pending = 0U;
+    as5600_i2c_error = 0U;
+
+    AS5600_RequestRead_DMA();
 }
 
-// I2C 通信错误回调（超时、仲裁丢失、NACK 等）
 void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c)
 {
-    if (hi2c->Instance == I2C1)
-    {
-        as5600_i2c_error = 1;  // 标记 I2C 故障
-        
-        // 尝试恢复：重新初始化 I2C 外设
-        HAL_I2C_DeInit(hi2c);
-        MX_I2C1_Init();
-        
-        AS5600_RequestRead_DMA();
+    if (hi2c->Instance != I2C1) {
+        return;
     }
+
+    /* 中断内只置故障标志，耗时的外设重启交给主循环。 */
+    as5600_i2c_error = 1U;
+    g_as5600_recovery_pending = 1U;
 }
 
-// 获取 I2C 通信状态（供外部诊断）
 uint8_t AS5600_IsI2cOk(void)
 {
-    return (as5600_i2c_error == 0) ? 1 : 0;
+    return (as5600_i2c_error == 0U) ? 1U : 0U;
+}
+
+void AS5600_BackgroundTask(void)
+{
+    static uint32_t last_attempt_ms = 0U;
+    uint32_t now = HAL_GetTick();
+
+    /* 即使 HAL 没有报错，数据长时间不更新也视为总线卡死。 */
+    if ((g_as5600_recovery_pending == 0U) &&
+        (((g_as5600_has_sample != 0U) &&
+          ((uint32_t)(now - g_as5600_last_update_ms) > 20U)) ||
+         ((g_as5600_has_sample == 0U) && (now > 100U)))) {
+        as5600_i2c_error = 1U;
+        g_as5600_recovery_pending = 1U;
+    }
+
+    if (g_as5600_recovery_pending == 0U) {
+        return;
+    }
+
+    if ((uint32_t)(now - last_attempt_ms) < 20U) {
+        return;
+    }
+    last_attempt_ms = now;
+
+    g_as5600_recovery_pending = 0U;
+    (void)HAL_I2C_DeInit(&hi2c1);
+    MX_I2C1_Init();
+    AS5600_RequestRead_DMA();
+}
+
+uint8_t AS5600_IsDataFresh(uint32_t max_age_ms)
+{
+    uint32_t primask = __get_PRIMASK();
+    uint32_t last_update;
+    uint8_t has_sample;
+    uint8_t has_error;
+
+    /* 复制中断共享数据时保持快照一致。 */
+    __disable_irq();
+    last_update = g_as5600_last_update_ms;
+    has_sample = g_as5600_has_sample;
+    has_error = as5600_i2c_error;
+    if (primask == 0U) {
+        __enable_irq();
+    }
+
+    if ((has_sample == 0U) || (has_error != 0U)) {
+        return 0U;
+    }
+
+    return ((uint32_t)(HAL_GetTick() - last_update) <= max_age_ms) ? 1U : 0U;
 }

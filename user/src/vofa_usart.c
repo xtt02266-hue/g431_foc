@@ -7,7 +7,7 @@ const uint8_t vofa_tail[4] = {0x00, 0x00, 0x80, 0x7f};
 
 // 定义全局的接收和发送缓冲区
 uint8_t vofa_rx_buffer[VOFA_RX_BUFFER_SIZE];
-uint8_t vofa_tx_buffer[64]; // 用于 DMA 发送的静态缓存
+uint8_t vofa_tx_buffer[84]; // 20 floats + 4-byte JustFloat frame tail
 
 void VOFA_Init(void)
 {

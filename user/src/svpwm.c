@@ -162,10 +162,23 @@ void SVPWM_SetVoltage(float v_alpha, float v_beta, float v_bus)
     __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, ccr_c);
 }
 
+void SVPWM_Enable(void)
+{
+    g_svpwm.enabled = 1U;
+}
+
+uint8_t SVPWM_IsEnabled(void)
+{
+    return g_svpwm.enabled;
+}
+
 // 禁用 SVPWM 输出：三相 50% 占空比（零矢量）。
 void SVPWM_Disable(void)
 {
-    g_svpwm.enabled = 0;
+    uint32_t primask = __get_PRIMASK();
+
+    __disable_irq();
+    g_svpwm.enabled = 0U;
 
     uint32_t half_arr = SVPWM_ARR / 2U;
     __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, half_arr);
@@ -175,5 +188,10 @@ void SVPWM_Disable(void)
     g_svpwm.duty_a = 0.5f;
     g_svpwm.duty_b = 0.5f;
     g_svpwm.duty_c = 0.5f;
+    g_svpwm.v_alpha = 0.0f;
+    g_svpwm.v_beta = 0.0f;
     g_svpwm.mod_index = 0.0f;
+    if (primask == 0U) {
+        __enable_irq();
+    }
 }

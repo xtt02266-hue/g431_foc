@@ -156,12 +156,12 @@ void OLED_ShowChar(uint8_t Line, uint8_t Column, char Char)
 	OLED_SetCursor((Line - 1) * 2, (Column - 1) * 8);		//设置光标位置在上半部分
 	for (i = 0; i < 8; i++)
 	{
-		OLED_WriteData(OLED_F8x16[Char - ' '][i]);			//显示上半部分内容
+		OLED_WriteData(OLED_F8x16[((uint16_t)(Char - ' ') * 16U) + i]);	//显示上半部分内容
 	}
 	OLED_SetCursor((Line - 1) * 2 + 1, (Column - 1) * 8);	//设置光标位置在下半部分
 	for (i = 0; i < 8; i++)
 	{
-		OLED_WriteData(OLED_F8x16[Char - ' '][i + 8]);		//显示下半部分内容
+		OLED_WriteData(OLED_F8x16[((uint16_t)(Char - ' ') * 16U) + i + 8U]);	//显示下半部分内容
 	}
 }
 

@@ -49,9 +49,13 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     user/src/motor_current_loop.c
     user/src/motor_feedforward.c
     user/src/motor_identify.c
+    user/src/motor_music.c
+    user/src/motor_parameters.c
     user/src/motor_position_loop.c
     user/src/motor_speed_loop.c
     user/src/motor_system.c
+    user/src/motor_songs.c
+    user/src/motor_sensorless.c
     user/src/motor_trajectory.c
     user/src/mt6826s.c
     user/src/oled.c

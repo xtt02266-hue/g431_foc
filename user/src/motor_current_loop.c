@@ -3,6 +3,8 @@
 #include "adc.h"
 #include "svpwm.h"
 #include "as5600.h"
+#include "motor_music.h"
+#include "motor_sensorless.h"
 #include <math.h>
 
     // 一阶低通滤波：滤除 PWM 开关噪声和 ADC 采样毛刺
@@ -71,6 +73,13 @@ void Motor_CurrentLoop_Run(uint16_t iu_raw, uint16_t iw_raw)
     // 3. Clarke 变换：将三相相电流（实际上只需两相，假设三相和为0）转换至两相静止坐标系 (Alpha-Beta)
     g_foc_state.clarke = Motor_CurrentLoop_Clarke(g_foc_state.sample.iu_a, g_foc_state.sample.iw_a);
 
+    // Debug-only observer: use the previous applied voltage and measured
+    // alpha-beta current. AS5600 remains the active Park-angle source.
+    Motor_Sensorless_Update(g_svpwm.v_alpha,
+                            g_svpwm.v_beta,
+                            g_foc_state.clarke.alpha,
+                            g_foc_state.clarke.beta);
+
     // 4. Park 变换：将静止坐标系转化为同步旋转坐标系 (D-Q)
     g_foc_state.park = Motor_CurrentLoop_Park(g_foc_state.clarke, g_foc_state.sin_theta, g_foc_state.cos_theta);
 
@@ -80,7 +89,7 @@ void Motor_CurrentLoop_Run(uint16_t iu_raw, uint16_t iw_raw)
 
     // 将外部期望的 D-Q 轴目标电流传给 PID (比如上层位置环/速度环计算出来的 target，通常 D轴目标为0)
     g_foc_state.pi_d.target = g_foc_state.target_d;
-    g_foc_state.pi_q.target = g_foc_state.target_q;
+    g_foc_state.pi_q.target = Motor_Music_ProcessIqTarget(g_foc_state.target_q);
 
     if (g_foc_state.closed_loop_enable)
     {
@@ -150,18 +159,35 @@ void Motor_CurrentLoop_SetParams(MotorCurrentParams params)
 // 专门接收并刷新电机辨识后的机械参数
 void Motor_CurrentLoop_SetMotorIdentityParams(uint16_t pole_pairs, float zero_angle_offset, int8_t uvw_dir)
 {
+    uint32_t primask = __get_PRIMASK();
+
+    __disable_irq();
     g_foc_state.params.pole_pairs = pole_pairs;
     g_foc_state.params.zero_angle_offset = zero_angle_offset;
     g_foc_state.params.uvw_dir = uvw_dir;
+    if (primask == 0U) {
+        __enable_irq();
+    }
 }
 
 // FOC 闭环启停开关
 void Motor_CurrentLoop_Enable(uint8_t enable)
 {
-    g_foc_state.closed_loop_enable = enable;
+    uint32_t primask = __get_PRIMASK();
+
+    __disable_irq();
+    g_foc_state.closed_loop_enable = (enable != 0U) ? 1U : 0U;
     // 无论启用还是停用，都重置 PID 积分，确保从零开始
     PID_Reset(&g_foc_state.pi_d);
     PID_Reset(&g_foc_state.pi_q);
+    if (primask == 0U) {
+        __enable_irq();
+    }
+}
+
+uint8_t Motor_CurrentLoop_IsEnabled(void)
+{
+    return g_foc_state.closed_loop_enable;
 }
 
 // 根据辨识出的电机 R/L 自动计算最优电流环 PI 参数。
@@ -177,6 +203,8 @@ void Motor_CurrentLoop_Enable(uint8_t enable)
 
 void Motor_CurrentLoop_AutoTunePID(float resistance, float inductance, float bus_voltage)
 {
+    uint32_t primask;
+
     if (resistance <= 0.0f || inductance <= 0.0f) return;
 
     float dt = 0.00005f;  // 20kHz 采样
@@ -192,18 +220,26 @@ void Motor_CurrentLoop_AutoTunePID(float resistance, float inductance, float bus
     float out_max =  v_max;
     float out_min = -v_max;
 
+    primask = __get_PRIMASK();
+    __disable_irq();
     PID_Init(&g_foc_state.pi_d, kp, ki, kd, out_max, out_min, dt);
     PID_Init(&g_foc_state.pi_q, kp, ki, kd, out_max, out_min, dt);
+    if (primask == 0U) {
+        __enable_irq();
+    }
 }
 
 // 获取当前参数。
 MotorCurrentParams Motor_CurrentLoop_GetParams(void)
 {
     MotorCurrentParams params;
+    uint32_t primask = __get_PRIMASK();
 
     __disable_irq();
     params = g_foc_state.params;
-    __enable_irq();
+    if (primask == 0U) {
+        __enable_irq();
+    }
 
     return params;
 }
@@ -236,10 +272,13 @@ void Motor_CurrentLoop_SetShuntOhms(float shunt_ohms)
 MotorCurrentSample Motor_CurrentLoop_GetLastSample(void)
 {
     MotorCurrentSample sample;
+    uint32_t primask = __get_PRIMASK();
 
     __disable_irq();
     sample = g_foc_state.sample;
-    __enable_irq();
+    if (primask == 0U) {
+        __enable_irq();
+    }
 
     return sample;
 }

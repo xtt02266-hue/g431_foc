@@ -56,8 +56,12 @@ ENTRY(Reset_Handler)
 MEMORY
 {
 RAM (xrw)      : ORIGIN = 0x20000000, LENGTH = 32K
-FLASH (rx)      : ORIGIN = 0x8000000, LENGTH = 128K
+FLASH (rx)      : ORIGIN = 0x8000000, LENGTH = 126K
+MOTOR_PARAMS (r) : ORIGIN = 0x801F800, LENGTH = 2K
 }
+
+/* The last 2 KB page is erased only by motor_parameters.c. */
+__motor_params_flash_start__ = ORIGIN(MOTOR_PARAMS);
 
 /* Highest address of the user mode stack */
 _estack = ORIGIN(RAM) + LENGTH(RAM);    /* end of RAM */
