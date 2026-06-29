@@ -107,7 +107,7 @@ void hardware_init(void)
     
     Motor_System_Init();
 
-    // Load validated parameters from Flash. Never identify automatically.
+    // Load parameters from Flash, or schedule one identification if absent.
     Motor_Parameters_Init();
     HAL_TIM_Base_Start_IT(&htim2);
 }

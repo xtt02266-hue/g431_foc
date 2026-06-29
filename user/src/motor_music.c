@@ -5,7 +5,7 @@
 
 #define MOTOR_MUSIC_SINE_TABLE_SIZE       32U
 #define MOTOR_MUSIC_SINE_INDEX_SHIFT      27U
-#define MOTOR_MUSIC_NOTE_GAP_MS           10U
+#define MOTOR_MUSIC_NOTE_GAP_MS            0U
 
 #if MOTOR_MUSIC_INTERPOLATION_BITS > 16U
 #error "MOTOR_MUSIC_INTERPOLATION_BITS must be between 0 and 16"
@@ -147,16 +147,16 @@ void Motor_Music_StartTimes(const MotorMusicNote *song,
 
 void Motor_Music_StartDemo(void)
 {
-    Motor_Music_Start(g_motor_song_twinkle,
-                      g_motor_song_twinkle_count,
+    Motor_Music_Start(g_motor_song_haruhikage_intro,
+                      g_motor_song_haruhikage_intro_count,
                       0U);
 }
 
 void Motor_Music_StartDemoTimes(uint16_t play_count)
 {
     Motor_Music_StartTimes(
-        g_motor_song_twinkle,
-        g_motor_song_twinkle_count,
+        g_motor_song_haruhikage_intro,
+        g_motor_song_haruhikage_intro_count,
         play_count);
 }
 

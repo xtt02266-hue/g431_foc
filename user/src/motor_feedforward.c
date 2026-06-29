@@ -14,7 +14,7 @@
 
 // 惯性补偿：Iq_ff = gain * accel
 // accel 来自轨迹规划器输出的目标加速度 (RPM/s)
-#define MOTOR_INERTIA_COMP_GAIN_A_PER_RPM_S 0.00001f // 惯性补偿增益 A/(RPM/s)
+#define MOTOR_INERTIA_COMP_GAIN_A_PER_RPM_S 0.00008f // 惯性补偿增益 A/(RPM/s)
 #define MOTOR_INERTIA_COMP_LIMIT_A     0.25f     // 惯性补偿单独限幅 (A)，防止加速度前馈过猛
 
 // 浮点数绝对值 (内部工具函数)

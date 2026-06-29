@@ -19,6 +19,14 @@
 #include "motor_sensorless.h"
 
 #define MOTOR_AS5600_MAX_SAMPLE_AGE_MS  10U
+#define MOTOR_CURRENT_LOOP_CONTROL_BW_HZ 250.0f
+#define MOTOR_CURRENT_LOOP_MUSIC_BW_HZ  2000.0f
+
+// 电位器低通滤波系数 (一阶 EMA, 1kHz 更新率)
+// α 越小滤波越强、响应越慢; α=1.0 则无滤波
+// α=0.10f → 截止频率 ~16Hz, 适合人手旋转电位器
+// α=0.05f → 截止频率 ~8Hz,  更平滑但略有滞后感
+#define POT_LPF_ALPHA  0.10f
 
 // 电机系统运行状态。
 MotorSystem g_motor_system = {
@@ -32,9 +40,11 @@ static volatile uint8_t g_fault_latched = 0U;
 static void Motor_System_ResetOuterLoops(void);
 static void Motor_System_ForceSafeStop(void);
 static void Motor_System_UpdateOperatingState(void);
+static void Motor_System_TuneCurrentLoopBandwidth(float bandwidth_hz);
 
 // 调试用全局变量，用于 VOFA+ 波形观察，不参与控制逻辑。
 static float g_debug_pot_target_pos = 0.0f;       // 电位器目标位置
+static float g_pot_target_filtered = 0.0f;         // 电位器目标位置经低通滤波后的值
 static float g_debug_uvw_dir = 1.0f;              // UVW 方向系数 (1 或 -1)
 static float g_debug_friction_iq = 0.0f;           // 摩擦补偿电流 (A)
 static float g_debug_inertia_iq = 0.0f;            // 惯性补偿电流 (A)
@@ -239,6 +249,16 @@ static void Motor_System_ResetOuterLoops(void)
     g_foc_state.target_d = 0.0f;
 }
 
+static void Motor_System_TuneCurrentLoopBandwidth(float bandwidth_hz)
+{
+    MotorIdentifiedParams id = Motor_Identify_GetResult();
+
+    Motor_CurrentLoop_AutoTunePIDWithBandwidth(id.resistance,
+                                               id.inductance,
+                                               SYSTEM_BUS_VOLTAGE,
+                                               bandwidth_hz);
+}
+
 static void Motor_System_ForceSafeStop(void)
 {
     /* 所有功能统一从这里撤销转矩输出。 */
@@ -261,9 +281,11 @@ static void Motor_System_UpdateOperatingState(void)
 {
     MotorParametersStatus parameter_status = Motor_Parameters_GetStatus();
 
-    /* 辨识独占 PWM，运行闭环、音乐和无感观测都必须退出。 */
+    /*
+     * Identification owns the PWM after its start routine has stopped all
+     * closed-loop features. Do not clear its open-loop duty every 1 ms.
+     */
     if (Motor_Parameters_IsBusy() != 0U) {
-        Motor_System_ForceSafeStop();
         g_motor_system.state = MOTOR_STATE_IDENTIFYING;
         return;
     }
@@ -297,9 +319,8 @@ static void Motor_System_UpdateOperatingState(void)
     if (Motor_CurrentLoop_IsEnabled() == 0U) {
         MotorIdentifiedParams id = Motor_Identify_GetResult();
 
-        Motor_CurrentLoop_AutoTunePID(id.resistance,
-                                      id.inductance,
-                                      SYSTEM_BUS_VOLTAGE);
+        Motor_System_TuneCurrentLoopBandwidth(
+            MOTOR_CURRENT_LOOP_CONTROL_BW_HZ);
         (void)Motor_Sensorless_ConfigureMotor(id.resistance,
                                               id.inductance,
                                               id.pole_pairs);
@@ -346,10 +367,13 @@ void Motor_System_Task(void)
     }
     
     // ========== 步骤 2: 读取电位器目标位置 ==========
-    // 电位器 ADC DMA 原始值 → 反向映射 (4095 - raw) → 目标位置
+    // 电位器 ADC DMA 原始值 → 反向映射 (4095 - raw) → 低通滤波 → 目标位置
     g_motor_system.run_data.pot_raw = Pot_ReadRaw();
 
-    float target_pos = 4095.0f - (float)g_motor_system.run_data.pot_raw;
+    float target_pos_raw = 4095.0f - (float)g_motor_system.run_data.pot_raw;
+    // 一阶 EMA 低通滤波: filtered += α * (raw - filtered)
+    g_pot_target_filtered += POT_LPF_ALPHA * (target_pos_raw - g_pot_target_filtered);
+    float target_pos = g_pot_target_filtered;
     g_debug_pot_target_pos = target_pos;
     g_foc_state.target_d = 0.0f;
 
@@ -366,6 +390,8 @@ void Motor_System_Task(void)
     // position/speed control cannot fight the alternating audio torque.
     if (g_motor_system.state == MOTOR_STATE_MUSIC) {
         if (music_was_active == 0U) {
+            Motor_System_TuneCurrentLoopBandwidth(
+                MOTOR_CURRENT_LOOP_MUSIC_BW_HZ);
             Motor_SpeedLoop_SetTarget(0.0f);
             PID_Reset(&speed_pid);
             PID_Reset(&g_pi_pos);
@@ -383,6 +409,10 @@ void Motor_System_Task(void)
         return;
     }
 
+    if (music_was_active != 0U) {
+        Motor_System_TuneCurrentLoopBandwidth(
+            MOTOR_CURRENT_LOOP_CONTROL_BW_HZ);
+    }
     music_was_active = 0U;
     
     // 3. FOC 闭环开始工作后，开始让位置环介入产生速度，速度环介入产生 Iq
@@ -502,7 +532,7 @@ void Motor_ShowDebugInfo_OLED(void)
     static uint32_t last_refresh_ms = 0U;
     uint32_t now = HAL_GetTick();
 
-    if ((uint32_t)(now - last_refresh_ms) < 20U) {
+    if ((uint32_t)(now - last_refresh_ms) < 2U) {
         return;
     }
     last_refresh_ms = now;

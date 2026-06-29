@@ -4,34 +4,47 @@
 #include <stdint.h>
 
 /*
- * Set to 1 to play the built-in demo once after motor identification.
- * Keep it disabled by default so normal position control remains unchanged.
+ * Play the built-in demo once after the motor first enters closed-loop run.
+ * Position control resumes automatically when the song finishes.
  */
 #ifndef MOTOR_MUSIC_AUTOPLAY_DEMO
-#define MOTOR_MUSIC_AUTOPLAY_DEMO          0
+#define MOTOR_MUSIC_AUTOPLAY_DEMO          1
 #endif
 
 /* The FOC current loop is called from the 20 kHz injected ADC callback. */
 #define MOTOR_MUSIC_SAMPLE_RATE_HZ         20000.0f
-#define MOTOR_MUSIC_DEFAULT_AMPLITUDE_A    0.12f
+#define MOTOR_MUSIC_DEFAULT_AMPLITUDE_A    0.30f
 #define MOTOR_MUSIC_MAX_AMPLITUDE_A        0.30f
-#define MOTOR_MUSIC_MAX_FREQUENCY_HZ       4000.0f
+#define MOTOR_MUSIC_MAX_FREQUENCY_HZ       4500.0f
 
 /* 0 disables interpolation; 8 gives 256 interpolated steps per LUT segment. */
 #define MOTOR_MUSIC_INTERPOLATION_BITS      8U
 
 #define MOTOR_MUSIC_REST                    0.0f
+#define MOTOR_NOTE_FS3                    185.00f
+#define MOTOR_NOTE_GS3                    207.65f
+#define MOTOR_NOTE_A3                     220.00f
+#define MOTOR_NOTE_AS3                    233.08f
+#define MOTOR_NOTE_B3                     246.94f
 #define MOTOR_NOTE_C4                     261.63f
+#define MOTOR_NOTE_CS4                    277.18f
 #define MOTOR_NOTE_D4                     293.66f
+#define MOTOR_NOTE_DS4                    311.13f
 #define MOTOR_NOTE_E4                     329.63f
 #define MOTOR_NOTE_F4                     349.23f
+#define MOTOR_NOTE_FS4                    369.99f
 #define MOTOR_NOTE_G4                     392.00f
+#define MOTOR_NOTE_GS4                    415.30f
 #define MOTOR_NOTE_A4                     440.00f
+#define MOTOR_NOTE_AS4                    466.16f
 #define MOTOR_NOTE_B4                     493.88f
 #define MOTOR_NOTE_C5                     523.25f
+#define MOTOR_NOTE_CS5                    554.37f
 #define MOTOR_NOTE_D5                     587.33f
+#define MOTOR_NOTE_DS5                    622.25f
 #define MOTOR_NOTE_E5                     659.25f
 #define MOTOR_NOTE_F5                     698.46f
+#define MOTOR_NOTE_FS5                    739.99f
 #define MOTOR_NOTE_G5                     783.99f
 #define MOTOR_NOTE_A5                     880.00f
 #define MOTOR_NOTE_B5                     987.77f

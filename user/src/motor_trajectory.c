@@ -3,13 +3,13 @@
 #include <stdint.h>
 
 /* 最大期望速度，单位 RPM。只用于限制惯性前馈规划速度，不直接作为速度环目标。 */
-#define MOTOR_TRAJ_MAX_VELOCITY_RPM        225.0f
+#define MOTOR_TRAJ_MAX_VELOCITY_RPM        220.0f
 
 /* 最大期望加速度，单位 RPM/s。惯性前馈电流由这个加速度计算。 */
-#define MOTOR_TRAJ_MAX_ACCEL_RPM_S         12000.0f
+#define MOTOR_TRAJ_MAX_ACCEL_RPM_S         50000.0f
 
 /* 最大 jerk，单位 RPM/s^2，用于避免惯性前馈电流突变。 */
-#define MOTOR_TRAJ_MAX_JERK_RPM_S2         3600000.0f
+#define MOTOR_TRAJ_MAX_JERK_RPM_S2         9000000.0f
 
 /* 到达目标附近的死区，单位 counts。 */
 #define MOTOR_TRAJ_ARRIVE_COUNTS           2.0f

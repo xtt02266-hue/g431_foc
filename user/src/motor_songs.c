@@ -1,16 +1,38 @@
 #include "motor_songs.h"
 
-const MotorMusicNote g_motor_song_twinkle[] = {
-    {MOTOR_NOTE_C4, 350U}, {MOTOR_NOTE_C4, 350U},
-    {MOTOR_NOTE_G4, 350U}, {MOTOR_NOTE_G4, 350U},
-    {MOTOR_NOTE_A4, 350U}, {MOTOR_NOTE_A4, 350U},
-    {MOTOR_NOTE_G4, 700U}, {MOTOR_MUSIC_REST, 120U},
-    {MOTOR_NOTE_F4, 350U}, {MOTOR_NOTE_F4, 350U},
-    {MOTOR_NOTE_E4, 350U}, {MOTOR_NOTE_E4, 350U},
-    {MOTOR_NOTE_D4, 350U}, {MOTOR_NOTE_D4, 350U},
-    {MOTOR_NOTE_C4, 700U}
+/* 50 ms-grid monophonic transcription of the first 15.5 seconds. */
+const MotorMusicNote g_motor_song_haruhikage_intro[] = {
+    {MOTOR_MUSIC_REST, 500U}, {MOTOR_NOTE_FS4, 100U},
+    {MOTOR_NOTE_AS4, 50U}, {MOTOR_NOTE_DS5, 750U},
+    {MOTOR_NOTE_FS5, 50U}, {MOTOR_NOTE_CS5, 250U},
+    {MOTOR_NOTE_FS5, 50U}, {MOTOR_NOTE_B4, 550U},
+    {MOTOR_NOTE_FS5, 50U}, {MOTOR_NOTE_CS5, 300U},
+    {MOTOR_NOTE_FS5, 50U}, {MOTOR_NOTE_DS5, 350U},
+    {MOTOR_NOTE_E5, 200U}, {MOTOR_NOTE_FS5, 50U},
+    {MOTOR_NOTE_DS5, 250U}, {MOTOR_NOTE_FS5, 50U},
+    {MOTOR_NOTE_CS5, 950U}, {MOTOR_NOTE_DS5, 550U},
+    {MOTOR_NOTE_FS5, 50U}, {MOTOR_NOTE_CS5, 250U},
+    {MOTOR_NOTE_FS5, 50U}, {MOTOR_NOTE_B4, 450U},
+    {MOTOR_NOTE_DS5, 100U}, {MOTOR_NOTE_FS5, 50U},
+    {MOTOR_NOTE_CS5, 250U}, {MOTOR_NOTE_DS5, 350U},
+    {MOTOR_NOTE_CS5, 50U}, {MOTOR_NOTE_B4, 50U},
+    {MOTOR_NOTE_FS5, 50U}, {MOTOR_NOTE_E5, 200U},
+    {MOTOR_NOTE_DS5, 300U}, {MOTOR_NOTE_CS5, 900U},
+    {MOTOR_NOTE_E5, 50U}, {MOTOR_NOTE_DS5, 500U},
+    {MOTOR_NOTE_FS5, 100U}, {MOTOR_NOTE_CS5, 300U},
+    {MOTOR_NOTE_B4, 400U}, {MOTOR_NOTE_CS5, 500U},
+    {MOTOR_NOTE_FS5, 50U}, {MOTOR_NOTE_DS5, 400U},
+    {MOTOR_NOTE_CS5, 50U}, {MOTOR_NOTE_E5, 150U},
+    {MOTOR_NOTE_DS5, 250U}, {MOTOR_NOTE_FS5, 50U},
+    {MOTOR_NOTE_CS5, 500U}, {MOTOR_NOTE_FS5, 150U},
+    {MOTOR_NOTE_CS5, 300U}, {MOTOR_NOTE_DS5, 500U},
+    {MOTOR_NOTE_E5, 50U}, {MOTOR_NOTE_CS5, 400U},
+    {MOTOR_NOTE_B4, 350U}, {MOTOR_NOTE_CS5, 500U},
+    {MOTOR_NOTE_DS5, 450U}, {MOTOR_NOTE_FS5, 100U},
+    {MOTOR_NOTE_E5, 100U}, {MOTOR_NOTE_DS5, 250U},
+    {MOTOR_NOTE_CS5, 750U}, {MOTOR_NOTE_FS5, 100U},
 };
 
-const uint16_t g_motor_song_twinkle_count =
-    (uint16_t)(sizeof(g_motor_song_twinkle) /
-               sizeof(g_motor_song_twinkle[0]));
+const uint16_t g_motor_song_haruhikage_intro_count =
+    (uint16_t)(sizeof(g_motor_song_haruhikage_intro) /
+               sizeof(g_motor_song_haruhikage_intro[0]));

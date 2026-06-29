@@ -4,7 +4,7 @@
 #include "motor_music.h"
 #include <stdint.h>
 
-extern const MotorMusicNote g_motor_song_twinkle[];
-extern const uint16_t g_motor_song_twinkle_count;
+extern const MotorMusicNote g_motor_song_haruhikage_intro[];
+extern const uint16_t g_motor_song_haruhikage_intro_count;
 
 #endif

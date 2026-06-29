@@ -12,7 +12,10 @@ typedef enum
     MOTOR_PARAMETERS_ERROR
 } MotorParametersStatus;
 
-/* Load and validate the saved parameters. This never starts identification. */
+/*
+ * Load and validate saved parameters. If none are valid, schedule one
+ * automatic identification attempt after the encoder becomes ready.
+ */
 void Motor_Parameters_Init(void);
 
 /*

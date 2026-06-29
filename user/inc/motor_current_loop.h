@@ -37,8 +37,8 @@
 #define MOTOR_CURRENT_PID_D_KP       1.0f
 #define MOTOR_CURRENT_PID_D_KI       1000.0f
 #define MOTOR_CURRENT_PID_D_KD       0.0f
-#define MOTOR_CURRENT_PID_D_OUT_MAX  6.5f   // SVPWM 线性区最大相电压 = 12V/√3 × 0.95
-#define MOTOR_CURRENT_PID_D_OUT_MIN -6.5f
+#define MOTOR_CURRENT_PID_D_OUT_MAX  8.3f   // SVPWM 线性区最大相电压 = 12V/√3 × 0.95
+#define MOTOR_CURRENT_PID_D_OUT_MIN -8.3f
 #endif
 
 // q 轴电流环 PID 默认参数。
@@ -46,8 +46,8 @@
 #define MOTOR_CURRENT_PID_Q_KP       1.0f
 #define MOTOR_CURRENT_PID_Q_KI       1000.0f
 #define MOTOR_CURRENT_PID_Q_KD       0.0f
-#define MOTOR_CURRENT_PID_Q_OUT_MAX  6.5f
-#define MOTOR_CURRENT_PID_Q_OUT_MIN -6.5f
+#define MOTOR_CURRENT_PID_Q_OUT_MAX  8.3f
+#define MOTOR_CURRENT_PID_Q_OUT_MIN -8.3f
 #endif
 
 // 电流采样参数。
@@ -123,6 +123,10 @@ void Motor_CurrentLoop_Enable(uint8_t enable);
 uint8_t Motor_CurrentLoop_IsEnabled(void);
 // 根据辨识出的 R/L 自动整定电流环 PID（辨识完成后调用）
 void Motor_CurrentLoop_AutoTunePID(float resistance, float inductance, float bus_voltage);
+void Motor_CurrentLoop_AutoTunePIDWithBandwidth(float resistance,
+                                                float inductance,
+                                                float bus_voltage,
+                                                float bandwidth_hz);
 // 获取当前参数。
 MotorCurrentParams Motor_CurrentLoop_GetParams(void);
 // 设置偏置电压。

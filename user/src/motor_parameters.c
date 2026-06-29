@@ -1,4 +1,5 @@
 #include "motor_parameters.h"
+#include "as5600.h"
 #include "motor_current_loop.h"
 #include "motor_identify.h"
 #include "motor_music.h"
@@ -36,6 +37,7 @@ extern uint8_t __motor_params_flash_start__;
 
 static volatile MotorParametersStatus g_parameters_status = MOTOR_PARAMETERS_NO_DATA;
 static volatile uint8_t g_has_stored_data = 0U;
+static uint8_t g_auto_identify_pending = 0U;
 
 static uint32_t Motor_Parameters_Crc32(const void *data, size_t length)
 {
@@ -191,9 +193,11 @@ void Motor_Parameters_Init(void)
     if (Motor_Parameters_Load(&params) != 0U) {
         Motor_Identify_UseResult(&params);
         g_has_stored_data = 1U;
+        g_auto_identify_pending = 0U;
         g_parameters_status = MOTOR_PARAMETERS_READY;
     } else {
         g_has_stored_data = 0U;
+        g_auto_identify_pending = 1U;
         g_parameters_status = MOTOR_PARAMETERS_NO_DATA;
     }
 }
@@ -252,6 +256,21 @@ void Motor_Parameters_ControlTask1ms(void)
 void Motor_Parameters_BackgroundTask(void)
 {
     MotorIdentifiedParams params;
+
+    /*
+     * A blank or invalid parameter page triggers one identification attempt
+     * per boot. Wait for a valid encoder sample before energizing the motor.
+     */
+    if ((g_parameters_status == MOTOR_PARAMETERS_NO_DATA) &&
+        (g_auto_identify_pending != 0U)) {
+        if (AS5600_IsDataFresh(20U) == 0U) {
+            return;
+        }
+
+        g_auto_identify_pending = 0U;
+        (void)Motor_Parameters_IdentifyAndSave();
+        return;
+    }
 
     if (g_parameters_status != MOTOR_PARAMETERS_SAVE_PENDING) {
         return;

@@ -10,7 +10,7 @@
     // 一阶低通滤波：滤除 PWM 开关噪声和 ADC 采样毛刺
     // alpha 越大滤波越弱（响应越快），越小滤波越强（越平滑）
     // 20kHz 采样下，alpha=0.2 对应截止频率约 500Hz
-#define ADC_FILTER_ALPHA  0.2f
+#define ADC_FILTER_ALPHA  0.25f
 
 // 电流环/FOC 全局运行状态与参数。
 MotorCurrentLoopState g_foc_state = {0};
@@ -201,14 +201,19 @@ uint8_t Motor_CurrentLoop_IsEnabled(void)
 #define KI_DAMPING           0.8f     // 积分阻尼 (0.3=柔和, 0.6=较快, 1.0=理论值)
 #define KP_DAMPING           1.0f     
 
-void Motor_CurrentLoop_AutoTunePID(float resistance, float inductance, float bus_voltage)
+void Motor_CurrentLoop_AutoTunePIDWithBandwidth(float resistance, float inductance, float bus_voltage, float bandwidth_hz)
 {
     uint32_t primask;
 
     if (resistance <= 0.0f || inductance <= 0.0f) return;
+    if (bandwidth_hz < 50.0f) {
+        bandwidth_hz = 50.0f;
+    } else if (bandwidth_hz > 2000.0f) {
+        bandwidth_hz = 2000.0f;
+    }
 
     float dt = 0.00005f;  // 20kHz 采样
-    float wc = 2.0f * 3.1415926f * CURRENT_LOOP_BW_HZ;
+    float wc = 2.0f * 3.1415926f * bandwidth_hz;
 
     float kp = inductance * wc * KP_DAMPING;                      // 比例 (V/A)
     float ki = resistance * wc * KI_DAMPING;          // 积分 (V/(A·s))，阻尼抑制超调
@@ -230,6 +235,14 @@ void Motor_CurrentLoop_AutoTunePID(float resistance, float inductance, float bus
 }
 
 // 获取当前参数。
+void Motor_CurrentLoop_AutoTunePID(float resistance, float inductance, float bus_voltage)
+{
+    Motor_CurrentLoop_AutoTunePIDWithBandwidth(resistance,
+                                               inductance,
+                                               bus_voltage,
+                                               CURRENT_LOOP_BW_HZ);
+}
+
 MotorCurrentParams Motor_CurrentLoop_GetParams(void)
 {
     MotorCurrentParams params;
