@@ -1,5 +1,5 @@
 #include "motor_trajectory.h"
-#include "motor_system.h"
+#include "motor_config.h"
 #include <stdint.h>
 
 /* 最大期望速度，单位 RPM。只用于限制惯性前馈规划速度，不直接作为速度环目标。 */

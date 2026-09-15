@@ -16,6 +16,8 @@ extern PID_Controller g_pi_pos;
 
 // 函数声明
 void Motor_PositionLoop_Init(void);
+/* 清除位置 PID 和跨零展开状态；模式切换、停机或音乐结束时调用。 */
+void Motor_PositionLoop_Reset(void);
 float Motor_PositionLoop_Run(float target_position, float actual_position);
 
 #endif // MOTOR_POSITION_LOOP_H

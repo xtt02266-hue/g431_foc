@@ -34,6 +34,10 @@ float Motor_SpeedLoop_Update(float current_speed_rpm);
 void Motor_SpeedEstimator_Init(float filter_alpha);
 float Motor_SpeedEstimator_Update(uint16_t current_angle_raw, float dt_seconds);
 
+/* 自适应采样率调度：按 published_speed_rpm 选择分频，到期才读 AS5600 并更新速度。
+ * 未到期时返回传入的 published_speed_rpm；不得用 speed_est.speed_rpm 替代传入值。 */
+float Motor_SpeedEstimator_UpdateAdaptive(float published_speed_rpm);
+
 // 弱磁控制 (Field Weakening)
 float Motor_SpeedLoop_FieldWeakening(float current_rpm);
 

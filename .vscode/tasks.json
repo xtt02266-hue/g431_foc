@@ -2,13 +2,36 @@
     "version": "2.0.0",
     "tasks": [
         {
+            "label": "CMake: Configure Debug",
+            "type": "shell",
+            "command": "C:\\Users\\scott\\AppData\\Local\\stm32cube\\bundles\\cmake\\4.3.1+st.1\\bin\\cmake.exe",
+            "args": [
+                "--preset",
+                "Debug"
+            ],
+            "options": {
+                "env": {
+                    "PATH": "D:\\software\\arm-gnu-toolchain-14.3.rel1\\bin;C:\\Users\\scott\\AppData\\Local\\stm32cube\\bundles\\ninja\\1.13.2+st.1\\bin;${env:PATH}"
+                }
+            },
+            "problemMatcher": []
+        },
+        {
             "label": "CMake: Build Debug",
             "type": "shell",
-            "command": "D:\\software\\cmake-4.3.3-windows-x86_64\\bin\\cmake.exe",
+            "command": "C:\\Users\\scott\\AppData\\Local\\stm32cube\\bundles\\cmake\\4.3.1+st.1\\bin\\cmake.exe",
             "args": [
                 "--build",
                 "--preset",
                 "Debug"
+            ],
+            "options": {
+                "env": {
+                    "PATH": "D:\\software\\arm-gnu-toolchain-14.3.rel1\\bin;C:\\Users\\scott\\AppData\\Local\\stm32cube\\bundles\\ninja\\1.13.2+st.1\\bin;${env:PATH}"
+                }
+            },
+            "dependsOn": [
+                "CMake: Configure Debug"
             ],
             "group": {
                 "kind": "build",
@@ -21,46 +44,22 @@
         {
             "label": "DAPLink: Flash Debug",
             "type": "shell",
-            "command": "D:\\software\\embedded-tools\\Scripts\\pyocd.exe",
+            "command": "C:\\Users\\scott\\AppData\\Roaming\\uv\\tools\\pyocd\\Scripts\\pyocd.exe",
             "args": [
                 "flash",
+                "--pack",
+                "D:\\software\\cmsis-packs\\Keil.STM32G4xx_DFP.2.2.0.pack",
+                "-O",
+                "cmsis_dap.limit_packets=1",
                 "-e",
                 "sector",
-                "--pack",
-                "C:\\Users\\25934\\AppData\\Local\\Arm\\Packs\\.Download\\Keil.STM32G4xx_DFP.2.0.0.pack",
                 "-t",
                 "stm32g431cbux",
                 "-M",
                 "under-reset",
                 "-f",
                 "800000",
-                "-u",
-                "507874000284",
-                "${workspaceFolder}\\build\\Debug\\g431_foc.elf"
-            ],
-            "dependsOn": [
-                "CMake: Build Debug"
-            ],
-            "problemMatcher": []
-        },
-        {
-            "label": "DAPLink: Flash Debug Probe 350",
-            "type": "shell",
-            "command": "D:\\software\\embedded-tools\\Scripts\\pyocd.exe",
-            "args": [
-                "flash",
-                "-e",
-                "sector",
-                "--pack",
-                "C:\\Users\\25934\\AppData\\Local\\Arm\\Packs\\.Download\\Keil.STM32G4xx_DFP.2.0.0.pack",
-                "-t",
-                "stm32g431cbux",
-                "-M",
-                "under-reset",
-                "-f",
-                "800000",
-                "-u",
-                "507874000350",
+                "--no-wait",
                 "${workspaceFolder}\\build\\Debug\\g431_foc.elf"
             ],
             "dependsOn": [

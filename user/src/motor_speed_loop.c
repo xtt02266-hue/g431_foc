@@ -1,4 +1,6 @@
 #include "motor_speed_loop.h"
+#include "motor_config.h"
+#include "as5600.h"
 #include "pid.h"
 
 // 速度环PID控制器实例
@@ -10,26 +12,15 @@ MotorSpeedEstimator speed_est;
 // 假设速度环控制周期为 1ms，与 motor_system 里的定时分频配平
 #define SPEED_LOOP_DT  0.001f
 
-// 缩小滑动窗口，降低速度反馈中的硬件级相位滞后！
-#define SPEED_WINDOW_SIZE 4 // 低速自适应采样时会拉长等效测速窗口，降低量化抖动
-static uint16_t angle_history[SPEED_WINDOW_SIZE];
-static float dt_history[SPEED_WINDOW_SIZE];
-static uint8_t history_idx = 0;
-
 /**
  * @brief 速度估计器初始化
- * @param filter_alpha 低通滤波系数 (0.0~1.0，值越小越平滑但延迟越大，默认建议 0.1~0.2)
+ * @param filter_alpha 低通滤波系数 (0.0~1.0，值越小越平滑但延迟越大)
  */
 void Motor_SpeedEstimator_Init(float filter_alpha) {
     speed_est.last_angle_raw = 0;
     speed_est.speed_rpm = 0.0f;
     speed_est.filter_alpha = filter_alpha;
     speed_est.initialized = 0;
-    for (int i = 0; i < SPEED_WINDOW_SIZE; i++) {
-        angle_history[i] = 0;
-        dt_history[i] = 0.0f;
-    }
-    history_idx = 0;
 }
 
 /**
@@ -39,33 +30,21 @@ void Motor_SpeedEstimator_Init(float filter_alpha) {
 float Motor_SpeedEstimator_Update(uint16_t current_angle_raw, float dt_seconds) {
     if (dt_seconds <= 0.0f) return speed_est.speed_rpm;
     
-    // 初始化第一次读数：填满整个缓冲区，避免刚启动时算错差值
+    // 第一次读数只建立基准，不计算速度，避免启动时产生虚假差值。
     if (!speed_est.initialized) {
-        for (int i = 0; i < SPEED_WINDOW_SIZE; i++) {
-            angle_history[i] = current_angle_raw;
-            dt_history[i] = 0.0f;
-        }
-        history_idx = 0;
-        
         speed_est.last_angle_raw = current_angle_raw;
         speed_est.speed_rpm = 0.0f;
         speed_est.initialized = 1;
         return 0.0f;
     }
 
-    // 1. 获取 SPEED_WINDOW_SIZE 次实际测速前记录的历史角度
-    uint16_t oldest_angle = angle_history[history_idx];
-    
-    // 2. 将当前最新角度存入历史缓冲区覆盖旧值，并推进索引
-    angle_history[history_idx] = current_angle_raw;
-    dt_history[history_idx] = dt_seconds;
-    history_idx++;
-    if (history_idx >= SPEED_WINDOW_SIZE) {
-        history_idx = 0;
-    }
-
-    // 3. 计算测速窗口内的原始数据增量
-    int32_t delta = (int32_t)current_angle_raw - (int32_t)oldest_angle;
+    /*
+     * 为什么改为相邻两次“实际测速时刻”直接差分：外层已经根据速度选择 1~20ms
+     * 的采样周期，旧代码又叠加 4 点窗口，使低速反馈覆盖约 80ms，造成明显相位滞后。
+     * 现在低速仍用最长 20ms 的计数窗口抑制 12 位量化噪声，但不再额外等待四个窗口。
+     */
+    int32_t delta = (int32_t)current_angle_raw -
+                    (int32_t)speed_est.last_angle_raw;
     
     // 4. 处理编码器过零点 (0 -> 4095 或 4095 -> 0)
     if (delta > 2048) {
@@ -76,19 +55,67 @@ float Motor_SpeedEstimator_Update(uint16_t current_angle_raw, float dt_seconds) 
     
     speed_est.last_angle_raw = current_angle_raw;
     
-    // 5. 计算机械瞬时速度
-    float actual_dt = 0.0f;
-    for (int i = 0; i < SPEED_WINDOW_SIZE; i++) {
-        actual_dt += dt_history[i];
-    }
-    if (actual_dt <= 0.0f) return speed_est.speed_rpm;
-    float instant_rpm = ((float)delta * 60.0f) / (4096.0f * actual_dt);
+    // dt_seconds 是外层累计的真实测速间隔，直接用于机械转速换算。
+    float instant_rpm = ((float)delta * 60.0f) /
+                        (4096.0f * dt_seconds);
     
     // 6. 一阶低通滤波 (EMA)，进一步平滑
     speed_est.speed_rpm = speed_est.filter_alpha * instant_rpm 
                         + (1.0f - speed_est.filter_alpha) * speed_est.speed_rpm;
                         
     return speed_est.speed_rpm;
+}
+
+/* 为什么需要：自适应采样率调度原本在系统模块，依赖系统全局量；迁入速度模块后
+ * 只依赖估算器自身状态和 AS5600，避免系统模块与测速实现相互耦合。
+ * 功能：按传入的发布速度选择编码器采样分频，仅在到期周期读取 AS5600 并更新速度。
+ * 参数：rpm 为用于分频判断的速度；返回对应的采样周期 tick 数。
+ * 注意：使用传入值而非 speed_est.speed_rpm，二者在 stale 恢复等场景不恒等。
+ */
+static uint16_t Motor_SpeedEstimator_GetPeriodTicks(float rpm)
+{
+    float abs_rpm = (rpm < 0.0f) ? -rpm : rpm;
+
+    if (abs_rpm >= SPEED_EST_HIGH_RPM_THRESHOLD) {
+        return SPEED_EST_MAX_PERIOD_TICKS;
+    } else if (abs_rpm >= SPEED_EST_MID_RPM_THRESHOLD) {
+        return SPEED_EST_HIGH_PERIOD_TICKS;
+    } else if (abs_rpm >= SPEED_EST_LOW_RPM_THRESHOLD) {
+        return SPEED_EST_MID_PERIOD_TICKS;
+    } else {
+        return SPEED_EST_LOW_PERIOD_TICKS;
+    }
+}
+
+// 自适应采样率速度估算器
+// 策略: 根据当前估算转速动态调整编码器采样间隔 (分频比)
+//   低速 (<50 RPM):  每 20ms 采样一次 (50Hz)，用更长窗口抑制量化噪声
+//   中速 (50~200):   每 5ms 采样一次 (200Hz)
+//   中高速 (200~500): 每 2ms 采样一次 (500Hz)
+//   高速 (>500 RPM): 每 1ms 采样一次 (1000Hz)，保证响应速度
+// 这样在低速时避免了 AS5600 12-bit 编码器因采样过快导致的量化抖动
+float Motor_SpeedEstimator_UpdateAdaptive(float published_speed_rpm)
+{
+    static uint16_t ticks = 0;
+    static float dt_acc = 0.0f;
+
+    if (!speed_est.initialized) {
+        ticks = 0;
+        dt_acc = 0.0f;
+        return Motor_SpeedEstimator_Update(AS5600_ReadRawAngle(), MOTOR_SYSTEM_TASK_DT_SEC);
+    }
+
+    ticks++;
+    dt_acc += MOTOR_SYSTEM_TASK_DT_SEC;
+
+    if (ticks >= Motor_SpeedEstimator_GetPeriodTicks(published_speed_rpm)) {
+        float updated_speed_rpm = Motor_SpeedEstimator_Update(AS5600_ReadRawAngle(), dt_acc);
+        ticks = 0;
+        dt_acc = 0.0f;
+        return updated_speed_rpm;
+    }
+
+    return published_speed_rpm;
 }
 
 // ======================= PID 闭环部分 =======================

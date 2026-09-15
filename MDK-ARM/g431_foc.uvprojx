@@ -1324,6 +1324,16 @@
               <FilePath>..\user\inc\pid.h</FilePath>
             </File>
             <File>
+              <FileName>motor_debug.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\inc\motor_debug.h</FilePath>
+            </File>
+            <File>
+              <FileName>pc_protocol.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\inc\pc_protocol.h</FilePath>
+            </File>
+            <File>
               <FileName>user_io.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\user\inc\user_io.h</FilePath>
@@ -1342,6 +1352,16 @@
               <FileName>motor_current_loop.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\user\src\motor_current_loop.c</FilePath>
+            </File>
+            <File>
+              <FileName>motor_debug.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\src\motor_debug.c</FilePath>
+            </File>
+            <File>
+              <FileName>pc_protocol.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\src\pc_protocol.c</FilePath>
             </File>
             <File>
               <FileName>motor_identify.c</FileName>

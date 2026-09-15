@@ -5,18 +5,16 @@
 #include "motor_feedforward.h"
 #include "motor_trajectory.h"
 #include "as5600.h"
-#include "oled.h"
 #include "tim.h"
 #include <math.h>
 #include <stddef.h>
 #include "user_io.h"
-#include "vofa_usart.h"
 #include "motor_identify.h"
 #include "svpwm.h"
-#include "mt6826s.h"
 #include "motor_music.h"
 #include "motor_parameters.h"
 #include "motor_sensorless.h"
+#include "motor_debug.h"
 
 #define MOTOR_AS5600_MAX_SAMPLE_AGE_MS  10U
 #define MOTOR_CURRENT_LOOP_CONTROL_BW_HZ 250.0f
@@ -33,23 +31,35 @@ MotorSystem g_motor_system = {
     .state = MOTOR_STATE_WAIT_PARAMETERS,
 };
 
-static volatile uint8_t g_run_requested = 1U;
+static volatile uint8_t g_run_requested = 0U;
 /* 故障采用锁存方式，传感器恢复后仍需调用 ClearFault。 */
 static volatile uint8_t g_fault_latched = 0U;
+/* 主循环接口和 1ms 中断共用；volatile 保证读取最新值，多变量切换另用临界区保护。 */
+static volatile MotorControlMode g_control_mode = MOTOR_DEFAULT_CONTROL_MODE;
+static volatile float g_torque_current_a = 0.0f; // 限幅后的 Iq 给定，供力矩分支送入电流环
+static volatile MotorInputSource g_input_source = MOTOR_INPUT_POT;
+static volatile MotorControlOwner g_control_owner = MOTOR_OWNER_LOCAL;
+static volatile uint32_t g_host_last_heartbeat_ms = 0U;
+static volatile uint32_t g_config_revision = 0U;
+static volatile float g_host_iq_limit_a = MOTOR_HOST_DEFAULT_IQ_LIMIT_A;
+static float g_host_iq_applied_a = 0.0f;
+static float g_continuous_angle_rad = 0.0f;
+static float g_haptic_center_rad = 0.0f;
+static uint16_t g_last_angle_counts = 0U;
+static uint8_t g_angle_initialized = 0U;
+static MotorHapticParams g_haptic_params = {
+    0.03f, 0.002f, 0.05f, 0.05f, 90.0f, 24U
+};
 
 static void Motor_System_ResetOuterLoops(void);
 static void Motor_System_ForceSafeStop(void);
 static void Motor_System_UpdateOperatingState(void);
 static void Motor_System_TuneCurrentLoopBandwidth(float bandwidth_hz);
+static void Motor_System_ResetControlHistory(void);
 
-// 调试用全局变量，用于 VOFA+ 波形观察，不参与控制逻辑。
-static float g_debug_pot_target_pos = 0.0f;       // 电位器目标位置
-static float g_pot_target_filtered = 0.0f;         // 电位器目标位置经低通滤波后的值
-static float g_debug_uvw_dir = 1.0f;              // UVW 方向系数 (1 或 -1)
-static float g_debug_friction_iq = 0.0f;           // 摩擦补偿电流 (A)
-static float g_debug_inertia_iq = 0.0f;            // 惯性补偿电流 (A)
-static float g_debug_speed_loop_iq = 0.0f;         // 速度环基础 Iq 输出 (A)
-static float g_debug_target_accel_rpm_s = 0.0f;    // 惯性补偿使用的目标加速度 (RPM/s)
+// 电位器滤波量参与力矩/位置控制，同时供 VOFA+ 只读观测。
+static float g_pot_target_filtered = 0.0f;         // 反向映射并滤波后的 ADC 计数，供位置/力矩模式共用
+static uint8_t g_pot_filter_initialized = 0U;      // 首次采样直接装入，避免从零滤波产生虚假反向力矩
 
 // 浮点数绝对值
 static float Motor_AbsFloat(float value)
@@ -57,60 +67,26 @@ static float Motor_AbsFloat(float value)
     return (value < 0.0f) ? -value : value;
 }
 
-static uint16_t Motor_SpeedEstimator_GetPeriodTicks(float rpm)
-{
-    float abs_rpm = Motor_AbsFloat(rpm);
-
-    if (abs_rpm >= SPEED_EST_HIGH_RPM_THRESHOLD) {
-        return SPEED_EST_MAX_PERIOD_TICKS;
-    } else if (abs_rpm >= SPEED_EST_MID_RPM_THRESHOLD) {
-        return SPEED_EST_HIGH_PERIOD_TICKS;
-    } else if (abs_rpm >= SPEED_EST_LOW_RPM_THRESHOLD) {
-        return SPEED_EST_MID_PERIOD_TICKS;
-    } else {
-        return SPEED_EST_LOW_PERIOD_TICKS;
-    }
-}
-
-// 自适应采样率速度估算器
-// 策略: 根据当前估算转速动态调整编码器采样间隔 (分频比)
-//   低速 (<50 RPM):  每 20ms 采样一次 (50Hz)，用更长窗口抑制量化噪声
-//   中速 (50~200):   每 5ms 采样一次 (200Hz)
-//   中高速 (200~500): 每 2ms 采样一次 (500Hz)
-//   高速 (>500 RPM): 每 1ms 采样一次 (1000Hz)，保证响应速度
-// 这样在低速时避免了 AS5600 12-bit 编码器因采样过快导致的量化抖动
-static float Motor_UpdateSpeedEstimatorAdaptive(void)
-{
-    static uint16_t ticks = 0;
-    static float dt_acc = 0.0f;
-
-    if (!speed_est.initialized) {
-        ticks = 0;
-        dt_acc = 0.0f;
-        g_motor_system.run_data.speed_rpm =
-            Motor_SpeedEstimator_Update(AS5600_ReadRawAngle(), MOTOR_SYSTEM_TASK_DT_SEC);
-        return g_motor_system.run_data.speed_rpm;
-    }
-
-    ticks++;
-    dt_acc += MOTOR_SYSTEM_TASK_DT_SEC;
-
-    if (ticks >= Motor_SpeedEstimator_GetPeriodTicks(g_motor_system.run_data.speed_rpm)) {
-        g_motor_system.run_data.speed_rpm =
-            Motor_SpeedEstimator_Update(AS5600_ReadRawAngle(), dt_acc);
-        ticks = 0;
-        dt_acc = 0.0f;
-    }
-
-    return g_motor_system.run_data.speed_rpm;
-}
-
-// 初始化系统状态与目标值。
+/* 初始化系统状态与目标值，清除上次运行残留的力矩和电位器滤波状态。
+ * 默认选择力矩模式，但实际输出仍须等待参数有效、编码器新鲜且状态机允许运行。
+ * 保留外环初始化，是为了以后切回位置模式时可直接使用，并非默认执行外环。
+ */
 void Motor_System_Init(void)
 {
     g_motor_system.state = MOTOR_STATE_WAIT_PARAMETERS;
-    g_run_requested = 1U;
+    g_run_requested = 0U;
     g_fault_latched = 0U;
+
+    g_control_mode = MOTOR_DEFAULT_CONTROL_MODE;
+    g_input_source = MOTOR_INPUT_POT;
+    g_control_owner = MOTOR_OWNER_LOCAL;
+    g_host_iq_limit_a = MOTOR_HOST_DEFAULT_IQ_LIMIT_A;
+    g_host_iq_applied_a = 0.0f;
+    g_config_revision = 0U;
+    g_angle_initialized = 0U;
+    g_torque_current_a = 0.0f;
+    g_motor_system.run_data.target_torque_nm = 0.0f;
+    g_pot_filter_initialized = 0U;
 
     // 初始目标电流归零
     g_foc_state.target_q = 0.0f;
@@ -128,7 +104,7 @@ void Motor_System_Init(void)
     // 初始化位置环 PID
     Motor_PositionLoop_Init();
 
-    // Music output is disabled until explicitly started.
+    // 仅初始化音乐模块；当前自动播放宏为 0，需要主动调用播放接口才会发声。
     Motor_Music_Init();
 
     // Sensorless estimation is observation-only and disabled by default.
@@ -164,6 +140,290 @@ void Motor_System_StopControl(void)
         __enable_irq();
     }
 }
+
+/* 为什么需要：集中切换控制权，防止旧的速度积分或力矩目标带入新模式。
+ * 功能：检查模式；发生切换时清零力矩、复位外环，再更新所选模式。
+ * 参数：mode 为位置或力矩模式；返回 1 表示接受，0 表示模式无效。
+ * 不改变运行请求、不自动停音乐；电位器模式下一周期会重新读取当前旋钮给定。
+ */
+uint8_t Motor_System_SetControlMode(MotorControlMode mode)
+{
+    if ((mode < MOTOR_CONTROL_POSITION) || (mode > MOTOR_CONTROL_LIMIT)) {
+        return 0U;
+    }
+    if ((g_control_owner == MOTOR_OWNER_HOST) ||
+        (g_motor_system.state == MOTOR_STATE_SENSORED_RUN)) {
+        return 0U;
+    }
+
+    // 切换包含多个共享变量，暂时屏蔽中断，避免 1ms 控制任务看到切换一半的状态。
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if (g_control_mode != mode) {
+        g_torque_current_a = 0.0f;
+        Motor_System_ResetOuterLoops();
+        g_control_mode = mode;
+        g_input_source = (mode <= MOTOR_CONTROL_TORQUE)
+                             ? MOTOR_INPUT_POT : MOTOR_INPUT_INTERNAL;
+    }
+    if (primask == 0U) {
+        __enable_irq();
+    }
+    return 1U;
+}
+
+MotorInputSource Motor_System_GetInputSource(void) { return g_input_source; }
+MotorControlOwner Motor_System_GetControlOwner(void) { return g_control_owner; }
+
+static uint8_t Motor_System_IsModeSourceValid(MotorControlMode mode,
+                                               MotorInputSource source)
+{
+    if (mode == MOTOR_CONTROL_POSITION) return source == MOTOR_INPUT_POT;
+    if (mode == MOTOR_CONTROL_TORQUE) {
+        return (source == MOTOR_INPUT_POT) || (source == MOTOR_INPUT_HOST);
+    }
+    return ((mode >= MOTOR_CONTROL_FREE) && (mode <= MOTOR_CONTROL_LIMIT) &&
+            (source == MOTOR_INPUT_INTERNAL));
+}
+
+MotorCommandResult Motor_System_ClaimHost(void)
+{
+    if ((g_motor_system.state == MOTOR_STATE_IDENTIFYING) ||
+        (g_motor_system.state == MOTOR_STATE_MUSIC)) return MOTOR_CMD_BUSY;
+    if (g_motor_system.state == MOTOR_STATE_FAULT) return MOTOR_CMD_FAULT_ACTIVE;
+    if (g_motor_system.state != MOTOR_STATE_STOPPED) return MOTOR_CMD_MUST_STOP_FIRST;
+    if (g_control_owner == MOTOR_OWNER_HOST) return MOTOR_CMD_BUSY;
+    g_control_owner = MOTOR_OWNER_HOST;
+    g_host_iq_limit_a = MOTOR_HOST_DEFAULT_IQ_LIMIT_A;
+    g_host_last_heartbeat_ms = HAL_GetTick();
+    return MOTOR_CMD_OK;
+}
+
+void Motor_System_ReleaseHost(void)
+{
+    Motor_System_StopControl();
+    g_control_owner = MOTOR_OWNER_LOCAL;
+    g_control_mode = MOTOR_CONTROL_TORQUE;
+    g_input_source = MOTOR_INPUT_POT;
+    g_host_iq_limit_a = MOTOR_HOST_DEFAULT_IQ_LIMIT_A;
+    g_torque_current_a = 0.0f;
+    g_host_iq_applied_a = 0.0f;
+    ++g_config_revision;
+}
+
+void Motor_System_HostHeartbeat(void)
+{
+    if (g_control_owner == MOTOR_OWNER_HOST) g_host_last_heartbeat_ms = HAL_GetTick();
+}
+
+MotorCommandResult Motor_System_HostStart(void)
+{
+    if (g_control_owner != MOTOR_OWNER_HOST) return MOTOR_CMD_NOT_OWNER;
+    if (g_motor_system.state == MOTOR_STATE_FAULT) return MOTOR_CMD_FAULT_ACTIVE;
+    if (Motor_Parameters_IsBusy() != 0U) return MOTOR_CMD_BUSY;
+    if ((g_control_mode >= MOTOR_CONTROL_DAMPING) &&
+        (g_control_mode <= MOTOR_CONTROL_LIMIT)) {
+        int8_t direction = Motor_Identify_GetResult().uvw_dir;
+        if ((direction != 1) && (direction != -1)) return MOTOR_CMD_NOT_READY;
+    }
+    if (Motor_System_StartControl() == 0U) return MOTOR_CMD_NOT_READY;
+    g_torque_current_a = 0.0f;
+    g_host_iq_applied_a = 0.0f;
+    if ((g_control_mode >= MOTOR_CONTROL_SPRING) &&
+        (g_control_mode <= MOTOR_CONTROL_LIMIT)) {
+        g_haptic_center_rad = g_continuous_angle_rad;
+    }
+    g_host_last_heartbeat_ms = HAL_GetTick();
+    return MOTOR_CMD_OK;
+}
+
+MotorCommandResult Motor_System_HostSetMode(MotorControlMode mode,
+                                            MotorInputSource source)
+{
+    if (g_control_owner != MOTOR_OWNER_HOST) return MOTOR_CMD_NOT_OWNER;
+    if (g_motor_system.state != MOTOR_STATE_STOPPED) return MOTOR_CMD_MUST_STOP_FIRST;
+    if (Motor_System_IsModeSourceValid(mode, source) == 0U) {
+        return MOTOR_CMD_INVALID_COMBINATION;
+    }
+    if ((g_control_mode != mode) || (g_input_source != source)) {
+        g_control_mode = mode;
+        g_input_source = source;
+        g_torque_current_a = 0.0f;
+        g_host_iq_applied_a = 0.0f;
+        Motor_System_ResetOuterLoops();
+        ++g_config_revision;
+    }
+    return MOTOR_CMD_OK;
+}
+
+MotorCommandResult Motor_System_HostSetIq(float iq_a, float *accepted_iq_a)
+{
+    if (g_control_owner != MOTOR_OWNER_HOST) return MOTOR_CMD_NOT_OWNER;
+    if ((g_control_mode != MOTOR_CONTROL_TORQUE) ||
+        (g_input_source != MOTOR_INPUT_HOST)) return MOTOR_CMD_INVALID_COMBINATION;
+    if (g_motor_system.state != MOTOR_STATE_SENSORED_RUN) return MOTOR_CMD_NOT_RUNNING;
+    if (!isfinite(iq_a)) return MOTOR_CMD_INVALID_VALUE;
+    if (iq_a > g_host_iq_limit_a) iq_a = g_host_iq_limit_a;
+    if (iq_a < -g_host_iq_limit_a) iq_a = -g_host_iq_limit_a;
+    g_torque_current_a = iq_a;
+    if (accepted_iq_a != NULL) *accepted_iq_a = iq_a;
+    return MOTOR_CMD_OK;
+}
+
+MotorCommandResult Motor_System_HostSetIqLimit(float limit_a)
+{
+    if (g_control_owner != MOTOR_OWNER_HOST) return MOTOR_CMD_NOT_OWNER;
+    if (g_motor_system.state != MOTOR_STATE_STOPPED) return MOTOR_CMD_MUST_STOP_FIRST;
+    if (!isfinite(limit_a) || (limit_a < 0.02f) ||
+        (limit_a > MOTOR_TORQUE_CURRENT_LIMIT_A)) return MOTOR_CMD_INVALID_VALUE;
+    g_host_iq_limit_a = limit_a;
+    ++g_config_revision;
+    return MOTOR_CMD_OK;
+}
+
+MotorCommandResult Motor_System_HostSetHapticParams(const MotorHapticParams *p)
+{
+    if (g_control_owner != MOTOR_OWNER_HOST) return MOTOR_CMD_NOT_OWNER;
+    if (g_motor_system.state != MOTOR_STATE_STOPPED) return MOTOR_CMD_MUST_STOP_FIRST;
+    if ((p == NULL) || !isfinite(p->spring_k_a_per_rad) ||
+        !isfinite(p->damping_b_a_per_rad_s) || !isfinite(p->detent_k_a_per_rad) ||
+        !isfinite(p->limit_k_a_per_rad) || !isfinite(p->limit_half_range_deg) ||
+        (p->spring_k_a_per_rad < 0.0f) || (p->spring_k_a_per_rad > 5.0f) ||
+        (p->damping_b_a_per_rad_s < 0.0f) || (p->damping_b_a_per_rad_s > 1.0f) ||
+        (p->detent_k_a_per_rad < 0.0f) || (p->detent_k_a_per_rad > 5.0f) ||
+        (p->limit_k_a_per_rad < 0.0f) || (p->limit_k_a_per_rad > 5.0f) ||
+        (p->limit_half_range_deg < 5.0f) || (p->limit_half_range_deg > 180.0f) ||
+        (p->detent_count < 1U) || (p->detent_count > 128U)) return MOTOR_CMD_INVALID_VALUE;
+    g_haptic_params = *p;
+    ++g_config_revision;
+    return MOTOR_CMD_OK;
+}
+
+void Motor_System_GetHapticParams(MotorHapticParams *p)
+{
+    if (p != NULL) *p = g_haptic_params;
+}
+
+void Motor_System_GetControlSnapshot(MotorControlSnapshot *s)
+{
+    if (s == NULL) return;
+    s->state = g_motor_system.state;
+    s->mode = g_control_mode;
+    s->source = g_input_source;
+    s->owner = g_control_owner;
+    s->run_requested = g_run_requested;
+    s->iq_limit_a = g_host_iq_limit_a;
+    s->continuous_angle_rad = g_continuous_angle_rad;
+    s->relative_center_angle_rad = ((g_control_mode >= MOTOR_CONTROL_SPRING) &&
+                                    (g_control_mode <= MOTOR_CONTROL_LIMIT))
+                                       ? g_continuous_angle_rad - g_haptic_center_rad : 0.0f;
+    s->config_revision = g_config_revision;
+}
+
+/* 提供统一的模式查询入口，避免其他模块直接依赖内部变量。
+ * 返回当前选择的模式；停机、故障或播放音乐时也保留此模式值。
+ */
+MotorControlMode Motor_System_GetControlMode(void)
+{
+    return g_control_mode;
+}
+
+/* 为什么需要：为手动调试和 N·m 接口提供统一的电流限幅及运行条件检查。
+ * 功能：接收有符号 Iq（A），拒绝 NaN/无穷大，并限制在允许电流范围。
+ * 仅手动给定配置且处于正常力矩运行时接受；返回 1 表示接受，0 表示拒绝。
+ * 拒绝时清零存储目标；若正处于力矩模式，还立即清零当前 FOC 的 q 轴目标。
+ * 默认电位器配置下不应调用此接口：即使调用清零，下一周期仍由电位器重新给定。
+ */
+uint8_t Motor_System_SetTorqueCurrent(float iq_a)
+{
+    uint8_t valid = isfinite(iq_a) ? 1U : 0U;
+    if (valid == 0U) {
+        iq_a = 0.0f;
+    } else if (iq_a > MOTOR_TORQUE_CURRENT_LIMIT_A) {
+        iq_a = MOTOR_TORQUE_CURRENT_LIMIT_A;
+    } else if (iq_a < -MOTOR_TORQUE_CURRENT_LIMIT_A) {
+        iq_a = -MOTOR_TORQUE_CURRENT_LIMIT_A;
+    }
+
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if ((g_input_source != MOTOR_INPUT_HOST) ||
+        (g_control_mode != MOTOR_CONTROL_TORQUE) ||
+        (g_motor_system.state != MOTOR_STATE_SENSORED_RUN) ||
+        (g_run_requested == 0U) || (g_fault_latched != 0U)) {
+        valid = 0U;
+        iq_a = 0.0f;
+    }
+    g_torque_current_a = iq_a;
+    if ((valid == 0U) && (g_control_mode == MOTOR_CONTROL_TORQUE)) {
+        g_foc_state.target_q = 0.0f;
+    }
+    if (primask == 0U) {
+        __enable_irq();
+    }
+    return valid;
+}
+
+/* 为什么需要：FOC 电流环接收安培，上层使用 N·m，必须统一换算并限制电流。
+ * 参数：torque_nm 为目标电磁力矩（N·m），符号沿用 Iq 方向。
+ * 返回：按 Iq=T/Kt 换算并限幅的电流（A）；参数或 Kt 无效时返回 0。
+ * 先与 Kt*电流上限比较，再做除法，避免极小 Kt 或极大输入导致除法溢出。
+ * 此函数只计算，不修改运行状态；电位器和手动力矩入口共用相同换算规则。
+ */
+static float Motor_System_TorqueToIq(float torque_nm)
+{
+    const float kt = MOTOR_TORQUE_CONSTANT_NM_PER_A;
+    if (!isfinite(kt) || (kt <= 0.0f) || !isfinite(torque_nm)) {
+        return 0.0f;
+    }
+    float max_torque_nm = kt * MOTOR_TORQUE_CURRENT_LIMIT_A;
+    if (torque_nm >= max_torque_nm) {
+        return MOTOR_TORQUE_CURRENT_LIMIT_A;
+    }
+    if (torque_nm <= -max_torque_nm) {
+        return -MOTOR_TORQUE_CURRENT_LIMIT_A;
+    }
+    return torque_nm / kt;
+}
+
+/* 为什么需要：允许上层按 N·m 给定，无需在业务代码中重复计算 Kt 和限流。
+ * 功能：检查输入与 Kt，经 TorqueToIq 换算后交给 SetTorqueCurrent 执行。
+ * 参数单位为 N·m；返回 1 表示接受（可能限幅），0 表示参数或运行条件不满足。
+ * 仅 MOTOR_TORQUE_USE_POT=0 时用于手动控制，不替代默认电位器输入。
+ */
+uint8_t Motor_System_SetTorqueNm(float torque_nm)
+{
+    const float kt = MOTOR_TORQUE_CONSTANT_NM_PER_A;
+    if (!isfinite(kt) || (kt <= 0.0f) || !isfinite(torque_nm)) {
+        (void)Motor_System_SetTorqueCurrent(0.0f);
+        return 0U;
+    }
+    return Motor_System_SetTorqueCurrent(Motor_System_TorqueToIq(torque_nm));
+}
+
+#if MOTOR_TORQUE_USE_POT
+/* 为什么需要：将单路电位器变成可正反向调节的力矩旋钮，并抑制中点抖动。
+ * 参数：filtered_pot 是经过 4095-raw 反向映射和低通滤波的 ADC 计数。
+ * 返回：中点死区内为 0；死区外线性映射至 +/- MOTOR_TORQUE_POT_MAX_NM。
+ * 减去死区后再归一化，使刚离开死区时从零连续增加，不会突然跳到一个非零力矩。
+ * 原始 ADC 越小，反向映射后的给定越正；该符号不承诺实际轴端顺/逆时针方向。
+ * 只生成力矩目标，电流限幅由后续 TorqueToIq 负责。
+ */
+static float Motor_System_PotTorqueNm(float filtered_pot)
+{
+    float offset = filtered_pot - MOTOR_TORQUE_POT_CENTER;
+    float magnitude = Motor_AbsFloat(offset) - MOTOR_TORQUE_POT_DEADBAND;
+    if (magnitude <= 0.0f) {
+        return 0.0f;
+    }
+    float normalized = magnitude /
+                       (MOTOR_TORQUE_POT_CENTER - MOTOR_TORQUE_POT_DEADBAND);
+    if (normalized > 1.0f) {
+        normalized = 1.0f;
+    }
+    return ((offset > 0.0f) ? normalized : -normalized) * MOTOR_TORQUE_POT_MAX_NM;
+}
+#endif
 
 uint8_t Motor_System_ClearFault(void)
 {
@@ -238,13 +498,24 @@ uint8_t Motor_System_EnableSensorlessObserver(uint8_t enable)
     return 1U;
 }
 
-static void Motor_System_ResetOuterLoops(void)
+/* 为什么需要：位置/速度环历史复位在多处重复，集中为一处以免顺序漂移。
+ * 功能：按固定顺序清目标速度、速度 PID、位置环和轨迹规划器历史量。
+ * 参数：无；调用上下文：仅由模式切换、进入音乐和非运行清理复用。
+ * 副作用：会清 PID 积分与轨迹状态；不修改目标力矩、q/d 给定。
+ */
+static void Motor_System_ResetControlHistory(void)
 {
-    /* 清掉位置/速度环历史量，避免功能切换后积分残留。 */
     Motor_SpeedLoop_SetTarget(0.0f);
     PID_Reset(&speed_pid);
-    PID_Reset(&g_pi_pos);
+    Motor_PositionLoop_Reset();
     Motor_Trajectory_Clear();
+}
+
+static void Motor_System_ResetOuterLoops(void)
+{
+    g_motor_system.run_data.target_torque_nm = 0.0f;
+    /* 清掉位置/速度环历史量，避免功能切换后积分残留。 */
+    Motor_System_ResetControlHistory();
     g_foc_state.target_q = 0.0f;
     g_foc_state.target_d = 0.0f;
 }
@@ -262,6 +533,7 @@ static void Motor_System_TuneCurrentLoopBandwidth(float bandwidth_hz)
 static void Motor_System_ForceSafeStop(void)
 {
     /* 所有功能统一从这里撤销转矩输出。 */
+    g_torque_current_a = 0.0f;
     Motor_System_ResetOuterLoops();
     if (Motor_Music_IsPlaying() != 0U) {
         Motor_Music_Stop();
@@ -286,6 +558,7 @@ static void Motor_System_UpdateOperatingState(void)
      * closed-loop features. Do not clear its open-loop duty every 1 ms.
      */
     if (Motor_Parameters_IsBusy() != 0U) {
+        g_torque_current_a = 0.0f;
         g_motor_system.state = MOTOR_STATE_IDENTIFYING;
         return;
     }
@@ -333,9 +606,114 @@ static void Motor_System_UpdateOperatingState(void)
                                : MOTOR_STATE_SENSORED_RUN;
 }
 
-// 周期任务：读取电位器位置目标, 通过位置规划器生成速度目标, 再由速度环生成 Iq。
+/* 为什么需要：电位器采样、反向映射与滤波是力矩/位置模式共用的公共输入。
+ * 功能：读取 ADC，做 4095-raw 反向映射，首次直接装入并做一阶 EMA 滤波。
+ * 参数：无；返回滤波后的目标位置计数 (0~4095)。
+ * 副作用：更新 run_data.pot_raw、g_pot_target_filtered 与电位器初始化标记。
+ * 调用上下文：每次 1ms 任务开始时由 Task 调用一次。
+ */
+static float Motor_System_UpdatePotTarget(void)
+{
+    // ========== 步骤 2: 读取电位器给定 ==========
+    // ADC 原始值 → 反向映射 (4095-raw) → 低通滤波。
+    // 力矩模式将该计数映射成 N·m；保留的位置模式将该计数作为位置目标。
+    g_motor_system.run_data.pot_raw = Pot_ReadRaw();
+
+    float target_pos_raw = 4095.0f - (float)g_motor_system.run_data.pot_raw;
+    /* 首次直接装入采样，避免中点电位器从滤波初值 0 爬升造成反向力矩。 */
+    if (g_pot_filter_initialized == 0U) {
+        g_pot_target_filtered = target_pos_raw;
+        g_pot_filter_initialized = 1U;
+    }
+    // 一阶 EMA 低通滤波: filtered += α * (raw - filtered)
+    g_pot_target_filtered += POT_LPF_ALPHA * (target_pos_raw - g_pot_target_filtered);
+    return g_pot_target_filtered;
+}
+
+/* 为什么需要：力矩模式给定换算独立成函数，使 Task 只表达模式调度。
+ * 功能：按配置从电位器（或手动保存值）生成受限 Iq，写 q/d 目标并反算调试力矩。
+ * 参数：无；调用上下文：状态为 SENSORED_RUN 且模式为 TORQUE 时，由 Task 调用。
+ * 副作用：更新 g_torque_current_a、g_foc_state.target_q/target_d，
+ *         并可能更新 run_data.target_torque_nm。
+ */
+static void Motor_System_RunTorqueMode(void)
+{
+    if (g_input_source == MOTOR_INPUT_POT) {
+        g_torque_current_a = Motor_System_TorqueToIq(
+            Motor_System_PotTorqueNm(g_pot_target_filtered));
+        g_host_iq_applied_a = g_torque_current_a;
+    } else {
+        float max_step = MOTOR_IQ_SLEW_A_PER_S * MOTOR_SYSTEM_TASK_DT_SEC;
+        if (g_torque_current_a > g_host_iq_applied_a + max_step) {
+            g_host_iq_applied_a += max_step;
+        } else if (g_torque_current_a < g_host_iq_applied_a - max_step) {
+            g_host_iq_applied_a -= max_step;
+        } else {
+            g_host_iq_applied_a = g_torque_current_a;
+        }
+    }
+    g_foc_state.target_q = g_host_iq_applied_a;
+    g_foc_state.target_d = 0.0f;
+    if (isfinite(MOTOR_TORQUE_CONSTANT_NM_PER_A) &&
+        (MOTOR_TORQUE_CONSTANT_NM_PER_A > 0.0f)) {
+        // 从限幅后的 Iq 反算目标力矩用于调试；这是模型估算，不是力矩传感器读数。
+        g_motor_system.run_data.target_torque_nm =
+            g_host_iq_applied_a * MOTOR_TORQUE_CONSTANT_NM_PER_A;
+    }
+}
+
+/* 为什么需要：位置/速度/前馈级联计算独立成函数，使 Task 只表达模式调度。
+ * 功能：用目标位置与实际位置跑位置环、轨迹、速度环及摩擦/惯性前馈，合成 Iq。
+ * 参数：target_pos 为电位器目标位置计数；current_rpm 为按电磁正方向统一后的转速。
+ * 调用上下文：状态为 SENSORED_RUN 且未选择力矩模式时，由 Task 调用。
+ * 副作用：更新速度环目标/PID、轨迹状态和 g_foc_state.target_q。
+ */
+static void Motor_System_RunPositionMode(float target_pos, float current_rpm)
+{
+    float actual_pos = (float)AS5600_ReadRawAngle();
+    float actual_mech_rpm = g_motor_system.run_data.speed_rpm;
+
+    // 位置/速度闭环直接使用电位器目标；轨迹规划器只旁路提供惯性前馈加速度。
+    float target_mech_rpm =
+        Motor_PositionLoop_Run(target_pos, actual_pos);
+
+    // 惯性前馈轨迹规划只用于估算加速度:
+    // 输入目标位置、实际位置、实际机械速度和位置环目标机械速度；
+    // 输出 Motor_Trajectory_GetAccel()，不再改变位置环/速度环目标。
+    Motor_Trajectory_Step(target_pos,
+                          actual_pos,
+                          actual_mech_rpm,
+                          target_mech_rpm);
+
+    // 将机械期望转速乘以 uvw_dir 统一符号后给到速度环，防止正反馈。
+    // 摩擦补偿和惯性补偿也必须使用同一个电磁方向坐标系。
+    // target_signed_rpm 是按电磁转矩正方向统一符号的机械 RPM，没有乘极对数。
+    float uvw_dir = (float)Motor_Identify_GetResult().uvw_dir;
+    float target_signed_rpm = target_mech_rpm * uvw_dir;
+
+    // 位置环输出的目标速度直接传给速度环。
+    Motor_SpeedLoop_SetTarget(target_signed_rpm);
+
+    // 速度闭环 PID 输出基础 Iq。
+    float speed_loop_iq = Motor_SpeedLoop_Update(current_rpm);
+
+    // 轨迹规划器只用于生成目标加速度，供惯性前馈使用。
+    float target_accel_rpm_s = Motor_Trajectory_GetAccel() * uvw_dir;
+    MotorFeedforwardResult feedforward =
+        Motor_Feedforward_Calculate(speed_loop_iq,
+                                    target_signed_rpm,
+                                    target_accel_rpm_s,
+                                    MOTOR_SPEED_PID_OUT_MIN,
+                                    MOTOR_SPEED_PID_OUT_MAX);
+
+    // 正确的合成顺序：速度 PID + 摩擦前馈 + 惯性前馈，最后统一限流。
+    // 不要再用 target_q = friction_iq 覆盖速度 PID 输出。
+    g_foc_state.target_q = feedforward.output_iq;
+}
+
+// 周期任务：位置模式执行外环；力矩模式直接将给定 Iq 送入电流环。
 // 调用频率: 1kHz (由 TIM2 中断驱动, dt = 1ms)
-// 控制链路: 电位器 → 位置环 → 速度环(仅前馈) → Iq → FOC → SVPWM → 电机
+// 默认链路: 电位器 → 目标力矩(N·m) → Iq=T/Kt → FOC → SVPWM → 电机
 void Motor_System_Task(void)
 {
     static uint8_t music_was_active = 0U;
@@ -346,7 +724,8 @@ void Motor_System_Task(void)
     // ========== 步骤 1: 速度估算 (自适应采样率) ==========
     // 低速时用长窗口降噪，高速时用短窗口提高响应
     if (AS5600_IsDataFresh(MOTOR_AS5600_MAX_SAMPLE_AGE_MS) != 0U) {
-        g_motor_system.run_data.speed_rpm = Motor_UpdateSpeedEstimatorAdaptive();
+        g_motor_system.run_data.speed_rpm =
+            Motor_SpeedEstimator_UpdateAdaptive(g_motor_system.run_data.speed_rpm);
     } else {
         g_motor_system.run_data.speed_rpm = 0.0f;
     }
@@ -360,21 +739,33 @@ void Motor_System_Task(void)
     float current_rpm = g_motor_system.run_data.speed_rpm *
                         (float)identified_direction;
 
+    /* 在机械坐标中展开单圈角度，供触觉模式跨零点连续计算。 */
+    uint16_t angle_counts = AS5600_ReadRawAngle();
+    if (g_angle_initialized == 0U) {
+        g_last_angle_counts = angle_counts;
+        g_continuous_angle_rad = (float)angle_counts * (6.28318530718f / 4096.0f);
+        g_angle_initialized = 1U;
+    } else {
+        int32_t delta = (int32_t)angle_counts - (int32_t)g_last_angle_counts;
+        if (delta > 2048) delta -= 4096;
+        if (delta < -2048) delta += 4096;
+        g_continuous_angle_rad += (float)delta * (6.28318530718f / 4096.0f);
+        g_last_angle_counts = angle_counts;
+    }
+
+    if ((g_control_owner == MOTOR_OWNER_HOST) &&
+        ((uint32_t)(HAL_GetTick() - g_host_last_heartbeat_ms) >
+         MOTOR_HOST_HEARTBEAT_TIMEOUT_MS)) {
+        Motor_System_ReleaseHost();
+    }
+
     if (current_rpm > 20.0f) {
         Motor_Sensorless_SetDirection(1);
     } else if (current_rpm < -20.0f) {
         Motor_Sensorless_SetDirection(-1);
     }
     
-    // ========== 步骤 2: 读取电位器目标位置 ==========
-    // 电位器 ADC DMA 原始值 → 反向映射 (4095 - raw) → 低通滤波 → 目标位置
-    g_motor_system.run_data.pot_raw = Pot_ReadRaw();
-
-    float target_pos_raw = 4095.0f - (float)g_motor_system.run_data.pot_raw;
-    // 一阶 EMA 低通滤波: filtered += α * (raw - filtered)
-    g_pot_target_filtered += POT_LPF_ALPHA * (target_pos_raw - g_pot_target_filtered);
-    float target_pos = g_pot_target_filtered;
-    g_debug_pot_target_pos = target_pos;
+    float target_pos = Motor_System_UpdatePotTarget();
     g_foc_state.target_d = 0.0f;
 
 #if MOTOR_MUSIC_AUTOPLAY_DEMO
@@ -386,24 +777,18 @@ void Motor_System_Task(void)
     }
 #endif
 
-    // Music mode owns only the q-axis current target. Pause the outer loops so
-    // position/speed control cannot fight the alternating audio torque.
+    // 音乐播放时由音频模块独占 q 轴给定，暂停正常位置/力矩输出以免相互叠加。
     if (g_motor_system.state == MOTOR_STATE_MUSIC) {
+        g_motor_system.run_data.target_torque_nm = 0.0f;
         if (music_was_active == 0U) {
+            g_torque_current_a = 0.0f;
             Motor_System_TuneCurrentLoopBandwidth(
                 MOTOR_CURRENT_LOOP_MUSIC_BW_HZ);
-            Motor_SpeedLoop_SetTarget(0.0f);
-            PID_Reset(&speed_pid);
-            PID_Reset(&g_pi_pos);
-            Motor_Trajectory_Clear();
+            Motor_System_ResetControlHistory();
             music_was_active = 1U;
         }
 
         Motor_Music_Task1ms();
-        g_debug_speed_loop_iq = 0.0f;
-        g_debug_friction_iq = 0.0f;
-        g_debug_inertia_iq = 0.0f;
-        g_debug_target_accel_rpm_s = 0.0f;
         g_foc_state.target_q = 0.0f;
         g_foc_state.target_d = 0.0f;
         return;
@@ -414,69 +799,69 @@ void Motor_System_Task(void)
             MOTOR_CURRENT_LOOP_CONTROL_BW_HZ);
     }
     music_was_active = 0U;
+    g_motor_system.run_data.target_torque_nm = 0.0f;
+
+    /* 直接力矩分支：状态机确认正常有感运行后，才将力矩给定送入电流环。
+     * 默认每 1ms 从电位器生成 N·m，再换算成受限的 Iq；手动配置则使用保存的 Iq。
+     * Id 固定为 0，并提前返回，防止下方位置/速度环和前馈覆盖直接力矩给定。
+     * 因为没有速度环，此模式不保持某个转速，也不保持某个位置。
+     */
+    if (g_motor_system.state == MOTOR_STATE_SENSORED_RUN) {
+        if (g_control_mode == MOTOR_CONTROL_TORQUE) {
+            Motor_System_RunTorqueMode();
+            return;
+        }
+        if ((g_control_mode >= MOTOR_CONTROL_FREE) &&
+            (g_control_mode <= MOTOR_CONTROL_LIMIT)) {
+            const float omega = g_motor_system.run_data.speed_rpm *
+                                (6.28318530718f / 60.0f);
+            const float rel = g_continuous_angle_rad - g_haptic_center_rad;
+            float i_mech = 0.0f;
+            if (g_control_mode == MOTOR_CONTROL_DAMPING) {
+                i_mech = -g_haptic_params.damping_b_a_per_rad_s * omega;
+            } else if (g_control_mode == MOTOR_CONTROL_SPRING) {
+                i_mech = -g_haptic_params.spring_k_a_per_rad * rel
+                         -g_haptic_params.damping_b_a_per_rad_s * omega;
+            } else if (g_control_mode == MOTOR_CONTROL_DETENT) {
+                float spacing = 6.28318530718f / (float)g_haptic_params.detent_count;
+                float nearest = roundf(rel / spacing) * spacing;
+                i_mech = -g_haptic_params.detent_k_a_per_rad * (rel - nearest)
+                         -g_haptic_params.damping_b_a_per_rad_s * omega;
+            } else if (g_control_mode == MOTOR_CONTROL_LIMIT) {
+                float half = g_haptic_params.limit_half_range_deg * 0.01745329252f;
+                if (rel > half) {
+                    i_mech = -g_haptic_params.limit_k_a_per_rad * (rel - half)
+                             -g_haptic_params.damping_b_a_per_rad_s * omega;
+                } else if (rel < -half) {
+                    i_mech = -g_haptic_params.limit_k_a_per_rad * (rel + half)
+                             -g_haptic_params.damping_b_a_per_rad_s * omega;
+                }
+            }
+            float iq = i_mech * (float)identified_direction;
+            if (!isfinite(iq)) iq = 0.0f;
+            if (iq > g_host_iq_limit_a) iq = g_host_iq_limit_a;
+            if (iq < -g_host_iq_limit_a) iq = -g_host_iq_limit_a;
+            float max_step = MOTOR_IQ_SLEW_A_PER_S * MOTOR_SYSTEM_TASK_DT_SEC;
+            if (iq > g_host_iq_applied_a + max_step) iq = g_host_iq_applied_a + max_step;
+            if (iq < g_host_iq_applied_a - max_step) iq = g_host_iq_applied_a - max_step;
+            g_host_iq_applied_a = iq;
+            g_foc_state.target_q = iq;
+            g_foc_state.target_d = 0.0f;
+            return;
+        }
+    }
     
     // 3. FOC 闭环开始工作后，开始让位置环介入产生速度，速度环介入产生 Iq
     // 控制链路: 电位器目标 → 位置环 (P) → 目标机械转速 → 乘 uvw_dir → 目标电磁转速
     //          → 速度环 (PI) → Iq 电流 → 摩擦前馈叠加 → 限幅 → FOC 电流环
     if (g_motor_system.state == MOTOR_STATE_SENSORED_RUN)
     {
-        float actual_pos = (float)AS5600_ReadRawAngle();
-        float actual_mech_rpm = g_motor_system.run_data.speed_rpm;
-        
-        // 位置/速度闭环直接使用电位器目标；轨迹规划器只旁路提供惯性前馈加速度。
-        float target_mech_rpm =
-            Motor_PositionLoop_Run(target_pos, actual_pos);
-
-        // 惯性前馈轨迹规划只用于估算加速度:
-        // 输入目标位置、实际位置、实际机械速度和位置环目标机械速度；
-        // 输出 Motor_Trajectory_GetAccel()，不再改变位置环/速度环目标。
-        Motor_Trajectory_Step(target_pos,
-                              actual_pos,
-                              actual_mech_rpm,
-                              target_mech_rpm);
-        
-        // 将机械期望转速乘以 uvw_dir，转换为电磁期望转速，给到速度环，防止正反馈。
-        // 摩擦补偿和惯性补偿也必须使用同一个电磁方向坐标系。
-        float uvw_dir = (float)Motor_Identify_GetResult().uvw_dir;
-        float target_elec_rpm = target_mech_rpm * uvw_dir;
-        g_debug_uvw_dir = uvw_dir;
-
-        // 位置环输出的目标速度直接传给速度环。
-        Motor_SpeedLoop_SetTarget(target_elec_rpm);
-
-        // 速度闭环 PID 输出基础 Iq。
-        float speed_loop_iq = Motor_SpeedLoop_Update(current_rpm);
-
-        // 轨迹规划器只用于生成目标加速度，供惯性前馈使用。
-        float target_accel_rpm_s = Motor_Trajectory_GetAccel() * uvw_dir;
-        MotorFeedforwardResult feedforward =
-            Motor_Feedforward_Calculate(speed_loop_iq,
-                                        target_elec_rpm,
-                                        target_accel_rpm_s,
-                                        MOTOR_SPEED_PID_OUT_MIN,
-                                        MOTOR_SPEED_PID_OUT_MAX);
-
-        // 调试量，便于在 VOFA+ 中观察各分量。
-        g_debug_speed_loop_iq = feedforward.speed_loop_iq;
-        g_debug_friction_iq = feedforward.friction_iq;
-        g_debug_inertia_iq = feedforward.inertia_iq;
-        g_debug_target_accel_rpm_s = feedforward.accel_rpm_s;
-        // 正确的合成顺序：速度 PID + 摩擦前馈 + 惯性前馈，最后统一限流。
-        // 不要再用 target_q = friction_iq 覆盖速度 PID 输出。
-        g_foc_state.target_q = feedforward.output_iq;
+        Motor_System_RunPositionMode(target_pos, current_rpm);
     }
     else
     {
         // 辨识未完成: 清零所有 PID 积分和电流输出，防止误动作
-        Motor_SpeedLoop_SetTarget(0.0f);
-        PID_Reset(&speed_pid);
-        PID_Reset(&g_pi_pos);
-        Motor_Trajectory_Clear();
-        g_debug_uvw_dir = (float)Motor_Identify_GetResult().uvw_dir;
-        g_debug_speed_loop_iq = 0.0f;
-        g_debug_friction_iq = 0.0f;
-        g_debug_inertia_iq = 0.0f;
-        g_debug_target_accel_rpm_s = 0.0f;
+        Motor_System_ResetControlHistory();
         g_foc_state.target_q = 0.0f;
         g_foc_state.target_d = 0.0f;
     }
@@ -518,7 +903,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         
         // 调用系统普通任务 (1ms 周期刷新电位器和目标)
         Motor_System_Task();
-       //Motor_SimulateSpring_Task();   // 弹簧模拟 (与位置控制互斥，二选一)
         // ================================================
         // ============ 状态灯 2Hz 闪烁 ============
         Motor_StatusLed_Task();
@@ -527,81 +911,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     }
 }
 
-void Motor_ShowDebugInfo_OLED(void)
+/* 仅供前台 VOFA 观测：读取不关中断、不做 I/O、不调用算法。 */
+float Motor_System_GetDebugPotTarget(void)
 {
-    static uint32_t last_refresh_ms = 0U;
-    uint32_t now = HAL_GetTick();
-
-    if ((uint32_t)(now - last_refresh_ms) < 2U) {
-        return;
-    }
-    last_refresh_ms = now;
-
-    // 获取实时的 FOC 内部状态（电流、坐标变换后结果）
-    // 注意：这里读取全局变量，如果有严谨强迫症可以加关中断，但对于只是观察调试没关系。
-    MotorIdentifyState id_state = Motor_Identify_GetState();
-    MotorParametersStatus parameter_status = Motor_Parameters_GetStatus();
-    
-    // 1. OLED 界面显示关键调度状态
-    if (g_motor_system.state == MOTOR_STATE_FAULT) {
-        OLED_ShowString(1, 1, "Fault");
-    } else if (parameter_status == MOTOR_PARAMETERS_NO_DATA) {
-        OLED_ShowString(1, 1, "NoParam");
-    } else if (parameter_status == MOTOR_PARAMETERS_ERROR) {
-        OLED_ShowString(1, 1, "ParamErr");
-    } else if (parameter_status != MOTOR_PARAMETERS_READY) {
-        // 辨识进行中：显示状态编号 + 目标 q 电流
-        OLED_ShowString(1, 1, "Idt");     // "Idt" = Identify (辨识中)
-        OLED_ShowString(1, 4, "Tq:");
-        OLED_ShowSignedNum(1, 7, (int32_t)(g_foc_state.target_q * 1000.0f), 5);  // 显示 mA 级
-        OLED_ShowNum(1, 14, id_state, 2);   // 辨识状态码
-    } else {
-        // 辨识完成：OLED 显示暂时关闭以节省 CPU
-       // OLED_ShowString(1, 1, "Run");
-        //OLED_ShowSignedNum(1, 7, (int32_t)(g_foc_state.target_q * 1000.0f), 5);
-    }
-if(0)  // 开启 OLED 诊断显示：d/q电流、ADC原始值、角度、电位器
-       // 改为 if(1) 可开启详细诊断界面 (会增加 CPU 负载)
-{
-    // 第2行：D 轴实际电流 (mA) + ADC U 相原始值
-    OLED_ShowChar(2, 1, 'd');
-    OLED_ShowSignedNum(2, 2, (int32_t)(g_foc_state.park.d * 1000.0f), 4);
-    OLED_ShowString(2, 7, "U:");
-    OLED_ShowNum(2, 9, g_foc_state.sample.iu_raw, 4);
-
-    // 第3行：Q 轴实际电流 (mA) + ADC W 相原始值
-    OLED_ShowChar(3, 1, 'q');
-    OLED_ShowSignedNum(3, 2, (int32_t)(g_foc_state.park.q * 1000.0f), 4);
-    OLED_ShowString(3, 7, "A:");
-    // OLED_ShowNum(3, 9, AS5600_ReadRawAngle(), 4); 
-
-}
-
-    MotorSensorlessOutput sensorless = Motor_Sensorless_GetOutput();
-    float vofa_data[20];
-    vofa_data[0] = 4095-Pot_ReadRaw();                   // CH0:  电位器原始 ADC (反向)
-    vofa_data[1] = (float)AS5600_ReadRawAngle();         // CH1:  编码器实际位置 (counts)
-    vofa_data[2] = speed_pid.target;                     // CH2:  速度环目标转速 (电磁方向, RPM)
-    vofa_data[3] = speed_pid.measure;                    // CH3:  速度环实测转速 (电磁方向, RPM)
-    vofa_data[4] = g_debug_speed_loop_iq*1000;           // CH4:  速度环 PID 基础输出 (mA)
-    vofa_data[5] = g_debug_friction_iq*1000;             // CH5:  摩擦前馈补偿电流 (mA)
-    vofa_data[6] = g_debug_inertia_iq*1000;              // CH6:  惯性前馈补偿电流 (mA)
-    vofa_data[7] = g_foc_state.pi_q.target*1000;          // CH7:  实际送入电流环的目标 Iq (mA)
-    vofa_data[8] = g_foc_state.park.q*1000;              // CH8:  实测 Q 轴电流 (mA)
-    vofa_data[9] = g_debug_target_accel_rpm_s;           // CH9:  轨迹规划加速度 (电磁方向, RPM/s)
-    vofa_data[10] = (float)MT6826S_ReadRawAngle15();     // CH10: MT6826S 15-bit 机械角度 (0~32767)
-    vofa_data[11] = Motor_Trajectory_GetAccel()*0.1;         // CH11: 轨迹规划加速度 (RPM/s)
-    vofa_data[12] = Motor_Trajectory_GetFilteredTarget();// CH12: 轨迹规划滤波后目标位置 (counts)
-    vofa_data[13] = g_debug_pot_target_pos;              // CH13: 电位器反向映射目标位置 (counts)
-    vofa_data[14] = Motor_Trajectory_GetPosition();      // CH14: 惯性前馈规划器内部位置 (不参与位置环)
-    vofa_data[15] = sensorless.electrical_angle_rad;     // CH15: sensorless electrical angle (rad)
-    vofa_data[16] = sensorless.mechanical_speed_rpm;     // CH16: sensorless mechanical speed (RPM)
-    vofa_data[17] = sensorless.bemf_magnitude_volts;     // CH17: estimated back-EMF magnitude (V)
-    vofa_data[18] = (float)sensorless.valid;             // CH18: sensorless estimate valid flag
-    vofa_data[19] = (float)g_motor_system.state;          // CH19: system operating state
-    VOFA_JustFloat_Send(vofa_data, 20);
-    // 适当的软件延时，刷新太快 OLED 会闪
-    // 这里设定 50ms (即20Hz刷新率)，对 OLED 友好，对 VOFA 观察手动转动也足够
-   // HAL_Delay(1);
+    return g_pot_target_filtered;
 }
 

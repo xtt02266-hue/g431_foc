@@ -6,6 +6,7 @@
 #include "motor_sensorless.h"
 #include "svpwm.h"
 #include "stm32g4xx_hal.h"
+#include "motor_config.h"
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
@@ -197,7 +198,7 @@ void Motor_Parameters_Init(void)
         g_parameters_status = MOTOR_PARAMETERS_READY;
     } else {
         g_has_stored_data = 0U;
-        g_auto_identify_pending = 1U;
+        g_auto_identify_pending = (MOTOR_PARAMETERS_AUTO_IDENTIFY != 0) ? 1U : 0U;
         g_parameters_status = MOTOR_PARAMETERS_NO_DATA;
     }
 }

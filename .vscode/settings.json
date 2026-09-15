@@ -1,10 +1,14 @@
 {
-    "cmake.cmakePath": "D:\\software\\cmake-4.3.3-windows-x86_64\\bin\\cmake.exe",
+    "cmake.cmakePath": "C:\\Users\\scott\\AppData\\Local\\stm32cube\\bundles\\cmake\\4.3.1+st.1\\bin\\cmake.exe",
     "cmake.generator": "Ninja",
     "cmake.configureEnvironment": {
-        "PATH": "D:\\software\\embedded-tools\\Scripts;D:\\software\\cmake-4.3.3-windows-x86_64\\bin;${env:PATH}"
+        "PATH": "D:\\software\\arm-gnu-toolchain-14.3.rel1\\bin;C:\\Users\\scott\\AppData\\Local\\stm32cube\\bundles\\ninja\\1.13.2+st.1\\bin;${env:PATH}"
     },
     "cmake.buildEnvironment": {
-        "PATH": "D:\\software\\embedded-tools\\Scripts;D:\\software\\cmake-4.3.3-windows-x86_64\\bin;${env:PATH}"
-    }
+        "PATH": "D:\\software\\arm-gnu-toolchain-14.3.rel1\\bin;C:\\Users\\scott\\AppData\\Local\\stm32cube\\bundles\\ninja\\1.13.2+st.1\\bin;${env:PATH}"
+    },
+    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+    "cortex-debug.pyocdPath.windows": "C:\\Users\\scott\\AppData\\Roaming\\uv\\tools\\pyocd\\Scripts\\pyocd.exe",
+    "stm32-for-vscode.openOCDPath": false,
+    "stm32-for-vscode.armToolchainPath": false
 }

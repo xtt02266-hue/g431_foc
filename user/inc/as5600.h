@@ -11,8 +11,6 @@
 // 7 位 I2C 从机地址（未包含读写位）。
 #define AS5600_7BIT_ADDRESS 0x36
 #define AS5600_Address      (AS5600_7BIT_ADDRESS << 1)
-// I2C 超时（ms）。
-#define I2C_TIMEOUT 10000U
 
 extern uint8_t as5600_rx_buffer[2];
 

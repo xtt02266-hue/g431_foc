@@ -4,11 +4,12 @@
 #include <stdint.h>
 
 /*
- * Play the built-in demo once after the motor first enters closed-loop run.
- * Position control resumes automatically when the song finishes.
+ * 上电自动播放开关：0 为关闭，避免进入闭环后音乐抢占正常力矩输出。
+ * 改为 1 时，首次进入有感运行会自动播放一次内置歌曲。
+ * 此开关只控制自动触发，音乐合成、曲谱和手动播放接口仍然保留。
  */
 #ifndef MOTOR_MUSIC_AUTOPLAY_DEMO
-#define MOTOR_MUSIC_AUTOPLAY_DEMO          1
+#define MOTOR_MUSIC_AUTOPLAY_DEMO          0
 #endif
 
 /* The FOC current loop is called from the 20 kHz injected ADC callback. */

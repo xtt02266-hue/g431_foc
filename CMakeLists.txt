@@ -47,6 +47,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     user/src/as5600.c
     user/src/hardware_init.c
     user/src/motor_current_loop.c
+    user/src/motor_debug.c
     user/src/motor_feedforward.c
     user/src/motor_identify.c
     user/src/motor_music.c
@@ -60,6 +61,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     user/src/mt6826s.c
     user/src/oled.c
     user/src/pid.c
+    user/src/pc_protocol.c
     user/src/svpwm.c
     user/src/user_io.c
     user/src/vofa_usart.c

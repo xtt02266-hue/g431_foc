@@ -1,6 +1,6 @@
 #include "motor_identify.h"
 #include "as5600.h"
-#include "motor_system.h"
+#include "motor_config.h"
 #include "motor_current_loop.h"
 #include "tim.h"
 #include <math.h>
@@ -142,6 +142,11 @@ void Motor_Identify_UseResult(const MotorIdentifiedParams *params)
     }
 
     g_identified_params = *params;
+    /* 旧固件曾保存 0.6mH 占位值，不能让旧 Flash 覆盖已确认的相电感。
+     * 仅更新 RAM 中的标称电感，保留原来的电阻、极对数、方向和零点标定。
+     * 不在开机时擦写 Flash；下次主动辨识保存时才将新电感一并写入。
+     */
+    g_identified_params.inductance = MOTOR_NOMINAL_PHASE_INDUCTANCE_H;
     Motor_CurrentLoop_SetMotorIdentityParams(params->pole_pairs,
                                              params->zero_angle_offset,
                                              params->uvw_dir);
@@ -159,7 +164,7 @@ void Motor_Identify_UseResult(const MotorIdentifiedParams *params)
 // 目的：算出电机的真实电阻。因为只有知道了电阻，后续强拖时才知道给多大的电压是安全的，避免电机烧毁。
 static void Identify_MeasureR(void)
 {
-    // 云台电机内阻大，这里施加约2.4V的相电压测试 (假设母线是SYSTEM_BUS_VOLTAGE)
+    // 幅值 200 在当前固定 15V 母线下对应约 3V 相电压，电阻仍通过实测电流计算。
     // 幅值 200 对应占空比 200/1000
     const float test_amplitude = 200.0f; 
     const float bus_voltage = SYSTEM_BUS_VOLTAGE; 
@@ -211,25 +216,23 @@ static void Identify_MeasureR(void)
     }
 }
 
-// 2. 测量相电感 
-// 目的：测出电感(L)大小，主要是为了后面的“电流环”能自动算出 PI 控制器的参数。
+// 2. 装载标称相电感（保留原状态名，并非实际测量电感）。
+// 目的：给电流环 PI 整定提供已确认的相电感，避免使用旧的 0.6mH 占位值。
 static void Identify_MeasureL(void)
 {
-    // 由于云台电机时间常数极窄（<1ms），很难在 1ms 调度周期内完成斜率抓取。
-    // 在工程中对于这种电机，最好的策略是测准电阻后，电感直接给厂家的标称值。
-    // 商家给的线间电感为 1.2mH，FOC所需要的相电感 = 1.2 / 2 = 0.6mH = 0.0006H
+    // 当前 1ms 辨识任务没有实现电流瞬态采样，采用 BM3514H 标称相电感 1.2mH。
+    // 用户已确认这是相电感，直接换算为 0.0012H，不做线间到相的除以 2 操作。
 
     g_identify_timer++;
 
-    // Wait 100 ms so the resistance-test current has fully decayed.
+    // 先等待 100ms，让电阻测试电流衰减，再进入后续相序/极对数辨识。
     if (g_identify_timer <= MOTOR_IDENTIFY_L_COOLDOWN_MS)
     {
         Motor_OpenLoop_Drive(0.0f, 0.0f);
         return;
     }
 
-    // 强行赋理论相电感值 0.6mH
-    g_identified_params.inductance = 0.0006f;
+    g_identified_params.inductance = MOTOR_NOMINAL_PHASE_INDUCTANCE_H;
 
     g_identify_timer = 0;
     g_identify_state = IDENTIFY_STATE_UVW_AND_POLES; // 进入测相序极对数

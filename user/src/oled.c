@@ -1,12 +1,6 @@
 #include "gpio.h"
 #include "OLED_Font.h"
 
-// 位操作枚举，仅用于兼容旧接口。
-typedef enum
-{ Bit_RESET = 0,
-  Bit_SET
-}BitAction;
-
 // I2C 位带延时，单位为微秒。
 void I2C_Delay(uint32_t us)
 {

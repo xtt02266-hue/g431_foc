@@ -1,5 +1,6 @@
 #include "vofa_usart.h"
 #include "usart.h"
+#include "pc_protocol.h"
 #include <string.h>
 
 // VOFA+ JustFloat 协议的固定帧尾：0x00 0x00 0x80 0x7F
@@ -7,10 +8,11 @@ const uint8_t vofa_tail[4] = {0x00, 0x00, 0x80, 0x7f};
 
 // 定义全局的接收和发送缓冲区
 uint8_t vofa_rx_buffer[VOFA_RX_BUFFER_SIZE];
-uint8_t vofa_tx_buffer[84]; // 20 floats + 4-byte JustFloat frame tail
+uint8_t vofa_tx_buffer[VOFA_TX_MAX_FLOAT_COUNT * sizeof(float) + sizeof(vofa_tail)];
 
 void VOFA_Init(void)
 {
+    PC_Protocol_Init();
     // 开启串口 DMA + 空闲中断接收，适用于上位机发来的不定长指令
     HAL_UARTEx_ReceiveToIdle_DMA(&huart2, vofa_rx_buffer, VOFA_RX_BUFFER_SIZE);
     
@@ -23,10 +25,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
     if (huart->Instance == USART2)
     {
-        // 在这里处理 VOFA+ 或者其他上位机发下来的指令帧
-        // 收到的有效数据长度为 Size，数据在 vofa_rx_buffer[0] 到 vofa_rx_buffer[Size-1] 中
-        
-        // TODO: 添加指令解析代码，比如设定期望电流、PID参数等
+        PC_Protocol_FeedFromISR(vofa_rx_buffer, Size);
         
         // 处理完毕后，重新打开 DMA 接收，准备接收下一帧
         HAL_UARTEx_ReceiveToIdle_DMA(&huart2, vofa_rx_buffer, VOFA_RX_BUFFER_SIZE);

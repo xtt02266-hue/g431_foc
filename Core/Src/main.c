@@ -28,6 +28,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "pc_protocol.h"
 #include "hardware_init.h"
 #include "motor_system.h" // 引入了我们要用的显示测试接口
 #include "motor_parameters.h"
@@ -117,6 +118,7 @@ int main(void)
     /* USER CODE BEGIN 3 */
     AS5600_BackgroundTask();
     Motor_Parameters_BackgroundTask();
+    PC_Protocol_Task();
     Motor_ShowDebugInfo_OLED();
   }
   /* USER CODE END 3 */

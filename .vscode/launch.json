@@ -1,0 +1,30 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "DAPLink: Build, Flash and Debug",
+            "type": "cortex-debug",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "servertype": "pyocd",
+            "serverpath": "C:\\Users\\scott\\AppData\\Roaming\\uv\\tools\\pyocd\\Scripts\\pyocd.exe",
+            "armToolchainPath": "D:\\software\\arm-gnu-toolchain-14.3.rel1\\bin",
+            "executable": "${workspaceFolder}\\build\\Debug\\g431_foc.elf",
+            "targetId": "stm32g431cbux",
+            "serverArgs": [
+                "--pack",
+                "D:\\software\\cmsis-packs\\Keil.STM32G4xx_DFP.2.2.0.pack",
+                "-O",
+                "cmsis_dap.limit_packets=1",
+                "--connect",
+                "under-reset",
+                "--frequency",
+                "800000",
+                "--no-wait"
+            ],
+            "runToEntryPoint": "main",
+            "preLaunchTask": "CMake: Build Debug",
+            "showDevDebugOutput": "none"
+        }
+    ]
+}

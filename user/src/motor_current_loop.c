@@ -1,5 +1,5 @@
 #include "motor_current_loop.h"
-#include "motor_system.h"
+#include "motor_config.h"
 #include "adc.h"
 #include "svpwm.h"
 #include "as5600.h"
@@ -108,7 +108,6 @@ void Motor_CurrentLoop_Run(uint16_t iu_raw, uint16_t iw_raw)
 
         // 9. SVPWM 生成：将 V_alpha/V_beta 转换为三相占空比，写入 TIM1 CCR
         SVPWM_SetVoltage(v_ab.alpha, v_ab.beta, SYSTEM_BUS_VOLTAGE);  // 第三个参数：母线电压(V)
-       //Motor_OpenLoop_Vdq_Control(1, 0, g_foc_state.elec_angle, SYSTEM_BUS_VOLTAGE);
     } 
     else 
     {

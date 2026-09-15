@@ -1,0 +1,15 @@
+﻿ M .vscode/settings.json
+ M .vscode/tasks.json
+ M user/inc/motor_identify.h
+ M user/inc/motor_music.h
+ M user/inc/motor_position_loop.h
+ M user/inc/motor_system.h
+ M user/src/motor_identify.c
+ M user/src/motor_position_loop.c
+ M user/src/motor_speed_loop.c
+ M user/src/motor_system.c
+ M user/src/svpwm.c
+?? .vscode/launch.json
+?? REFACTOR_PLAN.md
+?? SCH_Schematic1_2026-09-13.pdf
+?? refactor_validation/

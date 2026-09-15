@@ -7,7 +7,8 @@
 extern UART_HandleTypeDef huart2;
 
 // 定义接收缓存区大小
-#define VOFA_RX_BUFFER_SIZE 128
+#define VOFA_RX_BUFFER_SIZE 256
+#define VOFA_TX_MAX_FLOAT_COUNT 7U
 extern uint8_t vofa_rx_buffer[VOFA_RX_BUFFER_SIZE];
 
 /* 

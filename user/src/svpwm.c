@@ -1,5 +1,5 @@
 #include "svpwm.h"
-#include "motor_system.h"
+#include "motor_config.h"
 #include "tim.h"
 #include <math.h>
 #include <stddef.h>
@@ -90,7 +90,10 @@ void SVPWM_SetVoltage(float v_alpha, float v_beta, float v_bus)
     // 3. 归一化：将相电压映射到 [0, 1] 占空比
     //    母线电压 Vbus 对应满调制幅值
     //    占空比 = (Vphase / Vbus) + 0.5
-    float v_norm = 0.5f / g_svpwm.v_bus;  // 缩放因子
+    // va/vb/vc 已是伏特，半桥平均电压变化为 duty变化 * Vbus。
+    // 因此应除以 Vbus；中心对齐只改变计数方式，不需要再乘 0.5。
+    // 原 0.5/Vbus 会把实际线间电压缩小一半，导致电流环电压指令与输出不一致。
+    float v_norm = 1.0f / g_svpwm.v_bus;
     float duty_a = va * v_norm + 0.5f;
     float duty_b = vb * v_norm + 0.5f;
     float duty_c = vc * v_norm + 0.5f;
