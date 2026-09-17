@@ -21,10 +21,10 @@
 #define MOTOR_TRAJ_SPEED_MATCH_TIME_SEC    0.02f
 
 /* 编码器一圈计数值。 */
-#define MOTOR_TRAJ_COUNTS_PER_REV          4096.0f
+#define MOTOR_TRAJ_COUNTS_PER_REV          32768.0f
 
 /* 半圈计数值，用于环形最短路径判断。 */
-#define MOTOR_TRAJ_HALF_REV_COUNTS         2048.0f
+#define MOTOR_TRAJ_HALF_REV_COUNTS         16384.0f
 
 /* RPM 到 counts/s 的换算系数。 */
 #define MOTOR_TRAJ_RPM_TO_COUNTS_PER_SEC   (MOTOR_TRAJ_COUNTS_PER_REV / 60.0f)

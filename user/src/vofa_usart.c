@@ -10,14 +10,20 @@ const uint8_t vofa_tail[4] = {0x00, 0x00, 0x80, 0x7f};
 uint8_t vofa_rx_buffer[VOFA_RX_BUFFER_SIZE];
 uint8_t vofa_tx_buffer[VOFA_TX_MAX_FLOAT_COUNT * sizeof(float) + sizeof(vofa_tail)];
 
+static void VOFA_StartReceive(void)
+{
+    if (HAL_UARTEx_ReceiveToIdle_DMA(&huart2, vofa_rx_buffer,
+                                     VOFA_RX_BUFFER_SIZE) == HAL_OK)
+    {
+        __HAL_DMA_DISABLE_IT(huart2.hdmarx, DMA_IT_HT);
+    }
+}
+
 void VOFA_Init(void)
 {
     PC_Protocol_Init();
     // 开启串口 DMA + 空闲中断接收，适用于上位机发来的不定长指令
-    HAL_UARTEx_ReceiveToIdle_DMA(&huart2, vofa_rx_buffer, VOFA_RX_BUFFER_SIZE);
-    
-    // 关闭 DMA 的半传输完成中断（HT），通常上位机通信不需要处理一半的数据，关掉能省点 CPU
-    __HAL_DMA_DISABLE_IT(huart2.hdmarx, DMA_IT_HT);
+    VOFA_StartReceive();
 }
 
 // HAL 库不定长接收完成回调函数（当串口总线空闲或接收满时触发）
@@ -28,8 +34,18 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
         PC_Protocol_FeedFromISR(vofa_rx_buffer, Size);
         
         // 处理完毕后，重新打开 DMA 接收，准备接收下一帧
-        HAL_UARTEx_ReceiveToIdle_DMA(&huart2, vofa_rx_buffer, VOFA_RX_BUFFER_SIZE);
-        __HAL_DMA_DISABLE_IT(huart2.hdmarx, DMA_IT_HT);
+        VOFA_StartReceive();
+    }
+}
+
+// Overrun/noise/frame errors can stop an RX DMA session.  Recover the receiver
+// here so one transient UART error cannot leave the lower computer TX-only.
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == USART2)
+    {
+        (void)HAL_UART_AbortReceive(huart);
+        VOFA_StartReceive();
     }
 }
 

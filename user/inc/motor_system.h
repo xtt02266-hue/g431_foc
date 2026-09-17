@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include "motor_music.h"
 #include "motor_config.h"
+#include "motor_feedforward.h"
+#include "motor_cogging.h"
 
 // 电机运行状态。
 typedef enum
@@ -21,13 +23,14 @@ typedef enum
  */
 typedef enum
 {
-    MOTOR_CONTROL_POSITION = 0, // 电位器给位置，经位置环、速度环和前馈生成 Iq
+    MOTOR_CONTROL_POSITION = 0, // 电位器给位置，经位置环和速度环生成 Iq
     MOTOR_CONTROL_TORQUE,
     MOTOR_CONTROL_FREE,
     MOTOR_CONTROL_DAMPING,
     MOTOR_CONTROL_SPRING,
     MOTOR_CONTROL_DETENT,
-    MOTOR_CONTROL_LIMIT
+    MOTOR_CONTROL_LIMIT,
+    MOTOR_CONTROL_SPEED
 } MotorControlMode;
 
 typedef enum
@@ -78,6 +81,13 @@ typedef struct
     float iq_limit_a;
     float continuous_angle_rad;
     float relative_center_angle_rad;
+    float target_speed_rpm;
+    float speed_loop_iq_a;
+    float friction_iq_a;
+    float cogging_iq_a;
+    float cogging_effective_gain;
+    uint32_t cogging_table_revision;
+    uint32_t cogging_table_crc;
     uint32_t config_revision;
 } MotorControlSnapshot;
 
@@ -127,7 +137,25 @@ MotorCommandResult Motor_System_HostSetMode(MotorControlMode mode,
 MotorCommandResult Motor_System_HostSetIq(float iq_a, float *accepted_iq_a);
 MotorCommandResult Motor_System_HostSetIqLimit(float limit_a);
 MotorCommandResult Motor_System_HostSetHapticParams(const MotorHapticParams *params);
+MotorCommandResult Motor_System_HostSetFrictionConfig(const MotorFrictionConfig *config);
+MotorCommandResult Motor_System_HostSetCoggingConfig(const MotorCoggingConfig *config);
+MotorCommandResult Motor_System_HostBeginCoggingTable(uint16_t count,
+                                                      uint32_t expected_crc,
+                                                      uint16_t *transaction_id);
+MotorCommandResult Motor_System_HostWriteCoggingChunk(uint16_t transaction_id,
+                                                      uint16_t offset,
+                                                      uint8_t count,
+                                                      const int16_t *values);
+MotorCommandResult Motor_System_HostCommitCoggingTable(uint16_t transaction_id);
+MotorCommandResult Motor_System_HostReadCoggingChunk(uint16_t offset,
+                                                     uint8_t count,
+                                                     int16_t *values);
+MotorCommandResult Motor_System_HostSaveCogging(void);
+MotorCommandResult Motor_System_HostSetSpeed(float speed_rpm,
+                                             float *accepted_speed_rpm);
 void Motor_System_GetHapticParams(MotorHapticParams *params);
+void Motor_System_GetFrictionConfig(MotorFrictionConfig *config);
+void Motor_System_GetCoggingConfig(MotorCoggingConfig *config);
 void Motor_System_GetControlSnapshot(MotorControlSnapshot *snapshot);
 /* 手动给定仅在 MOTOR_TORQUE_USE_POT=0 时生效；电位器模式返回 0。
  * 直接给定电磁方向 Iq (A)，Id=0。
@@ -153,7 +181,7 @@ uint8_t Motor_System_PlaySong(const MotorMusicNote *song,
 uint8_t Motor_System_PlaySongLoop(const MotorMusicNote *song,
                                   uint16_t note_count);
 void Motor_System_StopMusic(void);
-/* 当前仅启停并行无感观测器，不会替换 AS5600 换相角度。 */
+/* 当前仅启停并行无感观测器，不会替换MT6826S SPI换相角度。 */
 uint8_t Motor_System_EnableSensorlessObserver(uint8_t enable);
 // OLED上显示临时调试信息。
 void Motor_ShowDebugInfo_OLED(void);

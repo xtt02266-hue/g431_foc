@@ -7,7 +7,7 @@
 
 /* 速度测算器结构体 */
 typedef struct {
-    uint16_t last_angle_raw; // 上一次编码器原始读数 (0~4095)
+    uint16_t last_angle_raw; // 上一次15位编码器原始读数 (0~32767)
     float speed_rpm;         // 滤波后的转速 (RPM)
     float filter_alpha;      // 一阶低通滤波系数 (0~1)
     uint8_t initialized;     // 是否已初始化首个角度
@@ -17,12 +17,15 @@ typedef struct {
 extern PID_Controller speed_pid;
 extern MotorSpeedEstimator speed_est;
 
-/* 速度环宏定义：将 PID 参数暴露在头文件中 */
-#define MOTOR_SPEED_PID_KP          0.00012f
-#define MOTOR_SPEED_PID_KI          0.00001f
+/*
+ * 无外加负载、摩擦前馈配合下的保守速度环基线参数。
+ * 输入误差单位为机械 RPM，输出单位为 q 轴电流 A。
+ */
+#define MOTOR_SPEED_PID_KP          0.0016f
+#define MOTOR_SPEED_PID_KI          0.0001f
 #define MOTOR_SPEED_PID_KD          0.0f
-#define MOTOR_SPEED_PID_OUT_MAX     2.5f    // 输出到电流环的最大 Iq_ref (A)
-#define MOTOR_SPEED_PID_OUT_MIN     -2.5f   // 输出到电流环的最小 Iq_ref (A)
+#define MOTOR_SPEED_PID_OUT_MAX     1.1f
+#define MOTOR_SPEED_PID_OUT_MIN     -1.1f
 
 /* 函数声明 */
 // PID 相关
@@ -34,8 +37,9 @@ float Motor_SpeedLoop_Update(float current_speed_rpm);
 void Motor_SpeedEstimator_Init(float filter_alpha);
 float Motor_SpeedEstimator_Update(uint16_t current_angle_raw, float dt_seconds);
 
-/* 自适应采样率调度：按 published_speed_rpm 选择分频，到期才读 AS5600 并更新速度。
- * 未到期时返回传入的 published_speed_rpm；不得用 speed_est.speed_rpm 替代传入值。 */
+/*
+ * 每1 ms读取角度并发布速度；根据转速选择20/10/5 ms滚动位置窗，切换带迟滞。
+ */
 float Motor_SpeedEstimator_UpdateAdaptive(float published_speed_rpm);
 
 // 弱磁控制 (Field Weakening)

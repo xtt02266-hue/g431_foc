@@ -4,7 +4,7 @@
 #include "motor_position_loop.h"
 #include "motor_feedforward.h"
 #include "motor_trajectory.h"
-#include "as5600.h"
+#include "motor_encoder.h"
 #include "tim.h"
 #include <math.h>
 #include <stddef.h>
@@ -16,7 +16,7 @@
 #include "motor_sensorless.h"
 #include "motor_debug.h"
 
-#define MOTOR_AS5600_MAX_SAMPLE_AGE_MS  10U
+#define MOTOR_ENCODER_MAX_SAMPLE_AGE_MS  2U
 #define MOTOR_CURRENT_LOOP_CONTROL_BW_HZ 250.0f
 #define MOTOR_CURRENT_LOOP_MUSIC_BW_HZ  2000.0f
 
@@ -43,6 +43,11 @@ static volatile uint32_t g_host_last_heartbeat_ms = 0U;
 static volatile uint32_t g_config_revision = 0U;
 static volatile float g_host_iq_limit_a = MOTOR_HOST_DEFAULT_IQ_LIMIT_A;
 static float g_host_iq_applied_a = 0.0f;
+static float g_host_speed_target_rpm = 0.0f;
+static float g_host_speed_applied_rpm = 0.0f;
+static float g_debug_speed_loop_iq_a = 0.0f;
+static float g_debug_friction_iq_a = 0.0f;
+static float g_debug_cogging_iq_a = 0.0f;
 static float g_continuous_angle_rad = 0.0f;
 static float g_haptic_center_rad = 0.0f;
 static uint16_t g_last_angle_counts = 0U;
@@ -82,6 +87,11 @@ void Motor_System_Init(void)
     g_control_owner = MOTOR_OWNER_LOCAL;
     g_host_iq_limit_a = MOTOR_HOST_DEFAULT_IQ_LIMIT_A;
     g_host_iq_applied_a = 0.0f;
+    g_host_speed_target_rpm = 0.0f;
+    g_host_speed_applied_rpm = 0.0f;
+    g_debug_speed_loop_iq_a = 0.0f;
+    g_debug_friction_iq_a = 0.0f;
+    g_debug_cogging_iq_a = 0.0f;
     g_config_revision = 0U;
     g_angle_initialized = 0U;
     g_torque_current_a = 0.0f;
@@ -103,6 +113,8 @@ void Motor_System_Init(void)
 
     // 初始化位置环 PID
     Motor_PositionLoop_Init();
+    Motor_Feedforward_FrictionInit();
+    Motor_Cogging_Init();
 
     // 仅初始化音乐模块；当前自动播放宏为 0，需要主动调用播放接口才会发声。
     Motor_Music_Init();
@@ -120,7 +132,7 @@ uint8_t Motor_System_StartControl(void)
 {
     if ((Motor_Parameters_IsReady() == 0U) ||
         (g_fault_latched != 0U) ||
-        (AS5600_IsDataFresh(MOTOR_AS5600_MAX_SAMPLE_AGE_MS) == 0U)) {
+        (Motor_Encoder_IsDataFresh(MOTOR_ENCODER_MAX_SAMPLE_AGE_MS) == 0U)) {
         return 0U;
     }
 
@@ -182,6 +194,7 @@ static uint8_t Motor_System_IsModeSourceValid(MotorControlMode mode,
     if (mode == MOTOR_CONTROL_TORQUE) {
         return (source == MOTOR_INPUT_POT) || (source == MOTOR_INPUT_HOST);
     }
+    if (mode == MOTOR_CONTROL_SPEED) return source == MOTOR_INPUT_HOST;
     return ((mode >= MOTOR_CONTROL_FREE) && (mode <= MOTOR_CONTROL_LIMIT) &&
             (source == MOTOR_INPUT_INTERNAL));
 }
@@ -191,7 +204,10 @@ MotorCommandResult Motor_System_ClaimHost(void)
     if ((g_motor_system.state == MOTOR_STATE_IDENTIFYING) ||
         (g_motor_system.state == MOTOR_STATE_MUSIC)) return MOTOR_CMD_BUSY;
     if (g_motor_system.state == MOTOR_STATE_FAULT) return MOTOR_CMD_FAULT_ACTIVE;
-    if (g_motor_system.state != MOTOR_STATE_STOPPED) return MOTOR_CMD_MUST_STOP_FIRST;
+    if ((g_motor_system.state != MOTOR_STATE_STOPPED) &&
+        (g_motor_system.state != MOTOR_STATE_WAIT_PARAMETERS)) {
+        return MOTOR_CMD_MUST_STOP_FIRST;
+    }
     if (g_control_owner == MOTOR_OWNER_HOST) return MOTOR_CMD_BUSY;
     g_control_owner = MOTOR_OWNER_HOST;
     g_host_iq_limit_a = MOTOR_HOST_DEFAULT_IQ_LIMIT_A;
@@ -208,6 +224,8 @@ void Motor_System_ReleaseHost(void)
     g_host_iq_limit_a = MOTOR_HOST_DEFAULT_IQ_LIMIT_A;
     g_torque_current_a = 0.0f;
     g_host_iq_applied_a = 0.0f;
+    g_host_speed_target_rpm = 0.0f;
+    g_host_speed_applied_rpm = 0.0f;
     ++g_config_revision;
 }
 
@@ -221,14 +239,17 @@ MotorCommandResult Motor_System_HostStart(void)
     if (g_control_owner != MOTOR_OWNER_HOST) return MOTOR_CMD_NOT_OWNER;
     if (g_motor_system.state == MOTOR_STATE_FAULT) return MOTOR_CMD_FAULT_ACTIVE;
     if (Motor_Parameters_IsBusy() != 0U) return MOTOR_CMD_BUSY;
-    if ((g_control_mode >= MOTOR_CONTROL_DAMPING) &&
-        (g_control_mode <= MOTOR_CONTROL_LIMIT)) {
+    if ((g_control_mode >= MOTOR_CONTROL_FREE) &&
+        (g_control_mode <= MOTOR_CONTROL_SPEED)) {
         int8_t direction = Motor_Identify_GetResult().uvw_dir;
         if ((direction != 1) && (direction != -1)) return MOTOR_CMD_NOT_READY;
     }
     if (Motor_System_StartControl() == 0U) return MOTOR_CMD_NOT_READY;
     g_torque_current_a = 0.0f;
     g_host_iq_applied_a = 0.0f;
+    g_host_speed_target_rpm = 0.0f;
+    g_host_speed_applied_rpm = 0.0f;
+    Motor_Cogging_RuntimeStart();
     if ((g_control_mode >= MOTOR_CONTROL_SPRING) &&
         (g_control_mode <= MOTOR_CONTROL_LIMIT)) {
         g_haptic_center_rad = g_continuous_angle_rad;
@@ -250,6 +271,8 @@ MotorCommandResult Motor_System_HostSetMode(MotorControlMode mode,
         g_input_source = source;
         g_torque_current_a = 0.0f;
         g_host_iq_applied_a = 0.0f;
+        g_host_speed_target_rpm = 0.0f;
+        g_host_speed_applied_rpm = 0.0f;
         Motor_System_ResetOuterLoops();
         ++g_config_revision;
     }
@@ -304,6 +327,109 @@ void Motor_System_GetHapticParams(MotorHapticParams *p)
     if (p != NULL) *p = g_haptic_params;
 }
 
+MotorCommandResult Motor_System_HostSetFrictionConfig(const MotorFrictionConfig *p)
+{
+    if (g_control_owner != MOTOR_OWNER_HOST) return MOTOR_CMD_NOT_OWNER;
+    if (g_motor_system.state != MOTOR_STATE_STOPPED) return MOTOR_CMD_MUST_STOP_FIRST;
+    if (Motor_Feedforward_IsFrictionConfigValid(p) == 0U) {
+        return MOTOR_CMD_INVALID_VALUE;
+    }
+    Motor_Feedforward_SetFrictionConfig(p);
+    ++g_config_revision;
+    return MOTOR_CMD_OK;
+}
+
+void Motor_System_GetFrictionConfig(MotorFrictionConfig *p)
+{
+    Motor_Feedforward_GetFrictionConfig(p);
+}
+
+MotorCommandResult Motor_System_HostSetCoggingConfig(const MotorCoggingConfig *p)
+{
+    if (g_control_owner != MOTOR_OWNER_HOST) return MOTOR_CMD_NOT_OWNER;
+    if (g_motor_system.state != MOTOR_STATE_STOPPED) return MOTOR_CMD_MUST_STOP_FIRST;
+    if (Motor_Cogging_IsConfigValid(p) == 0U) return MOTOR_CMD_INVALID_VALUE;
+    Motor_Cogging_SetConfig(p);
+    ++g_config_revision;
+    return MOTOR_CMD_OK;
+}
+
+MotorCommandResult Motor_System_HostBeginCoggingTable(uint16_t count,
+                                                      uint32_t expected_crc,
+                                                      uint16_t *transaction_id)
+{
+    if (g_control_owner != MOTOR_OWNER_HOST) return MOTOR_CMD_NOT_OWNER;
+    if (g_motor_system.state != MOTOR_STATE_STOPPED) return MOTOR_CMD_MUST_STOP_FIRST;
+    if (count != MOTOR_COGGING_TABLE_SIZE) return MOTOR_CMD_INVALID_VALUE;
+    if (Motor_Cogging_TableBegin(count, expected_crc, transaction_id) == 0U) {
+        return MOTOR_CMD_INVALID_VALUE;
+    }
+    return MOTOR_CMD_OK;
+}
+
+MotorCommandResult Motor_System_HostWriteCoggingChunk(uint16_t transaction_id,
+                                                      uint16_t offset,
+                                                      uint8_t count,
+                                                      const int16_t *values)
+{
+    if (g_control_owner != MOTOR_OWNER_HOST) return MOTOR_CMD_NOT_OWNER;
+    if (g_motor_system.state != MOTOR_STATE_STOPPED) return MOTOR_CMD_MUST_STOP_FIRST;
+    return Motor_Cogging_TableWriteChunk(transaction_id, offset, count, values)
+               ? MOTOR_CMD_OK : MOTOR_CMD_INVALID_VALUE;
+}
+
+MotorCommandResult Motor_System_HostCommitCoggingTable(uint16_t transaction_id)
+{
+    if (g_control_owner != MOTOR_OWNER_HOST) return MOTOR_CMD_NOT_OWNER;
+    if (g_motor_system.state != MOTOR_STATE_STOPPED) return MOTOR_CMD_MUST_STOP_FIRST;
+    if (Motor_Cogging_TableCommit(transaction_id) == 0U) {
+        return MOTOR_CMD_INVALID_VALUE;
+    }
+    ++g_config_revision;
+    return MOTOR_CMD_OK;
+}
+
+MotorCommandResult Motor_System_HostReadCoggingChunk(uint16_t offset,
+                                                     uint8_t count,
+                                                     int16_t *values)
+{
+    if (g_control_owner != MOTOR_OWNER_HOST) return MOTOR_CMD_NOT_OWNER;
+    return Motor_Cogging_TableReadChunk(offset, count, values)
+               ? MOTOR_CMD_OK : MOTOR_CMD_INVALID_VALUE;
+}
+
+MotorCommandResult Motor_System_HostSaveCogging(void)
+{
+    if (g_control_owner != MOTOR_OWNER_HOST) return MOTOR_CMD_NOT_OWNER;
+    if (g_motor_system.state != MOTOR_STATE_STOPPED) return MOTOR_CMD_MUST_STOP_FIRST;
+    return Motor_Cogging_SaveToFlash() ? MOTOR_CMD_OK : MOTOR_CMD_NOT_READY;
+}
+
+void Motor_System_GetCoggingConfig(MotorCoggingConfig *p)
+{
+    Motor_Cogging_GetConfig(p);
+}
+
+MotorCommandResult Motor_System_HostSetSpeed(float speed_rpm,
+                                             float *accepted_speed_rpm)
+{
+    if (g_control_owner != MOTOR_OWNER_HOST) return MOTOR_CMD_NOT_OWNER;
+    if ((g_control_mode != MOTOR_CONTROL_SPEED) ||
+        (g_input_source != MOTOR_INPUT_HOST)) return MOTOR_CMD_INVALID_COMBINATION;
+    if (g_motor_system.state != MOTOR_STATE_SENSORED_RUN) return MOTOR_CMD_NOT_RUNNING;
+    if (!isfinite(speed_rpm)) return MOTOR_CMD_INVALID_VALUE;
+    if (speed_rpm > MOTOR_HOST_SPEED_MAX_RPM) speed_rpm = MOTOR_HOST_SPEED_MAX_RPM;
+    if (speed_rpm < -MOTOR_HOST_SPEED_MAX_RPM) speed_rpm = -MOTOR_HOST_SPEED_MAX_RPM;
+    if ((speed_rpm == 0.0f) ||
+        ((g_host_speed_target_rpm * speed_rpm) < 0.0f)) {
+        /* 停止或换向时清除旧方向积分，避免静摩擦挣脱后的反向冲击。 */
+        PID_Reset(&speed_pid);
+    }
+    g_host_speed_target_rpm = speed_rpm;
+    if (accepted_speed_rpm != NULL) *accepted_speed_rpm = speed_rpm;
+    return MOTOR_CMD_OK;
+}
+
 void Motor_System_GetControlSnapshot(MotorControlSnapshot *s)
 {
     if (s == NULL) return;
@@ -317,6 +443,13 @@ void Motor_System_GetControlSnapshot(MotorControlSnapshot *s)
     s->relative_center_angle_rad = ((g_control_mode >= MOTOR_CONTROL_SPRING) &&
                                     (g_control_mode <= MOTOR_CONTROL_LIMIT))
                                        ? g_continuous_angle_rad - g_haptic_center_rad : 0.0f;
+    s->target_speed_rpm = g_host_speed_applied_rpm;
+    s->speed_loop_iq_a = g_debug_speed_loop_iq_a;
+    s->friction_iq_a = g_debug_friction_iq_a;
+    s->cogging_iq_a = g_debug_cogging_iq_a;
+    s->cogging_effective_gain = Motor_Cogging_GetEffectiveGain();
+    s->cogging_table_revision = Motor_Cogging_GetTableRevision();
+    s->cogging_table_crc = Motor_Cogging_GetActiveTableCrc();
     s->config_revision = g_config_revision;
 }
 
@@ -403,7 +536,7 @@ uint8_t Motor_System_SetTorqueNm(float torque_nm)
 
 #if MOTOR_TORQUE_USE_POT
 /* 为什么需要：将单路电位器变成可正反向调节的力矩旋钮，并抑制中点抖动。
- * 参数：filtered_pot 是经过 4095-raw 反向映射和低通滤波的 ADC 计数。
+ * 参数：filtered_pot 是经过4095-raw反向映射和低通滤波的12位ADC计数。
  * 返回：中点死区内为 0；死区外线性映射至 +/- MOTOR_TORQUE_POT_MAX_NM。
  * 减去死区后再归一化，使刚离开死区时从零连续增加，不会突然跳到一个非零力矩。
  * 原始 ADC 越小，反向映射后的给定越正；该符号不承诺实际轴端顺/逆时针方向。
@@ -428,7 +561,7 @@ static float Motor_System_PotTorqueNm(float filtered_pot)
 uint8_t Motor_System_ClearFault(void)
 {
     if ((Motor_Parameters_IsReady() == 0U) ||
-        (AS5600_IsDataFresh(MOTOR_AS5600_MAX_SAMPLE_AGE_MS) == 0U)) {
+        (Motor_Encoder_IsDataFresh(MOTOR_ENCODER_MAX_SAMPLE_AGE_MS) == 0U)) {
         return 0U;
     }
 
@@ -439,7 +572,7 @@ uint8_t Motor_System_ClearFault(void)
 uint8_t Motor_System_IdentifyAndSave(void)
 {
     if ((Motor_Parameters_IsBusy() != 0U) ||
-        (AS5600_IsDataFresh(MOTOR_AS5600_MAX_SAMPLE_AGE_MS) == 0U)) {
+        (Motor_Encoder_IsDataFresh(MOTOR_ENCODER_MAX_SAMPLE_AGE_MS) == 0U)) {
         return 0U;
     }
 
@@ -509,6 +642,11 @@ static void Motor_System_ResetControlHistory(void)
     PID_Reset(&speed_pid);
     Motor_PositionLoop_Reset();
     Motor_Trajectory_Clear();
+    g_host_speed_target_rpm = 0.0f;
+    g_host_speed_applied_rpm = 0.0f;
+    g_debug_speed_loop_iq_a = 0.0f;
+    g_debug_friction_iq_a = 0.0f;
+    g_debug_cogging_iq_a = 0.0f;
 }
 
 static void Motor_System_ResetOuterLoops(void)
@@ -533,6 +671,7 @@ static void Motor_System_TuneCurrentLoopBandwidth(float bandwidth_hz)
 static void Motor_System_ForceSafeStop(void)
 {
     /* 所有功能统一从这里撤销转矩输出。 */
+    Motor_Cogging_RuntimeStop();
     g_torque_current_a = 0.0f;
     Motor_System_ResetOuterLoops();
     if (Motor_Music_IsPlaying() != 0U) {
@@ -573,9 +712,9 @@ static void Motor_System_UpdateOperatingState(void)
         return;
     }
 
-    /* AS5600 是当前实际换相角度源，数据过期必须立即停机。 */
+    /* MT6826S SPI是当前实际换相角度源，数据过期必须立即停机。 */
     if ((g_fault_latched != 0U) ||
-        (AS5600_IsDataFresh(MOTOR_AS5600_MAX_SAMPLE_AGE_MS) == 0U)) {
+        (Motor_Encoder_IsDataFresh(MOTOR_ENCODER_MAX_SAMPLE_AGE_MS) == 0U)) {
         g_fault_latched = 1U;
         Motor_System_ForceSafeStop();
         g_motor_system.state = MOTOR_STATE_FAULT;
@@ -608,7 +747,7 @@ static void Motor_System_UpdateOperatingState(void)
 
 /* 为什么需要：电位器采样、反向映射与滤波是力矩/位置模式共用的公共输入。
  * 功能：读取 ADC，做 4095-raw 反向映射，首次直接装入并做一阶 EMA 滤波。
- * 参数：无；返回滤波后的目标位置计数 (0~4095)。
+ * 参数：无；返回映射到15位编码器范围的目标位置计数(0~32767)。
  * 副作用：更新 run_data.pot_raw、g_pot_target_filtered 与电位器初始化标记。
  * 调用上下文：每次 1ms 任务开始时由 Task 调用一次。
  */
@@ -627,7 +766,8 @@ static float Motor_System_UpdatePotTarget(void)
     }
     // 一阶 EMA 低通滤波: filtered += α * (raw - filtered)
     g_pot_target_filtered += POT_LPF_ALPHA * (target_pos_raw - g_pot_target_filtered);
-    return g_pot_target_filtered;
+    return g_pot_target_filtered *
+           (MOTOR_ENCODER_COUNTS_PER_REV_F / 4096.0f);
 }
 
 /* 为什么需要：力矩模式给定换算独立成函数，使 Task 只表达模式调度。
@@ -662,31 +802,25 @@ static void Motor_System_RunTorqueMode(void)
     }
 }
 
-/* 为什么需要：位置/速度/前馈级联计算独立成函数，使 Task 只表达模式调度。
- * 功能：用目标位置与实际位置跑位置环、轨迹、速度环及摩擦/惯性前馈，合成 Iq。
+/* 为什么需要：位置/速度级联计算独立成函数，使 Task 只表达模式调度。
+ * 功能：用目标位置与实际位置跑位置环和速度环，直接生成 Iq。
  * 参数：target_pos 为电位器目标位置计数；current_rpm 为按电磁正方向统一后的转速。
  * 调用上下文：状态为 SENSORED_RUN 且未选择力矩模式时，由 Task 调用。
- * 副作用：更新速度环目标/PID、轨迹状态和 g_foc_state.target_q。
+ * 副作用：更新位置/速度 PID 和 g_foc_state.target_q。
  */
 static void Motor_System_RunPositionMode(float target_pos, float current_rpm)
 {
-    float actual_pos = (float)AS5600_ReadRawAngle();
-    float actual_mech_rpm = g_motor_system.run_data.speed_rpm;
+    float actual_pos = (float)Motor_Encoder_GetRawAngle();
 
-    // 位置/速度闭环直接使用电位器目标；轨迹规划器只旁路提供惯性前馈加速度。
+    /* SPEED 模式会按会话限流收紧速度 PI 输出；回到位置模式时恢复位置环基线。 */
+    speed_pid.out_max = MOTOR_SPEED_PID_OUT_MAX;
+    speed_pid.out_min = MOTOR_SPEED_PID_OUT_MIN;
+
+    // 恢复无负载时期的纯级联结构：位置误差直接生成目标机械转速。
     float target_mech_rpm =
         Motor_PositionLoop_Run(target_pos, actual_pos);
 
-    // 惯性前馈轨迹规划只用于估算加速度:
-    // 输入目标位置、实际位置、实际机械速度和位置环目标机械速度；
-    // 输出 Motor_Trajectory_GetAccel()，不再改变位置环/速度环目标。
-    Motor_Trajectory_Step(target_pos,
-                          actual_pos,
-                          actual_mech_rpm,
-                          target_mech_rpm);
-
     // 将机械期望转速乘以 uvw_dir 统一符号后给到速度环，防止正反馈。
-    // 摩擦补偿和惯性补偿也必须使用同一个电磁方向坐标系。
     // target_signed_rpm 是按电磁转矩正方向统一符号的机械 RPM，没有乘极对数。
     float uvw_dir = (float)Motor_Identify_GetResult().uvw_dir;
     float target_signed_rpm = target_mech_rpm * uvw_dir;
@@ -694,21 +828,67 @@ static void Motor_System_RunPositionMode(float target_pos, float current_rpm)
     // 位置环输出的目标速度直接传给速度环。
     Motor_SpeedLoop_SetTarget(target_signed_rpm);
 
-    // 速度闭环 PID 输出基础 Iq。
-    float speed_loop_iq = Motor_SpeedLoop_Update(current_rpm);
+    // 速度 PI 直接输出 Iq；无负载位置模式不叠加摩擦或惯性前馈。
+    g_debug_speed_loop_iq_a = Motor_SpeedLoop_Update(current_rpm);
+    g_debug_friction_iq_a = 0.0f;
+    g_debug_cogging_iq_a = 0.0f;
+    g_foc_state.target_q = g_debug_speed_loop_iq_a;
+}
 
-    // 轨迹规划器只用于生成目标加速度，供惯性前馈使用。
-    float target_accel_rpm_s = Motor_Trajectory_GetAccel() * uvw_dir;
-    MotorFeedforwardResult feedforward =
-        Motor_Feedforward_Calculate(speed_loop_iq,
-                                    target_signed_rpm,
-                                    target_accel_rpm_s,
-                                    MOTOR_SPEED_PID_OUT_MIN,
-                                    MOTOR_SPEED_PID_OUT_MAX);
+static float Motor_System_ClampHostIq(float iq)
+{
+    if (!isfinite(iq)) return 0.0f;
+    if (iq > g_host_iq_limit_a) return g_host_iq_limit_a;
+    if (iq < -g_host_iq_limit_a) return -g_host_iq_limit_a;
+    return iq;
+}
 
-    // 正确的合成顺序：速度 PID + 摩擦前馈 + 惯性前馈，最后统一限流。
-    // 不要再用 target_q = friction_iq 覆盖速度 PID 输出。
-    g_foc_state.target_q = feedforward.output_iq;
+static float Motor_System_SlewHostIq(float target_iq, float slew_a_per_s)
+{
+    float max_step = slew_a_per_s * MOTOR_SYSTEM_TASK_DT_SEC;
+    if (target_iq > g_host_iq_applied_a + max_step) {
+        g_host_iq_applied_a += max_step;
+    } else if (target_iq < g_host_iq_applied_a - max_step) {
+        g_host_iq_applied_a -= max_step;
+    } else {
+        g_host_iq_applied_a = target_iq;
+    }
+    return g_host_iq_applied_a;
+}
+
+static void Motor_System_RunSpeedMode(float mechanical_speed_rpm,
+                                      int8_t identified_direction,
+                                      uint16_t mechanical_angle_counts)
+{
+    const float max_step = MOTOR_HOST_SPEED_SLEW_RPM_PER_S *
+                           MOTOR_SYSTEM_TASK_DT_SEC;
+    if (g_host_speed_target_rpm > g_host_speed_applied_rpm + max_step) {
+        g_host_speed_applied_rpm += max_step;
+    } else if (g_host_speed_target_rpm < g_host_speed_applied_rpm - max_step) {
+        g_host_speed_applied_rpm -= max_step;
+    } else {
+        g_host_speed_applied_rpm = g_host_speed_target_rpm;
+    }
+
+    /* SPEED按目标方向提前给摩擦前馈。实际速度为零时也能提供起步电流，
+     * 避免只能等待积分累积后突然挣脱。FREE仍使用实际速度，防止静止自驱。 */
+    g_debug_friction_iq_a = Motor_Feedforward_FrictionCompensation(
+        g_host_speed_applied_rpm) * (float)identified_direction;
+    g_debug_cogging_iq_a = Motor_Cogging_Compensation(
+        mechanical_angle_counts, mechanical_speed_rpm);
+    float feedforward_iq = g_debug_friction_iq_a + g_debug_cogging_iq_a;
+
+    /* 将前馈占用的电流余量反馈给PI抗饱和，防止总Iq已经限幅时积分仍增长。 */
+    speed_pid.out_max = g_host_iq_limit_a - feedforward_iq;
+    speed_pid.out_min = -g_host_iq_limit_a - feedforward_iq;
+    Motor_SpeedLoop_SetTarget(g_host_speed_applied_rpm * (float)identified_direction);
+    g_debug_speed_loop_iq_a = Motor_SpeedLoop_Update(
+        mechanical_speed_rpm * (float)identified_direction);
+    float iq = Motor_System_ClampHostIq(
+        g_debug_speed_loop_iq_a + feedforward_iq);
+    g_foc_state.target_q = Motor_System_SlewHostIq(
+        iq, MOTOR_SPEED_IQ_SLEW_A_PER_S);
+    g_foc_state.target_d = 0.0f;
 }
 
 // 周期任务：位置模式执行外环；力矩模式直接将给定 Iq 送入电流环。
@@ -721,9 +901,9 @@ void Motor_System_Task(void)
     static uint8_t demo_autoplay_checked = 0U;
 #endif
 
-    // ========== 步骤 1: 速度估算 (自适应采样率) ==========
-    // 低速时用长窗口降噪，高速时用短窗口提高响应
-    if (AS5600_IsDataFresh(MOTOR_AS5600_MAX_SAMPLE_AGE_MS) != 0U) {
+    // ========== 步骤 1: 速度估算（20/10/5 ms自适应滚动位置窗） ==========
+    // 始终每1ms更新反馈；带迟滞切换窗口，兼顾低速分辨率和中高速延迟。
+    if (Motor_Encoder_IsDataFresh(MOTOR_ENCODER_MAX_SAMPLE_AGE_MS) != 0U) {
         g_motor_system.run_data.speed_rpm =
             Motor_SpeedEstimator_UpdateAdaptive(g_motor_system.run_data.speed_rpm);
     } else {
@@ -740,16 +920,20 @@ void Motor_System_Task(void)
                         (float)identified_direction;
 
     /* 在机械坐标中展开单圈角度，供触觉模式跨零点连续计算。 */
-    uint16_t angle_counts = AS5600_ReadRawAngle();
+    uint16_t angle_counts = Motor_Encoder_GetRawAngle();
     if (g_angle_initialized == 0U) {
         g_last_angle_counts = angle_counts;
-        g_continuous_angle_rad = (float)angle_counts * (6.28318530718f / 4096.0f);
+        g_continuous_angle_rad = (float)angle_counts * MOTOR_ENCODER_RAD_PER_COUNT;
         g_angle_initialized = 1U;
     } else {
         int32_t delta = (int32_t)angle_counts - (int32_t)g_last_angle_counts;
-        if (delta > 2048) delta -= 4096;
-        if (delta < -2048) delta += 4096;
-        g_continuous_angle_rad += (float)delta * (6.28318530718f / 4096.0f);
+        if (delta > (int32_t)MOTOR_ENCODER_HALF_REV_U32) {
+            delta -= (int32_t)MOTOR_ENCODER_COUNTS_PER_REV_U32;
+        }
+        if (delta < -(int32_t)MOTOR_ENCODER_HALF_REV_U32) {
+            delta += (int32_t)MOTOR_ENCODER_COUNTS_PER_REV_U32;
+        }
+        g_continuous_angle_rad += (float)delta * MOTOR_ENCODER_RAD_PER_COUNT;
         g_last_angle_counts = angle_counts;
     }
 
@@ -767,6 +951,10 @@ void Motor_System_Task(void)
     
     float target_pos = Motor_System_UpdatePotTarget();
     g_foc_state.target_d = 0.0f;
+    Motor_Cogging_Task1ms(
+        (g_motor_system.state == MOTOR_STATE_SENSORED_RUN) &&
+        ((g_control_mode == MOTOR_CONTROL_SPEED) ||
+         (g_control_mode == MOTOR_CONTROL_FREE)));
 
 #if MOTOR_MUSIC_AUTOPLAY_DEMO
     if ((g_motor_system.state == MOTOR_STATE_SENSORED_RUN) &&
@@ -808,7 +996,15 @@ void Motor_System_Task(void)
      */
     if (g_motor_system.state == MOTOR_STATE_SENSORED_RUN) {
         if (g_control_mode == MOTOR_CONTROL_TORQUE) {
+            g_debug_speed_loop_iq_a = 0.0f;
+            g_debug_friction_iq_a = 0.0f;
+            g_debug_cogging_iq_a = 0.0f;
             Motor_System_RunTorqueMode();
+            return;
+        }
+        if (g_control_mode == MOTOR_CONTROL_SPEED) {
+            Motor_System_RunSpeedMode(g_motor_system.run_data.speed_rpm,
+                                      identified_direction, angle_counts);
             return;
         }
         if ((g_control_mode >= MOTOR_CONTROL_FREE) &&
@@ -817,7 +1013,10 @@ void Motor_System_Task(void)
                                 (6.28318530718f / 60.0f);
             const float rel = g_continuous_angle_rad - g_haptic_center_rad;
             float i_mech = 0.0f;
-            if (g_control_mode == MOTOR_CONTROL_DAMPING) {
+            if (g_control_mode == MOTOR_CONTROL_FREE) {
+                i_mech = Motor_Feedforward_FrictionCompensation(
+                    g_motor_system.run_data.speed_rpm);
+            } else if (g_control_mode == MOTOR_CONTROL_DAMPING) {
                 i_mech = -g_haptic_params.damping_b_a_per_rad_s * omega;
             } else if (g_control_mode == MOTOR_CONTROL_SPRING) {
                 i_mech = -g_haptic_params.spring_k_a_per_rad * rel
@@ -837,14 +1036,20 @@ void Motor_System_Task(void)
                              -g_haptic_params.damping_b_a_per_rad_s * omega;
                 }
             }
-            float iq = i_mech * (float)identified_direction;
+            g_debug_friction_iq_a = (g_control_mode == MOTOR_CONTROL_FREE)
+                                        ? i_mech * (float)identified_direction
+                                        : 0.0f;
+            g_debug_cogging_iq_a = (g_control_mode == MOTOR_CONTROL_FREE)
+                ? Motor_Cogging_Compensation(
+                      angle_counts, g_motor_system.run_data.speed_rpm)
+                : 0.0f;
+            float iq = i_mech * (float)identified_direction +
+                       g_debug_cogging_iq_a;
             if (!isfinite(iq)) iq = 0.0f;
             if (iq > g_host_iq_limit_a) iq = g_host_iq_limit_a;
             if (iq < -g_host_iq_limit_a) iq = -g_host_iq_limit_a;
-            float max_step = MOTOR_IQ_SLEW_A_PER_S * MOTOR_SYSTEM_TASK_DT_SEC;
-            if (iq > g_host_iq_applied_a + max_step) iq = g_host_iq_applied_a + max_step;
-            if (iq < g_host_iq_applied_a - max_step) iq = g_host_iq_applied_a - max_step;
-            g_host_iq_applied_a = iq;
+            iq = Motor_System_SlewHostIq(iq, MOTOR_IQ_SLEW_A_PER_S);
+            g_debug_speed_loop_iq_a = 0.0f;
             g_foc_state.target_q = iq;
             g_foc_state.target_d = 0.0f;
             return;
@@ -853,7 +1058,7 @@ void Motor_System_Task(void)
     
     // 3. FOC 闭环开始工作后，开始让位置环介入产生速度，速度环介入产生 Iq
     // 控制链路: 电位器目标 → 位置环 (P) → 目标机械转速 → 乘 uvw_dir → 目标电磁转速
-    //          → 速度环 (PI) → Iq 电流 → 摩擦前馈叠加 → 限幅 → FOC 电流环
+    //          → 速度环 (PI) → Iq 电流 → FOC 电流环
     if (g_motor_system.state == MOTOR_STATE_SENSORED_RUN)
     {
         Motor_System_RunPositionMode(target_pos, current_rpm);

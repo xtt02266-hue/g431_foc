@@ -8,8 +8,7 @@
 #include "motor_identify.h"
 #include "svpwm.h"
 #include "vofa_usart.h" // 包含 VOFA 系列函数
-#include "as5600.h"
-#include "mt6826s.h"
+#include "motor_encoder.h"
 #include "motor_system.h"
 #include "motor_parameters.h"
 
@@ -63,6 +62,9 @@ void hardware_init(void)
 
     UserIO_StartDma();
 
+    /* SPI1已由CubeMX初始化；先建立首个15位角度快照，再启动FOC采样中断。 */
+    Motor_Encoder_Init();
+
 
     // 2. 启动 TIM1 通道 4（用作 ADC 的触发信号 CC4）
     //此时不开启PWM输出（占空比全0），对运放偏置进行初始标定
@@ -89,18 +91,10 @@ void hardware_init(void)
     // 初始化 SVPWM 模块（三相输出 50% 零矢量，上电安全）
     SVPWM_Init();
 
-    // 5. 启动 TIM2 (用于 1ms / 1000Hz 周期任务调度，如 AS5600 慢速读取、目标值更新等)
+    // 5. 启动 TIM2 (用于 1ms / 1000Hz 周期任务调度)
 
     // 6. 启动串口接收 (与 VOFA+ 上位机通信)
     VOFA_Init(); 
-
-    // MT6826S is initialized for SPI readout testing only.
-    // The motor control chain still uses AS5600 until explicitly switched.
-    MT6826S_Init();
-
-    // 7. 启动 I2C DMA (用于 AS5600 基于 DMA 的无阻塞读取逻辑)
-    // 首次发起一次 AS5600 的 DMA 接收请求
-    AS5600_RequestRead_DMA();
 
     OLED_Init();
     HAL_Delay(50);

@@ -56,7 +56,7 @@ if (MOTOR_DEBUG_OLED_DETAILS)  // 开启 OLED 诊断显示：d/q电流、ADC原�
     OLED_ShowChar(3, 1, 'q');
     OLED_ShowSignedNum(3, 2, (int32_t)(g_foc_state.park.q * 1000.0f), 4);
     OLED_ShowString(3, 7, "A:");
-    // OLED_ShowNum(3, 9, AS5600_ReadRawAngle(), 4); 
+    // OLED_ShowNum(3, 9, Motor_Encoder_GetRawAngle(), 5);
 
 }
 

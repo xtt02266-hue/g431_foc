@@ -1,5 +1,5 @@
 #include "motor_identify.h"
-#include "as5600.h"
+#include "motor_encoder.h"
 #include "motor_config.h"
 #include "motor_current_loop.h"
 #include "tim.h"
@@ -250,8 +250,8 @@ static void Identify_Align(void)
     if ((g_identify_timer > MOTOR_IDENTIFY_ALIGN_SETTLE_MS) &&
         (g_identify_timer <= (MOTOR_IDENTIFY_ALIGN_SETTLE_MS +
                               MOTOR_IDENTIFY_ALIGN_SAMPLE_MS))) {
-        float sample_angle = (float)AS5600_ReadRawAngle() *
-                             (MOTOR_TWO_PI / 4096.0f);
+        float sample_angle = (float)Motor_Encoder_GetRawAngle() *
+                             MOTOR_ENCODER_RAD_PER_COUNT;
         g_align_sin_sum += sinf(sample_angle);
         g_align_cos_sum += cosf(sample_angle);
         g_align_sample_count++;
@@ -262,7 +262,7 @@ static void Identify_Align(void)
                             MOTOR_IDENTIFY_ALIGN_SAMPLE_MS))
     {
         // 极点吸固后，读取此刻的磁编码器角度作为机械零点
-        // AS5600 读出的原始值是 0~4095，这里将其换算成国际标准单位：弧度 (0 ~ 2π)
+        // 将MT6826S的0~32767原始值换算为弧度(0~2π)。
         float align_mech_angle;
 
         if (g_align_sample_count == 0U) {
@@ -327,7 +327,7 @@ static void Identify_UvwAndPoles(void)
         {
             g_uvw_elec_angle = 0.0f;
             g_accumulated_mech_angle = 0.0f;
-            g_last_raw_angle = AS5600_ReadRawAngle();
+            g_last_raw_angle = Motor_Encoder_GetRawAngle();
         }
         g_identify_timer++;
         return; // 预对齐阶段直接返回
@@ -339,14 +339,17 @@ static void Identify_UvwAndPoles(void)
     Motor_OpenLoop_Drive(fmodf(g_uvw_elec_angle, 2.0f * 3.1415926f), 200.0f);
 
     // 1. 获取当前最新角度
-    uint16_t current_angle = AS5600_ReadRawAngle();
+    uint16_t current_angle = Motor_Encoder_GetRawAngle();
     
     // 2. 计算这 1ms 内发生的微小位移
     int32_t step_delta = (int32_t)current_angle - (int32_t)g_last_raw_angle;
     
-    // 3. 处理单步的跨零点 (因为是 1ms 的微小位移，绝不可能超过 2048，此处逻辑变得100%安全)
-    if (step_delta > 2048) step_delta -= 4096;
-    else if (step_delta < -2048) step_delta += 4096;
+    // 3. 处理15位编码器单步跨零点。
+    if (step_delta > (int32_t)MOTOR_ENCODER_HALF_REV_U32) {
+        step_delta -= (int32_t)MOTOR_ENCODER_COUNTS_PER_REV_U32;
+    } else if (step_delta < -(int32_t)MOTOR_ENCODER_HALF_REV_U32) {
+        step_delta += (int32_t)MOTOR_ENCODER_COUNTS_PER_REV_U32;
+    }
     
     // 4. 将微小位移积分到全局累加器中，并更新历史值
     g_accumulated_mech_angle += (float)step_delta;
@@ -360,8 +363,9 @@ static void Identify_UvwAndPoles(void)
         // 1. 判断相序方向 (累加的角度是正还是负一目了然)
         g_identified_params.uvw_dir = (g_accumulated_mech_angle >= 0.0f) ? 1 : -1;
         
-        // 2. 计算极对数 (累积的机械角度 / 4096 = 机械圈数)
-        float mech_turns = fabsf(g_accumulated_mech_angle) / 4096.0f; 
+        // 2. 计算极对数（累计机械计数/32768=机械圈数）。
+        float mech_turns = fabsf(g_accumulated_mech_angle) /
+                           MOTOR_ENCODER_COUNTS_PER_REV_F;
         
         // Electrical cycles divided by mechanical turns gives pole pairs.
         if (mech_turns < 0.01f) {

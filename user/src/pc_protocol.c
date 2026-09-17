@@ -3,7 +3,8 @@
 #include "motor_parameters.h"
 #include "motor_current_loop.h"
 #include "motor_debug.h"
-#include "as5600.h"
+#include "motor_encoder.h"
+#include "mt6826s.h"
 #include "usart.h"
 #include <math.h>
 #include <string.h>
@@ -19,9 +20,15 @@
 
 enum { CMD_HELLO=0x01, CMD_GET_STATUS=0x02, CMD_CLAIM=0x03,
        CMD_RELEASE=0x04, CMD_HEARTBEAT=0x05, CMD_START=0x10,
-       CMD_STOP=0x11, CMD_CLEAR_FAULT=0x12, CMD_SET_MODE=0x20,
+       CMD_STOP=0x11, CMD_CLEAR_FAULT=0x12, CMD_IDENTIFY=0x13,
+       CMD_SET_MODE=0x20,
        CMD_SET_IQ=0x21, CMD_SET_IQ_LIMIT=0x22,
-       CMD_SET_HAPTIC=0x23, CMD_GET_PARAMS=0x24 };
+       CMD_SET_HAPTIC=0x23, CMD_GET_PARAMS=0x24,
+       CMD_SET_FRICTION=0x25, CMD_GET_FRICTION=0x26,
+       CMD_SET_SPEED=0x27, CMD_SET_COGGING_CONFIG=0x28,
+       CMD_GET_COGGING_CONFIG=0x29, CMD_COGGING_TABLE_BEGIN=0x2A,
+       CMD_COGGING_TABLE_CHUNK=0x2B, CMD_COGGING_TABLE_COMMIT=0x2C,
+       CMD_GET_COGGING_TABLE_CHUNK=0x2D, CMD_SAVE_COGGING=0x2E };
 
 static volatile uint8_t s_ring[RX_RING_SIZE];
 static volatile uint16_t s_head, s_tail;
@@ -54,9 +61,18 @@ static uint16_t crc16(const uint8_t *p, uint16_t n)
     return crc;
 }
 
+/* HELLO and STOP are safe to execute repeatedly.  Keeping them out of the
+ * replay cache also lets a newly connected host restart its sequence counter
+ * without colliding with the previous connection. */
+static uint8_t command_uses_replay_cache(uint8_t cmd)
+{
+    return (cmd != CMD_HEARTBEAT) && (cmd != CMD_HELLO) && (cmd != CMD_STOP);
+}
+
 static void put_u16(uint8_t *p, uint16_t v) { p[0]=(uint8_t)v; p[1]=(uint8_t)(v>>8U); }
 static void put_u32(uint8_t *p, uint32_t v) { p[0]=(uint8_t)v; p[1]=(uint8_t)(v>>8U); p[2]=(uint8_t)(v>>16U); p[3]=(uint8_t)(v>>24U); }
 static uint16_t get_u16(const uint8_t *p) { return (uint16_t)p[0] | ((uint16_t)p[1]<<8U); }
+static int16_t get_i16(const uint8_t *p) { return (int16_t)get_u16(p); }
 static uint32_t get_u32(const uint8_t *p) { return (uint32_t)p[0] | ((uint32_t)p[1]<<8U) | ((uint32_t)p[2]<<16U) | ((uint32_t)p[3]<<24U); }
 static float get_f32(const uint8_t *p) { float v; memcpy(&v,p,4U); return v; }
 static void put_f32(uint8_t *p, float v) { memcpy(p,&v,4U); }
@@ -95,7 +111,7 @@ static uint16_t build_status(uint8_t *p)
     put_u32(&p[0],HAL_GetTick()); p[4]=(uint8_t)s.state; p[5]=(uint8_t)s.mode;
     p[6]=(uint8_t)s.source; p[7]=(uint8_t)s.owner; p[8]=s.run_requested;
     p[9]=(uint8_t)Motor_Parameters_GetStatus();
-    p[10]=AS5600_IsDataFresh(10U); p[11]=0U;
+    p[10]=Motor_Encoder_IsDataFresh(2U); p[11]=MT6826S_GetStatus();
     uint32_t faults = 0U;
     if (p[10] == 0U) faults |= 1U;
     if (p[9] == (uint8_t)MOTOR_PARAMETERS_ERROR) faults |= 2U;
@@ -114,7 +130,7 @@ static void response(uint16_t seq, uint8_t cmd, MotorCommandResult result,
     put_u32(&p[6],s.config_revision);
     if (body_len != 0U) memcpy(&p[10],body,body_len);
     uint16_t response_len=(uint16_t)(10U+body_len);
-    if (cmd != CMD_HEARTBEAT) {
+    if (command_uses_replay_cache(cmd)) {
         s_last_response_len=response_len;
         memcpy(s_last_response,p,response_len);
     }
@@ -132,8 +148,8 @@ static void handle_command(uint16_t seq, const uint8_t *p, uint16_t n)
     if (n < 5U) return;
     uint8_t cmd=p[0]; uint32_t token=get_u32(&p[1]); const uint8_t *b=&p[5];
     uint16_t bn=(uint16_t)(n-5U); MotorCommandResult r=MOTOR_CMD_OK;
-    uint8_t out[64]; uint16_t out_n=0U;
-    if ((cmd != CMD_HEARTBEAT) && (seq == s_last_request_seq) &&
+    uint8_t out[PC_PROTOCOL_MAX_PAYLOAD-10U]; uint16_t out_n=0U;
+    if (command_uses_replay_cache(cmd) && (seq == s_last_request_seq) &&
         (n == s_last_request_len)) {
         if (memcmp(p,s_last_request,n)==0) {
             (void)queue_frame(TYPE_RESPONSE,seq,s_last_response,s_last_response_len,1U);
@@ -149,9 +165,9 @@ static void handle_command(uint16_t seq, const uint8_t *p, uint16_t n)
     if (cmd == CMD_HELLO) {
         if (bn != 0U) r=MOTOR_CMD_INVALID_LENGTH;
         else {
-            out[0]=1U; out[1]=0U; out[2]=0U; put_u16(&out[3],1U);
+            out[0]=1U; out[1]=4U; out[2]=0U; put_u16(&out[3],4U);
             put_u32(&out[5],HAL_GetUIDw0()); put_u32(&out[9],HAL_GetUIDw1()); put_u32(&out[13],HAL_GetUIDw2());
-            put_u32(&out[17],0x7FU); put_u32(&out[21],0x07U);
+            put_u32(&out[17],0xFFU); put_u32(&out[21],0x7FU);
             put_f32(&out[25],MOTOR_TORQUE_CURRENT_LIMIT_A); put_f32(&out[29],MOTOR_HOST_DEFAULT_IQ_LIMIT_A);
             put_u16(&out[33],PC_PROTOCOL_MAX_PAYLOAD); put_u16(&out[35],MOTOR_HOST_HEARTBEAT_TIMEOUT_MS); out_n=37U;
         }
@@ -166,6 +182,10 @@ static void handle_command(uint16_t seq, const uint8_t *p, uint16_t n)
         r=Motor_System_ClearFault() ? MOTOR_CMD_OK : MOTOR_CMD_NOT_READY;
     } else if (!token_ok(token)) {
         r=MOTOR_CMD_NOT_OWNER;
+    } else if (cmd == CMD_IDENTIFY) {
+        if (bn != 0U) r=MOTOR_CMD_INVALID_LENGTH;
+        else if (Motor_Encoder_IsDataFresh(2U) == 0U) r=MOTOR_CMD_NOT_READY;
+        else r=Motor_Parameters_IdentifyAndSave() ? MOTOR_CMD_OK : MOTOR_CMD_BUSY;
     } else if (cmd == CMD_RELEASE) {
         Motor_System_ReleaseHost(); s_token=0U;
     } else if (cmd == CMD_HEARTBEAT) {
@@ -190,9 +210,113 @@ static void handle_command(uint16_t seq, const uint8_t *p, uint16_t n)
         MotorControlSnapshot cs; MotorHapticParams hp; Motor_System_GetControlSnapshot(&cs); Motor_System_GetHapticParams(&hp);
         out[0]=(uint8_t)cs.mode; out[1]=(uint8_t)cs.source; put_f32(&out[2],cs.iq_limit_a); put_f32(&out[6],MOTOR_IQ_SLEW_A_PER_S);
         put_f32(&out[10],hp.spring_k_a_per_rad); put_f32(&out[14],hp.damping_b_a_per_rad_s); put_f32(&out[18],hp.detent_k_a_per_rad); put_f32(&out[22],hp.limit_k_a_per_rad); put_f32(&out[26],hp.limit_half_range_deg); put_u16(&out[30],hp.detent_count); out_n=32U;
+    } else if (cmd == CMD_SET_FRICTION) {
+        MotorFrictionConfig fc;
+        if (bn!=17U) r=MOTOR_CMD_INVALID_LENGTH;
+        else {
+            fc.enabled=b[0]; fc.coulomb_iq_a=get_f32(&b[1]);
+            fc.viscous_iq_a_per_rpm=get_f32(&b[5]);
+            fc.smooth_speed_rpm=get_f32(&b[9]); fc.max_iq_a=get_f32(&b[13]);
+            r=Motor_System_HostSetFrictionConfig(&fc);
+            if (r==MOTOR_CMD_OK) { memcpy(out,b,17U); out_n=17U; }
+        }
+    } else if (cmd == CMD_GET_FRICTION) {
+        MotorFrictionConfig fc;
+        if (bn!=0U) r=MOTOR_CMD_INVALID_LENGTH;
+        else {
+            Motor_System_GetFrictionConfig(&fc); out[0]=fc.enabled;
+            put_f32(&out[1],fc.coulomb_iq_a);
+            put_f32(&out[5],fc.viscous_iq_a_per_rpm);
+            put_f32(&out[9],fc.smooth_speed_rpm); put_f32(&out[13],fc.max_iq_a);
+            out_n=17U;
+        }
+    } else if (cmd == CMD_SET_SPEED) {
+        float accepted=0.0f;
+        if (bn!=4U) r=MOTOR_CMD_INVALID_LENGTH;
+        else { r=Motor_System_HostSetSpeed(get_f32(b),&accepted); put_f32(out,accepted); out_n=4U; }
+    } else if (cmd == CMD_SET_COGGING_CONFIG) {
+        MotorCoggingConfig cc;
+        if (bn!=19U) r=MOTOR_CMD_INVALID_LENGTH;
+        else {
+            cc.enabled=b[0]; cc.gain=get_f32(&b[1]); cc.max_iq_a=get_f32(&b[5]);
+            cc.fade_start_rpm=get_f32(&b[9]); cc.fade_end_rpm=get_f32(&b[13]);
+            cc.phase_offset_counts=get_u16(&b[17]);
+            r=Motor_System_HostSetCoggingConfig(&cc);
+            if (r==MOTOR_CMD_OK) { memcpy(out,b,19U); out_n=19U; }
+        }
+    } else if (cmd == CMD_GET_COGGING_CONFIG) {
+        MotorCoggingConfig cc; MotorControlSnapshot cs;
+        if (bn!=0U) r=MOTOR_CMD_INVALID_LENGTH;
+        else {
+            Motor_System_GetCoggingConfig(&cc); Motor_System_GetControlSnapshot(&cs);
+            out[0]=cc.enabled;
+            put_f32(&out[1],cc.gain); put_f32(&out[5],cc.max_iq_a);
+            put_f32(&out[9],cc.fade_start_rpm); put_f32(&out[13],cc.fade_end_rpm);
+            put_u16(&out[17],cc.phase_offset_counts);
+            put_u32(&out[19],cs.cogging_table_revision);
+            put_u32(&out[23],cs.cogging_table_crc);
+            out[27]=Motor_Cogging_IsPersisted(); out_n=28U;
+        }
+    } else if (cmd == CMD_COGGING_TABLE_BEGIN) {
+        uint16_t transaction=0U;
+        if (bn!=6U) r=MOTOR_CMD_INVALID_LENGTH;
+        else {
+            r=Motor_System_HostBeginCoggingTable(get_u16(&b[0]),get_u32(&b[2]),
+                                                 &transaction);
+            if (r==MOTOR_CMD_OK) { put_u16(out,transaction); out_n=2U; }
+        }
+    } else if (cmd == CMD_COGGING_TABLE_CHUNK) {
+        int16_t values[MOTOR_COGGING_CHUNK_MAX_POINTS];
+        if ((bn<5U) || (b[4]==0U) || (b[4]>MOTOR_COGGING_CHUNK_MAX_POINTS) ||
+            (bn!=(uint16_t)(5U+2U*b[4]))) r=MOTOR_CMD_INVALID_LENGTH;
+        else {
+            for (uint16_t i=0U;i<b[4];++i) values[i]=get_i16(&b[5U+2U*i]);
+            r=Motor_System_HostWriteCoggingChunk(get_u16(&b[0]),get_u16(&b[2]),
+                                                 b[4],values);
+            if (r==MOTOR_CMD_OK) {
+                put_u16(&out[0],get_u16(&b[2])); out[2]=b[4]; out_n=3U;
+            }
+        }
+    } else if (cmd == CMD_COGGING_TABLE_COMMIT) {
+        MotorControlSnapshot cs;
+        if (bn!=2U) r=MOTOR_CMD_INVALID_LENGTH;
+        else {
+            r=Motor_System_HostCommitCoggingTable(get_u16(b));
+            if (r==MOTOR_CMD_OK) {
+                Motor_System_GetControlSnapshot(&cs);
+                put_u32(&out[0],cs.cogging_table_revision);
+                put_u32(&out[4],cs.cogging_table_crc); out_n=8U;
+            }
+        }
+    } else if (cmd == CMD_GET_COGGING_TABLE_CHUNK) {
+        int16_t values[MOTOR_COGGING_CHUNK_MAX_POINTS];
+        if ((bn!=3U) || (b[2]==0U) ||
+            (b[2]>MOTOR_COGGING_CHUNK_MAX_POINTS)) r=MOTOR_CMD_INVALID_LENGTH;
+        else {
+            r=Motor_System_HostReadCoggingChunk(get_u16(&b[0]),b[2],values);
+            if (r==MOTOR_CMD_OK) {
+                put_u16(&out[0],get_u16(&b[0])); out[2]=b[2];
+                for (uint16_t i=0U;i<b[2];++i) {
+                    put_u16(&out[3U+2U*i],(uint16_t)values[i]);
+                }
+                out_n=(uint16_t)(3U+2U*b[2]);
+            }
+        }
+    } else if (cmd == CMD_SAVE_COGGING) {
+        MotorControlSnapshot cs;
+        if (bn!=0U) r=MOTOR_CMD_INVALID_LENGTH;
+        else {
+            r=Motor_System_HostSaveCogging();
+            Motor_System_GetControlSnapshot(&cs);
+            if (r==MOTOR_CMD_OK) {
+                put_u32(&out[0],cs.cogging_table_revision);
+                put_u32(&out[4],cs.cogging_table_crc);
+                out[8]=Motor_Cogging_IsPersisted(); out_n=9U;
+            }
+        }
     } else r=MOTOR_CMD_UNSUPPORTED;
     response(seq,cmd,r,out,out_n);
-    if (cmd != CMD_HEARTBEAT) {
+    if (command_uses_replay_cache(cmd)) {
         s_last_request_seq=seq; s_last_request_len=n; memcpy(s_last_request,p,n);
     }
 }
@@ -245,12 +369,17 @@ void PC_Protocol_Task(void)
 
 void PC_Protocol_SendTelemetry(void)
 {
-    uint8_t p[50]; MotorControlSnapshot s; Motor_System_GetControlSnapshot(&s);
-    put_u16(&p[0],1U); put_u32(&p[2],HAL_GetTick()); put_u32(&p[6],++s_sample_seq);
-    float values[10] = { Motor_System_GetDebugPotTarget(), g_foc_state.pi_q.target,
+    uint8_t p[86]; MotorControlSnapshot s; Motor_System_GetControlSnapshot(&s);
+    put_u16(&p[0],4U); put_u32(&p[2],HAL_GetTick()); put_u32(&p[6],++s_sample_seq);
+    float values[19] = { Motor_System_GetDebugPotTarget(), g_foc_state.pi_q.target,
         g_foc_state.park.q, g_foc_state.park.d, g_motor_system.run_data.speed_rpm,
-        g_foc_state.pi_q.output, (float)AS5600_ReadRawAngle()*(6.28318530718f/4096.0f),
-        s.continuous_angle_rad, g_foc_state.target_q, s.relative_center_angle_rad };
+        g_foc_state.pi_q.output, (float)Motor_Encoder_GetRawAngle()*MOTOR_ENCODER_RAD_PER_COUNT,
+        s.continuous_angle_rad, g_foc_state.target_q, s.relative_center_angle_rad,
+        s.target_speed_rpm, s.speed_loop_iq_a, s.friction_iq_a,
+        s.speed_loop_iq_a + s.friction_iq_a, s.cogging_iq_a,
+        s.cogging_effective_gain, (float)s.cogging_table_revision,
+        (float)(s.cogging_table_crc & 0xFFFFU),
+        (float)(s.cogging_table_crc >> 16U) };
     memcpy(&p[10],values,sizeof(values));
     if (queue_frame(TYPE_TELEMETRY,++s_telemetry_seq,p,sizeof(p),0U)==0U) ++s_telemetry_drops;
 }

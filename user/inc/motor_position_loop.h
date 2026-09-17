@@ -4,12 +4,15 @@
 #include "stdint.h"
 #include "pid.h"
 
-// 位置环相关的宏定义（根据实际情况调整）
-#define MOTOR_POSITION_PID_KP       0.8f
-#define MOTOR_POSITION_PID_KI       0.0f
-#define MOTOR_POSITION_PID_KD       0.01f
-#define MOTOR_POSITION_PID_OUT_MAX  250.0f  // 输出到速度环的最大速度 (rad/s 或 rpm)
-#define MOTOR_POSITION_PID_OUT_MIN  -250.0f // 输出到速度环的最小速度
+/*
+ * 无外加负载的位置环基线参数，恢复自惯性补偿引入前的 b7cc543。
+ * 输入误差单位为MT6826S 15位count，输出单位为机械RPM。
+ */
+#define MOTOR_POSITION_PID_KP       0.0275f
+#define MOTOR_POSITION_PID_KI       0.025f
+#define MOTOR_POSITION_PID_KD       0.000125f
+#define MOTOR_POSITION_PID_OUT_MAX  400.0f
+#define MOTOR_POSITION_PID_OUT_MIN  -400.0f
 
 // 对外暴露的控制变量
 extern PID_Controller g_pi_pos;

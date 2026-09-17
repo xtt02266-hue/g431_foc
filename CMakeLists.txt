@@ -44,9 +44,9 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-    user/src/as5600.c
     user/src/hardware_init.c
     user/src/motor_current_loop.c
+    user/src/motor_cogging.c
     user/src/motor_debug.c
     user/src/motor_feedforward.c
     user/src/motor_identify.c
@@ -59,6 +59,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     user/src/motor_sensorless.c
     user/src/motor_trajectory.c
     user/src/mt6826s.c
+    user/src/motor_encoder.c
     user/src/oled.c
     user/src/pid.c
     user/src/pc_protocol.c

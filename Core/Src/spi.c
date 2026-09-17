@@ -43,10 +43,10 @@ void MX_SPI1_Init(void)
   hspi1.Init.Mode = SPI_MODE_MASTER;
   hspi1.Init.Direction = SPI_DIRECTION_2LINES;
   hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
-  hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
-  hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
+  hspi1.Init.CLKPolarity = SPI_POLARITY_HIGH;
+  hspi1.Init.CLKPhase = SPI_PHASE_2EDGE;
   hspi1.Init.NSS = SPI_NSS_SOFT;
-  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_64;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
   hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -81,11 +81,17 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* spiHandle)
     PA6     ------> SPI1_MISO
     PA7     ------> SPI1_MOSI
     */
-    GPIO_InitStruct.Pin = GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7;
+    GPIO_InitStruct.Pin = GPIO_PIN_5|GPIO_PIN_7;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
     GPIO_InitStruct.Alternate = GPIO_AF5_SPI1;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+    /* MISO pull-up makes an absent/disconnected sensor return 0xFF, whose
+       status bits are invalid, instead of accidentally accepting a zero frame. */
+    GPIO_InitStruct.Pin = GPIO_PIN_6;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
     /* SPI1 DMA Init */

@@ -1,6 +1,6 @@
 #include "motor_speed_loop.h"
 #include "motor_config.h"
-#include "as5600.h"
+#include "motor_encoder.h"
 #include "pid.h"
 
 // 速度环PID控制器实例
@@ -8,6 +8,17 @@ PID_Controller speed_pid;
 
 // 速度测算器实例
 MotorSpeedEstimator speed_est;
+
+/*
+ * 滚动窗保存展开后的机械角度计数。每次覆盖的元素正好来自
+ * SPEED_EST_WINDOW_TICKS 个系统周期之前，因此不需要在不同转速区间
+ * 切换测速分频，也不会在 50/200/500 rpm 处产生反馈分辨率突变。
+ */
+static int32_t g_speed_position_history[SPEED_EST_WINDOW_TICKS];
+static int32_t g_speed_unwrapped_counts = 0;
+static uint16_t g_speed_history_index = 0U;
+static uint16_t g_speed_history_valid_ticks = 0U;
+static uint16_t g_speed_window_ticks = SPEED_EST_WINDOW_TICKS;
 
 // 假设速度环控制周期为 1ms，与 motor_system 里的定时分频配平
 #define SPEED_LOOP_DT  0.001f
@@ -21,6 +32,13 @@ void Motor_SpeedEstimator_Init(float filter_alpha) {
     speed_est.speed_rpm = 0.0f;
     speed_est.filter_alpha = filter_alpha;
     speed_est.initialized = 0;
+    g_speed_unwrapped_counts = 0;
+    g_speed_history_index = 0U;
+    g_speed_history_valid_ticks = 0U;
+    g_speed_window_ticks = SPEED_EST_WINDOW_TICKS;
+    for (uint16_t i = 0U; i < SPEED_EST_WINDOW_TICKS; ++i) {
+        g_speed_position_history[i] = 0;
+    }
 }
 
 /**
@@ -38,26 +56,22 @@ float Motor_SpeedEstimator_Update(uint16_t current_angle_raw, float dt_seconds) 
         return 0.0f;
     }
 
-    /*
-     * 为什么改为相邻两次“实际测速时刻”直接差分：外层已经根据速度选择 1~20ms
-     * 的采样周期，旧代码又叠加 4 点窗口，使低速反馈覆盖约 80ms，造成明显相位滞后。
-     * 现在低速仍用最长 20ms 的计数窗口抑制 12 位量化噪声，但不再额外等待四个窗口。
-     */
+    /* 直接差分接口保留给独立调用；系统1 kHz任务使用下方固定滚动窗接口。 */
     int32_t delta = (int32_t)current_angle_raw -
                     (int32_t)speed_est.last_angle_raw;
     
-    // 4. 处理编码器过零点 (0 -> 4095 或 4095 -> 0)
-    if (delta > 2048) {
-        delta -= 4096;
-    } else if (delta < -2048) {
-        delta += 4096;
+    // 4. 处理15位编码器的0/32767过零点。
+    if (delta > (int32_t)MOTOR_ENCODER_HALF_REV_U32) {
+        delta -= (int32_t)MOTOR_ENCODER_COUNTS_PER_REV_U32;
+    } else if (delta < -(int32_t)MOTOR_ENCODER_HALF_REV_U32) {
+        delta += (int32_t)MOTOR_ENCODER_COUNTS_PER_REV_U32;
     }
     
     speed_est.last_angle_raw = current_angle_raw;
     
-    // dt_seconds 是外层累计的真实测速间隔，直接用于机械转速换算。
+    // dt_seconds 是相邻两次调用的真实测速间隔，直接用于机械转速换算。
     float instant_rpm = ((float)delta * 60.0f) /
-                        (4096.0f * dt_seconds);
+                        (MOTOR_ENCODER_COUNTS_PER_REV_F * dt_seconds);
     
     // 6. 一阶低通滤波 (EMA)，进一步平滑
     speed_est.speed_rpm = speed_est.filter_alpha * instant_rpm 
@@ -66,56 +80,92 @@ float Motor_SpeedEstimator_Update(uint16_t current_angle_raw, float dt_seconds) 
     return speed_est.speed_rpm;
 }
 
-/* 为什么需要：自适应采样率调度原本在系统模块，依赖系统全局量；迁入速度模块后
- * 只依赖估算器自身状态和 AS5600，避免系统模块与测速实现相互耦合。
- * 功能：按传入的发布速度选择编码器采样分频，仅在到期周期读取 AS5600 并更新速度。
- * 参数：rpm 为用于分频判断的速度；返回对应的采样周期 tick 数。
- * 注意：使用传入值而非 speed_est.speed_rpm，二者在 stale 恢复等场景不恒等。
+/*
+ * 自适应滚动窗测速：
+ * - 每 1 ms 对相邻原始角度解回绕并累计为连续位置；
+ * - 低/中/高速分别使用20/10/5 ms位置差；
+ * - 每 1 ms 产生新结果，之后再经过原有 EMA。
+ *
+ * 窗口切换由当前发布速度决定并带迟滞；与旧分频实现不同，切换窗口不会让
+ * 反馈停止更新。启动阶段使用逐步增长的有效窗口，避免先固定输出零。
  */
-static uint16_t Motor_SpeedEstimator_GetPeriodTicks(float rpm)
-{
-    float abs_rpm = (rpm < 0.0f) ? -rpm : rpm;
-
-    if (abs_rpm >= SPEED_EST_HIGH_RPM_THRESHOLD) {
-        return SPEED_EST_MAX_PERIOD_TICKS;
-    } else if (abs_rpm >= SPEED_EST_MID_RPM_THRESHOLD) {
-        return SPEED_EST_HIGH_PERIOD_TICKS;
-    } else if (abs_rpm >= SPEED_EST_LOW_RPM_THRESHOLD) {
-        return SPEED_EST_MID_PERIOD_TICKS;
-    } else {
-        return SPEED_EST_LOW_PERIOD_TICKS;
-    }
-}
-
-// 自适应采样率速度估算器
-// 策略: 根据当前估算转速动态调整编码器采样间隔 (分频比)
-//   低速 (<50 RPM):  每 20ms 采样一次 (50Hz)，用更长窗口抑制量化噪声
-//   中速 (50~200):   每 5ms 采样一次 (200Hz)
-//   中高速 (200~500): 每 2ms 采样一次 (500Hz)
-//   高速 (>500 RPM): 每 1ms 采样一次 (1000Hz)，保证响应速度
-// 这样在低速时避免了 AS5600 12-bit 编码器因采样过快导致的量化抖动
 float Motor_SpeedEstimator_UpdateAdaptive(float published_speed_rpm)
 {
-    static uint16_t ticks = 0;
-    static float dt_acc = 0.0f;
+    float abs_rpm = (published_speed_rpm < 0.0f)
+                        ? -published_speed_rpm : published_speed_rpm;
+    if (g_speed_window_ticks == SPEED_EST_WINDOW_TICKS) {
+        if (abs_rpm > SPEED_EST_LOW_TO_MID_RPM) {
+            g_speed_window_ticks = SPEED_EST_MID_WINDOW_TICKS;
+        }
+    } else if (g_speed_window_ticks == SPEED_EST_MID_WINDOW_TICKS) {
+        if (abs_rpm < SPEED_EST_MID_TO_LOW_RPM) {
+            g_speed_window_ticks = SPEED_EST_WINDOW_TICKS;
+        } else if (abs_rpm > SPEED_EST_MID_TO_HIGH_RPM) {
+            g_speed_window_ticks = SPEED_EST_HIGH_WINDOW_TICKS;
+        }
+    } else if (abs_rpm < SPEED_EST_HIGH_TO_MID_RPM) {
+        g_speed_window_ticks = SPEED_EST_MID_WINDOW_TICKS;
+    }
+
+    uint16_t current_angle_raw = Motor_Encoder_GetRawAngle();
 
     if (!speed_est.initialized) {
-        ticks = 0;
-        dt_acc = 0.0f;
-        return Motor_SpeedEstimator_Update(AS5600_ReadRawAngle(), MOTOR_SYSTEM_TASK_DT_SEC);
+        speed_est.last_angle_raw = current_angle_raw;
+        speed_est.speed_rpm = 0.0f;
+        speed_est.initialized = 1U;
+        g_speed_unwrapped_counts = (int32_t)current_angle_raw;
+        g_speed_history_index = 0U;
+        g_speed_history_valid_ticks = 0U;
+        g_speed_window_ticks = SPEED_EST_WINDOW_TICKS;
+        for (uint16_t i = 0U; i < SPEED_EST_WINDOW_TICKS; ++i) {
+            g_speed_position_history[i] = g_speed_unwrapped_counts;
+        }
+        return 0.0f;
     }
 
-    ticks++;
-    dt_acc += MOTOR_SYSTEM_TASK_DT_SEC;
+    int32_t step_delta = (int32_t)current_angle_raw -
+                         (int32_t)speed_est.last_angle_raw;
+    if (step_delta > (int32_t)MOTOR_ENCODER_HALF_REV_U32) {
+        step_delta -= (int32_t)MOTOR_ENCODER_COUNTS_PER_REV_U32;
+    } else if (step_delta < -(int32_t)MOTOR_ENCODER_HALF_REV_U32) {
+        step_delta += (int32_t)MOTOR_ENCODER_COUNTS_PER_REV_U32;
+    }
+    speed_est.last_angle_raw = current_angle_raw;
+    g_speed_unwrapped_counts += step_delta;
 
-    if (ticks >= Motor_SpeedEstimator_GetPeriodTicks(published_speed_rpm)) {
-        float updated_speed_rpm = Motor_SpeedEstimator_Update(AS5600_ReadRawAngle(), dt_acc);
-        ticks = 0;
-        dt_acc = 0.0f;
-        return updated_speed_rpm;
+    uint16_t new_history_index = g_speed_history_index + 1U;
+    if (new_history_index >= SPEED_EST_WINDOW_TICKS) {
+        new_history_index = 0U;
     }
 
-    return published_speed_rpm;
+    uint16_t effective_window_ticks = g_speed_window_ticks;
+    if (effective_window_ticks > (uint16_t)(g_speed_history_valid_ticks + 1U)) {
+        effective_window_ticks = (uint16_t)(g_speed_history_valid_ticks + 1U);
+    }
+    uint16_t old_history_index = (uint16_t)(
+        (new_history_index + SPEED_EST_WINDOW_TICKS - effective_window_ticks) %
+        SPEED_EST_WINDOW_TICKS);
+    int32_t old_position = g_speed_position_history[old_history_index];
+    g_speed_position_history[new_history_index] = g_speed_unwrapped_counts;
+    g_speed_history_index = new_history_index;
+
+    if (g_speed_history_valid_ticks < SPEED_EST_WINDOW_TICKS) {
+        g_speed_history_valid_ticks++;
+    }
+
+    if (g_speed_history_valid_ticks == 0U) {
+        return speed_est.speed_rpm;
+    }
+
+    float dt_seconds = (float)effective_window_ticks *
+                       MOTOR_SYSTEM_TASK_DT_SEC;
+    float instant_rpm =
+        ((float)(g_speed_unwrapped_counts - old_position) * 60.0f) /
+        (MOTOR_ENCODER_COUNTS_PER_REV_F * dt_seconds);
+
+    speed_est.speed_rpm = speed_est.filter_alpha * instant_rpm +
+        (1.0f - speed_est.filter_alpha) * speed_est.speed_rpm;
+    return speed_est.speed_rpm;
 }
 
 // ======================= PID 闭环部分 =======================

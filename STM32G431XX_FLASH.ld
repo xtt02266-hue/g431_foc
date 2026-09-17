@@ -56,11 +56,13 @@ ENTRY(Reset_Handler)
 MEMORY
 {
 RAM (xrw)      : ORIGIN = 0x20000000, LENGTH = 32K
-FLASH (rx)      : ORIGIN = 0x8000000, LENGTH = 126K
+FLASH (rx)      : ORIGIN = 0x8000000, LENGTH = 124K
+COGGING_PARAMS (r) : ORIGIN = 0x801F000, LENGTH = 2K
 MOTOR_PARAMS (r) : ORIGIN = 0x801F800, LENGTH = 2K
 }
 
-/* The last 2 KB page is erased only by motor_parameters.c. */
+/* Dedicated parameter pages. Keep MOTOR_PARAMS at its historical address. */
+__cogging_params_flash_start__ = ORIGIN(COGGING_PARAMS);
 __motor_params_flash_start__ = ORIGIN(MOTOR_PARAMS);
 
 /* Highest address of the user mode stack */

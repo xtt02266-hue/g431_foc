@@ -2,7 +2,7 @@
 #include "motor_config.h"
 #include "adc.h"
 #include "svpwm.h"
-#include "as5600.h"
+#include "motor_encoder.h"
 #include "motor_music.h"
 #include "motor_sensorless.h"
 #include <math.h>
@@ -40,12 +40,10 @@ void Motor_CurrentLoop_Run(uint16_t iu_raw, uint16_t iw_raw)
     // 以下为整个 FOC 电流环的调用骨架
     // ----------------------------------------------------
 
-    // 2. 获取当前电角度  (注意：原先的硬编码已替换为真实传递的参数)
-    // 从 AS5600 缓存中极速获取 12 位原始机械角度 (0 ~ 4095)
-    uint16_t raw_mech_angle = AS5600_ReadRawAngle();
+    // 2. 读取由本中断刚刷新的MT6826S 15位机械角度快照。
+    uint16_t raw_mech_angle = Motor_Encoder_GetRawAngle();
     
-    // 将 AS5600 的计数转换成真实机械弧度 (0 ~ 2π)
-    float mech_angle = (float)raw_mech_angle * 0.001534;//(6.2831853f / 4096.0f);
+    float mech_angle = (float)raw_mech_angle * MOTOR_ENCODER_RAD_PER_COUNT;
     
     // 减去在辨识阶段标定好、并传进来的绝对机械零点偏置
     float mech_offset = mech_angle - g_foc_state.params.zero_angle_offset;
@@ -73,8 +71,7 @@ void Motor_CurrentLoop_Run(uint16_t iu_raw, uint16_t iw_raw)
     // 3. Clarke 变换：将三相相电流（实际上只需两相，假设三相和为0）转换至两相静止坐标系 (Alpha-Beta)
     g_foc_state.clarke = Motor_CurrentLoop_Clarke(g_foc_state.sample.iu_a, g_foc_state.sample.iw_a);
 
-    // Debug-only observer: use the previous applied voltage and measured
-    // alpha-beta current. AS5600 remains the active Park-angle source.
+    // Debug-only observer: use the previous applied voltage and measured alpha-beta current.
     Motor_Sensorless_Update(g_svpwm.v_alpha,
                             g_svpwm.v_beta,
                             g_foc_state.clarke.alpha,
@@ -336,6 +333,9 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
     {
         return;
     }
+
+    /* SPI由这个快速中断单点拥有；系统、辨识和遥测模块只读取缓存快照。 */
+    Motor_Encoder_UpdateFast();
 
     // 读取注入通道 U/W 相电流原始值。
     uint16_t iu_raw = (uint16_t)HAL_ADCEx_InjectedGetValue(&hadc1, ADC_INJECTED_RANK_1);

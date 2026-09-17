@@ -1,25 +1,22 @@
 #ifndef MOTOR_FEEDFORWARD_H
 #define MOTOR_FEEDFORWARD_H
 
-typedef struct {
-    float speed_loop_iq;
-    float friction_iq;
-    float inertia_iq;
-    float accel_rpm_s;
-    float output_iq;
-} MotorFeedforwardResult;
+#include <stdint.h>
 
-float Motor_Feedforward_FrictionIq(float speed_rpm);
-float Motor_Feedforward_InertiaIq(float accel_rpm_s);
-float Motor_Feedforward_ApplyIq(float speed_loop_iq,
-                                float friction_iq,
-                                float inertia_iq,
-                                float min_iq,
-                                float max_iq);
-MotorFeedforwardResult Motor_Feedforward_Calculate(float speed_loop_iq,
-                                                   float target_speed_rpm,
-                                                   float target_accel_rpm_s,
-                                                   float min_iq,
-                                                   float max_iq);
+typedef struct
+{
+    uint8_t enabled;
+    float coulomb_iq_a;
+    float viscous_iq_a_per_rpm;
+    float smooth_speed_rpm;
+    float max_iq_a;
+} MotorFrictionConfig;
+
+void Motor_Feedforward_FrictionInit(void);
+uint8_t Motor_Feedforward_IsFrictionConfigValid(
+    const MotorFrictionConfig *config);
+void Motor_Feedforward_SetFrictionConfig(const MotorFrictionConfig *config);
+void Motor_Feedforward_GetFrictionConfig(MotorFrictionConfig *config);
+float Motor_Feedforward_FrictionCompensation(float speed_rpm);
 
 #endif

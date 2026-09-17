@@ -13,6 +13,10 @@
 #define MOTOR_HOST_DEFAULT_IQ_LIMIT_A  0.10f
 #define MOTOR_HOST_HEARTBEAT_TIMEOUT_MS 500U
 #define MOTOR_IQ_SLEW_A_PER_S          1.0f
+#define MOTOR_HOST_SPEED_MAX_RPM       400.0f
+#define MOTOR_HOST_SPEED_SLEW_RPM_PER_S 1000.0f
+/* Speed闭环需要及时从驱动切换到制动；Free触觉仍使用上面的柔和斜率。 */
+#define MOTOR_SPEED_IQ_SLEW_A_PER_S    5.0f
 #define MOTOR_PARAMETERS_AUTO_IDENTIFY 0
 /* BM3514H 商品页：291 KV。按常用 FOC 近似 Kt=8.27/KV 估算。
  * 单位 N·m/A，Iq 峰值定义；非实测标定，现有 R/L 辨识不测 Kt。
@@ -40,12 +44,16 @@
     (MOTOR_TORQUE_POT_MAX_CURRENT_A * MOTOR_TORQUE_CONSTANT_NM_PER_A)
 
 #define MOTOR_SYSTEM_TASK_DT_SEC       0.001f
-#define SPEED_EST_LOW_RPM_THRESHOLD    50.0f
-#define SPEED_EST_MID_RPM_THRESHOLD    200.0f
-#define SPEED_EST_HIGH_RPM_THRESHOLD   500.0f
-#define SPEED_EST_LOW_PERIOD_TICKS     20U     // 50Hz，低速测速窗口更长，降低量化抖动
-#define SPEED_EST_MID_PERIOD_TICKS     5U      // 200Hz
-#define SPEED_EST_HIGH_PERIOD_TICKS    2U      // 500Hz
-#define SPEED_EST_MAX_PERIOD_TICKS     1U      // 1000Hz，高速测速
+/*
+ * MT6826S 15位SPI角度的速度估算始终每1 ms发布；只调整滚动位置窗长度。
+ * 窗口切换使用迟滞，避免临界转速附近来回切换。
+ */
+#define SPEED_EST_WINDOW_TICKS         20U
+#define SPEED_EST_MID_WINDOW_TICKS     10U
+#define SPEED_EST_HIGH_WINDOW_TICKS     5U
+#define SPEED_EST_LOW_TO_MID_RPM       35.0f
+#define SPEED_EST_MID_TO_LOW_RPM       25.0f
+#define SPEED_EST_MID_TO_HIGH_RPM      85.0f
+#define SPEED_EST_HIGH_TO_MID_RPM      70.0f
 
 #endif

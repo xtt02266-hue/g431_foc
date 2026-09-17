@@ -1,14 +1,14 @@
 #include "motor_position_loop.h"
+#include "motor_encoder.h"
 
 // 位置环的 PID 控制器实例
 PID_Controller g_pi_pos;
 
-#define MOTOR_POSITION_COUNTS_PER_REV   4096.0f
-#define MOTOR_POSITION_HALF_REV_COUNTS  2048.0f
+#define MOTOR_POSITION_COUNTS_PER_REV   MOTOR_ENCODER_COUNTS_PER_REV_F
+#define MOTOR_POSITION_HALF_REV_COUNTS  MOTOR_ENCODER_HALF_REV_F
 
 /*
- * 位置 D 项不能直接对 AS5600 的 0~4095 原始值求导：转子正向跨过零点时，
- * 原始读数会从 4095 跳到 0，普通差分会误认为位置瞬间倒退了 4095 counts。
+ * 位置 D 项不能直接对0~32767原始值求导：转子跨零时普通差分会产生大跳变。
  * 这里保存一份连续展开的位置，仅供 PID 的测量微分使用；位置误差仍按最短路径计算。
  */
 static float g_position_unwrapped = 0.0f;
@@ -83,7 +83,7 @@ float Motor_PositionLoop_Run(float target_position, float actual_position)
         g_pi_pos.prev_measure = g_position_unwrapped;
         g_position_unwrap_initialized = 1U;
     } else {
-        /* 将本周期机械位移限制到最短跨零差值，例如 4095->0 等价于 +1。 */
+        /* 将本周期机械位移限制到最短跨零差值，例如32767->0等价于+1。 */
         float position_delta =
             Motor_PositionLoop_ShortestError(actual_position,
                                              g_position_last_wrapped);

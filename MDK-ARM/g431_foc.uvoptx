@@ -669,8 +669,8 @@
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\user\inc\as5600.h</PathWithFileName>
-      <FilenameWithoutPath>as5600.h</FilenameWithoutPath>
+      <PathWithFileName>..\user\inc\motor_encoder.h</PathWithFileName>
+      <FilenameWithoutPath>motor_encoder.h</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
     </File>
@@ -777,8 +777,8 @@
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\user\src\as5600.c</PathWithFileName>
-      <FilenameWithoutPath>as5600.c</FilenameWithoutPath>
+      <PathWithFileName>..\user\src\motor_encoder.c</PathWithFileName>
+      <FilenameWithoutPath>motor_encoder.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
     </File>

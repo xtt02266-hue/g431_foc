@@ -1284,9 +1284,9 @@
           <GroupName>user</GroupName>
           <Files>
             <File>
-              <FileName>as5600.h</FileName>
+              <FileName>motor_encoder.h</FileName>
               <FileType>5</FileType>
-              <FilePath>..\user\inc\as5600.h</FilePath>
+              <FilePath>..\user\inc\motor_encoder.h</FilePath>
             </File>
             <File>
               <FileName>hardware_init.h</FileName>
@@ -1339,9 +1339,9 @@
               <FilePath>..\user\inc\user_io.h</FilePath>
             </File>
             <File>
-              <FileName>as5600.c</FileName>
+              <FileName>motor_encoder.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\user\src\as5600.c</FilePath>
+              <FilePath>..\user\src\motor_encoder.c</FilePath>
             </File>
             <File>
               <FileName>hardware_init.c</FileName>
@@ -1423,6 +1423,15 @@
               <FileType>1</FileType>
               <FilePath>..\user\src\motor_position_loop.c</FilePath>
             </File>
+            <File><FileName>mt6826s.h</FileName><FileType>5</FileType><FilePath>..\user\inc\mt6826s.h</FilePath></File>
+            <File><FileName>mt6826s.c</FileName><FileType>1</FileType><FilePath>..\user\src\mt6826s.c</FilePath></File>
+            <File><FileName>motor_cogging.c</FileName><FileType>1</FileType><FilePath>..\user\src\motor_cogging.c</FilePath></File>
+            <File><FileName>motor_feedforward.c</FileName><FileType>1</FileType><FilePath>..\user\src\motor_feedforward.c</FilePath></File>
+            <File><FileName>motor_music.c</FileName><FileType>1</FileType><FilePath>..\user\src\motor_music.c</FilePath></File>
+            <File><FileName>motor_parameters.c</FileName><FileType>1</FileType><FilePath>..\user\src\motor_parameters.c</FilePath></File>
+            <File><FileName>motor_sensorless.c</FileName><FileType>1</FileType><FilePath>..\user\src\motor_sensorless.c</FilePath></File>
+            <File><FileName>motor_songs.c</FileName><FileType>1</FileType><FilePath>..\user\src\motor_songs.c</FilePath></File>
+            <File><FileName>motor_trajectory.c</FileName><FileType>1</FileType><FilePath>..\user\src\motor_trajectory.c</FilePath></File>
           </Files>
         </Group>
         <Group>

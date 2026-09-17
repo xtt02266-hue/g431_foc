@@ -1,5 +1,5 @@
 #include "motor_parameters.h"
-#include "as5600.h"
+#include "motor_encoder.h"
 #include "motor_current_loop.h"
 #include "motor_identify.h"
 #include "motor_music.h"
@@ -12,7 +12,7 @@
 #include <string.h>
 
 #define MOTOR_PARAMETERS_FLASH_MAGIC       0x4D504152UL
-#define MOTOR_PARAMETERS_FLASH_VERSION     1U
+#define MOTOR_PARAMETERS_FLASH_VERSION     2U
 #define MOTOR_PARAMETERS_MAX_RESISTANCE    100.0f
 #define MOTOR_PARAMETERS_MAX_INDUCTANCE    1.0f
 #define MOTOR_PARAMETERS_TWO_PI            6.2831854f
@@ -264,7 +264,7 @@ void Motor_Parameters_BackgroundTask(void)
      */
     if ((g_parameters_status == MOTOR_PARAMETERS_NO_DATA) &&
         (g_auto_identify_pending != 0U)) {
-        if (AS5600_IsDataFresh(20U) == 0U) {
+        if (Motor_Encoder_IsDataFresh(2U) == 0U) {
             return;
         }
 
