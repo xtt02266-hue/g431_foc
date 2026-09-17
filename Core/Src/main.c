@@ -32,6 +32,7 @@
 #include "hardware_init.h"
 #include "motor_system.h" // 引入了我们要用的显示测试接口
 #include "motor_parameters.h"
+#include "motor_angle_reference.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -116,6 +117,7 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
     Motor_Parameters_BackgroundTask();
+    Motor_AngleReference_BackgroundTask();
     PC_Protocol_Task();
     Motor_ShowDebugInfo_OLED();
   }

@@ -1,5 +1,6 @@
 #include "motor_current_loop.h"
 #include "motor_config.h"
+#include "board_profile.h"
 #include "adc.h"
 #include "svpwm.h"
 #include "motor_encoder.h"
@@ -169,6 +170,9 @@ void Motor_CurrentLoop_SetMotorIdentityParams(uint16_t pole_pairs, float zero_an
 // FOC 闭环启停开关
 void Motor_CurrentLoop_Enable(uint8_t enable)
 {
+#if !BOARD_SENSORED_CONTROL_ENABLE
+    enable = 0U;
+#endif
     uint32_t primask = __get_PRIMASK();
 
     __disable_irq();

@@ -1,4 +1,5 @@
 #include "motor_encoder.h"
+#include "board_profile.h"
 #include "mt6826s.h"
 #include "stm32g4xx_hal.h"
 
@@ -17,6 +18,7 @@ void Motor_Encoder_Init(void)
 
 void Motor_Encoder_UpdateFast(void)
 {
+#if BOARD_SENSORED_CONTROL_ENABLE
     uint16_t angle = MT6826S_ReadRawAngle15();
     if (MT6826S_IsOk() == 0U) {
         return;
@@ -24,6 +26,7 @@ void Motor_Encoder_UpdateFast(void)
     g_encoder_angle = angle & MOTOR_ENCODER_COUNT_MASK_U16;
     g_encoder_last_update_ms = HAL_GetTick();
     g_encoder_has_sample = 1U;
+#endif
 }
 
 uint16_t Motor_Encoder_GetRawAngle(void)

@@ -1,5 +1,6 @@
 # Build output
 build/
+.worktrees/
 
 # IDE files
 MDK-ARM/

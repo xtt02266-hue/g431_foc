@@ -23,6 +23,12 @@ set(CMAKE_PROJECT_NAME g431_foc)
 
 # Enable compile command to ease indexing with e.g. clangd
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
+include(cmake/development-profile.cmake)
+set(FOC_PROFILE "${FOC_DEFAULT_PROFILE}" CACHE STRING "sensored or sensorless")
+set_property(CACHE FOC_PROFILE PROPERTY STRINGS sensored sensorless)
+if(NOT FOC_PROFILE MATCHES "^(sensored|sensorless)$")
+    message(FATAL_ERROR "FOC_PROFILE must be sensored or sensorless")
+endif()
 
 # Core project settings
 project(${CMAKE_PROJECT_NAME})
@@ -44,6 +50,7 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+    user/src/motor_angle_reference.c
     user/src/hardware_init.c
     user/src/motor_current_loop.c
     user/src/motor_cogging.c
@@ -69,6 +76,13 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
 )
 
 # Add include paths
+if(FOC_PROFILE STREQUAL "sensorless")
+    target_sources(${CMAKE_PROJECT_NAME} PRIVATE user/src/as5600.c)
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE FOC_PROFILE_SENSORLESS=1)
+else()
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE FOC_PROFILE_SENSORLESS=0)
+endif()
+message(STATUS "FOC development profile: ${FOC_PROFILE}")
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     user/inc
 )

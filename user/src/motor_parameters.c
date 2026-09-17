@@ -1,4 +1,5 @@
 #include "motor_parameters.h"
+#include "board_profile.h"
 #include "motor_encoder.h"
 #include "motor_current_loop.h"
 #include "motor_identify.h"
@@ -198,13 +199,17 @@ void Motor_Parameters_Init(void)
         g_parameters_status = MOTOR_PARAMETERS_READY;
     } else {
         g_has_stored_data = 0U;
-        g_auto_identify_pending = (MOTOR_PARAMETERS_AUTO_IDENTIFY != 0) ? 1U : 0U;
+        g_auto_identify_pending = (BOARD_SENSORED_CONTROL_ENABLE &&
+                                   (MOTOR_PARAMETERS_AUTO_IDENTIFY != 0)) ? 1U : 0U;
         g_parameters_status = MOTOR_PARAMETERS_NO_DATA;
     }
 }
 
 uint8_t Motor_Parameters_IdentifyAndSave(void)
 {
+#if !BOARD_SENSORED_CONTROL_ENABLE
+    return 0U;
+#endif
     uint32_t primask;
     MotorIdentifyState identify_state = Motor_Identify_GetState();
     MotorParametersStatus status = g_parameters_status;

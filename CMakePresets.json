@@ -18,6 +18,16 @@
             }
         },
         {
+            "name": "sensored-debug",
+            "inherits": "Debug",
+            "cacheVariables": { "FOC_PROFILE": "sensored" }
+        },
+        {
+            "name": "sensorless-debug",
+            "inherits": "Debug",
+            "cacheVariables": { "FOC_PROFILE": "sensorless" }
+        },
+        {
             "name": "Release",
             "inherits": "default",
             "cacheVariables": {
@@ -26,6 +36,14 @@
         }
     ],
     "buildPresets": [
+        {
+            "name": "sensored-debug",
+            "configurePreset": "sensored-debug"
+        },
+        {
+            "name": "sensorless-debug",
+            "configurePreset": "sensorless-debug"
+        },
         {
             "name": "Debug",
             "configurePreset": "Debug"

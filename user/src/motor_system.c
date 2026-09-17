@@ -1,5 +1,6 @@
 ﻿#include "motor_system.h"
 #include "motor_current_loop.h"
+#include "board_profile.h"
 #include "motor_speed_loop.h"
 #include "motor_position_loop.h"
 #include "motor_feedforward.h"
@@ -130,6 +131,9 @@ MotorState Motor_System_GetState(void)
 
 uint8_t Motor_System_StartControl(void)
 {
+#if !BOARD_SENSORED_CONTROL_ENABLE
+    return 0U;
+#endif
     if ((Motor_Parameters_IsReady() == 0U) ||
         (g_fault_latched != 0U) ||
         (Motor_Encoder_IsDataFresh(MOTOR_ENCODER_MAX_SAMPLE_AGE_MS) == 0U)) {
@@ -690,6 +694,12 @@ static void Motor_System_ForceSafeStop(void)
 
 static void Motor_System_UpdateOperatingState(void)
 {
+#if !BOARD_SENSORED_CONTROL_ENABLE
+    /* Development foundation only: no sensorless startup/handover yet. */
+    Motor_System_ForceSafeStop();
+    g_motor_system.state = MOTOR_STATE_STOPPED;
+    return;
+#endif
     MotorParametersStatus parameter_status = Motor_Parameters_GetStatus();
 
     /*

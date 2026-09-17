@@ -11,6 +11,8 @@
 #include "motor_encoder.h"
 #include "motor_system.h"
 #include "motor_parameters.h"
+#include "board_profile.h"
+#include "motor_angle_reference.h"
 
 // OLED_Init 由显示驱动实现，这里做前置声明。
 void OLED_Init(void);
@@ -63,7 +65,10 @@ void hardware_init(void)
     UserIO_StartDma();
 
     /* SPI1已由CubeMX初始化；先建立首个15位角度快照，再启动FOC采样中断。 */
+#if BOARD_SENSORED_CONTROL_ENABLE
     Motor_Encoder_Init();
+#endif
+    Motor_AngleReference_Init();
 
 
     // 2. 启动 TIM1 通道 4（用作 ADC 的触发信号 CC4）

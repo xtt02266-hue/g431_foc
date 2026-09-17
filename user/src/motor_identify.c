@@ -1,5 +1,6 @@
 #include "motor_identify.h"
 #include "motor_encoder.h"
+#include "board_profile.h"
 #include "motor_config.h"
 #include "motor_current_loop.h"
 #include "tim.h"
@@ -87,6 +88,9 @@ void Motor_OpenLoop_Drive(float elec_angle, float amplitude)
 //       其他状态下调用此函数会被忽略（防止中途被打断）。
 void Motor_Identify_Start(void)
 {
+#if !BOARD_SENSORED_CONTROL_ENABLE
+    return;
+#endif
     if (g_identify_state == IDENTIFY_STATE_IDLE ||
         g_identify_state == IDENTIFY_STATE_DONE ||
         g_identify_state == IDENTIFY_STATE_ERROR)
