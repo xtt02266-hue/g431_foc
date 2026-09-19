@@ -15,6 +15,10 @@
 
 // 电流环/FOC 全局运行状态与参数。
 MotorCurrentLoopState g_foc_state = {0};
+static volatile MotorAngleSource g_angle_source = MOTOR_ANGLE_SOURCE_ENCODER;
+static volatile uint8_t g_angle_source_fault = 0U;
+static volatile float g_open_loop_electrical_angle_rad = 0.0f;
+static volatile float g_open_loop_electrical_speed_rad_s = 0.0f;
 
 // 将 ADC 原始值转换为相电流（安培）。
 static float Motor_CurrentLoop_RawToCurrent(uint16_t raw)
@@ -41,7 +45,7 @@ void Motor_CurrentLoop_Run(uint16_t iu_raw, uint16_t iw_raw)
     // 以下为整个 FOC 电流环的调用骨架
     // ----------------------------------------------------
 
-    // 2. 读取由本中断刚刷新的MT6826S 15位机械角度快照。
+    // 2. 读取编码器抽象层的15位机械角度快照；本分支的sensorless配置使用AS5600。
     uint16_t raw_mech_angle = Motor_Encoder_GetRawAngle();
     
     float mech_angle = (float)raw_mech_angle * MOTOR_ENCODER_RAD_PER_COUNT;
@@ -53,30 +57,57 @@ void Motor_CurrentLoop_Run(uint16_t iu_raw, uint16_t iw_raw)
     // 安全防护：极对数不能为 0（未辨识或辨识失败时兜底）
     uint16_t pp = g_foc_state.params.pole_pairs;
     if (pp == 0) pp = 1;
-    float elec_angle = mech_offset * (float)pp * (float)g_foc_state.params.uvw_dir;
+    float encoder_elec_angle = mech_offset * (float)pp * (float)g_foc_state.params.uvw_dir;
     
     // 将电角度限制在 0 ~ 2π 之间 (这步对某些三角函数硬件加速库不仅防止溢出，还能加速)
     // 替换为高效的边界限制逻辑
-    while (elec_angle >= 6.2831853f) {
-        elec_angle -= 6.2831853f;
+    while (encoder_elec_angle >= 6.2831853f) {
+        encoder_elec_angle -= 6.2831853f;
     }
 
-    while (elec_angle < 0.0f) {
-        elec_angle += 6.2831853f;
+    while (encoder_elec_angle < 0.0f) {
+        encoder_elec_angle += 6.2831853f;
     }
-    
-    // 供后续 Park 坐标变换使用的正余弦值
-    g_foc_state.sin_theta = sinf(elec_angle);
-    g_foc_state.cos_theta = cosf(elec_angle);
 
     // 3. Clarke 变换：将三相相电流（实际上只需两相，假设三相和为0）转换至两相静止坐标系 (Alpha-Beta)
     g_foc_state.clarke = Motor_CurrentLoop_Clarke(g_foc_state.sample.iu_a, g_foc_state.sample.iw_a);
 
-    // Debug-only observer: use the previous applied voltage and measured alpha-beta current.
+    // 观测器始终并行更新：使用上一拍电压指令和本拍 alpha-beta 电流。
     Motor_Sensorless_Update(g_svpwm.v_alpha,
                             g_svpwm.v_beta,
                             g_foc_state.clarke.alpha,
                             g_foc_state.clarke.beta);
+
+    float elec_angle = encoder_elec_angle;
+    if (g_angle_source == MOTOR_ANGLE_SOURCE_SENSORLESS) {
+        MotorSensorlessOutput sensorless = Motor_Sensorless_GetOutput();
+        if (sensorless.valid == 0U) {
+            /* 无感运行期间失锁：立即撤销PWM，1ms系统任务随后进入STOPPED。 */
+            g_angle_source_fault = 1U;
+            g_angle_source = MOTOR_ANGLE_SOURCE_ENCODER;
+            g_foc_state.closed_loop_enable = 0U;
+            g_foc_state.target_d = 0.0f;
+            g_foc_state.target_q = 0.0f;
+            PID_Reset(&g_foc_state.pi_d);
+            PID_Reset(&g_foc_state.pi_q);
+            SVPWM_Disable();
+            return;
+        }
+        elec_angle = sensorless.electrical_angle_rad;
+    } else if (g_angle_source == MOTOR_ANGLE_SOURCE_OPEN_LOOP) {
+        elec_angle = g_open_loop_electrical_angle_rad;
+        g_open_loop_electrical_angle_rad +=
+            g_open_loop_electrical_speed_rad_s * MOTOR_SENSORLESS_SAMPLE_TIME_SEC;
+        if (g_open_loop_electrical_angle_rad >= 6.2831853f) {
+            g_open_loop_electrical_angle_rad -= 6.2831853f;
+        } else if (g_open_loop_electrical_angle_rad < 0.0f) {
+            g_open_loop_electrical_angle_rad += 6.2831853f;
+        }
+    }
+
+    // 供后续 Park 和逆Park 坐标变换使用的正余弦值
+    g_foc_state.sin_theta = sinf(elec_angle);
+    g_foc_state.cos_theta = cosf(elec_angle);
 
     // 4. Park 变换：将静止坐标系转化为同步旋转坐标系 (D-Q)
     g_foc_state.park = Motor_CurrentLoop_Park(g_foc_state.clarke, g_foc_state.sin_theta, g_foc_state.cos_theta);
@@ -145,6 +176,10 @@ void Motor_CurrentLoop_Init(void)
              MOTOR_CURRENT_PID_Q_OUT_MAX, MOTOR_CURRENT_PID_Q_OUT_MIN, pid_dt);
              
     g_foc_state.closed_loop_enable = 0; // 默认不上电闭环，等待辨识完成
+    g_angle_source = MOTOR_ANGLE_SOURCE_ENCODER;
+    g_angle_source_fault = 0U;
+    g_open_loop_electrical_angle_rad = 0.0f;
+    g_open_loop_electrical_speed_rad_s = 0.0f;
 }
 
 // 设置所有参数。
@@ -177,6 +212,10 @@ void Motor_CurrentLoop_Enable(uint8_t enable)
 
     __disable_irq();
     g_foc_state.closed_loop_enable = (enable != 0U) ? 1U : 0U;
+    if (enable == 0U) {
+        g_angle_source = MOTOR_ANGLE_SOURCE_ENCODER;
+        g_open_loop_electrical_speed_rad_s = 0.0f;
+    }
     // 无论启用还是停用，都重置 PID 积分，确保从零开始
     PID_Reset(&g_foc_state.pi_d);
     PID_Reset(&g_foc_state.pi_q);
@@ -188,6 +227,50 @@ void Motor_CurrentLoop_Enable(uint8_t enable)
 uint8_t Motor_CurrentLoop_IsEnabled(void)
 {
     return g_foc_state.closed_loop_enable;
+}
+
+void Motor_CurrentLoop_SetAngleSource(MotorAngleSource source)
+{
+    uint32_t primask;
+    if ((source != MOTOR_ANGLE_SOURCE_ENCODER) &&
+        (source != MOTOR_ANGLE_SOURCE_SENSORLESS) &&
+        (source != MOTOR_ANGLE_SOURCE_OPEN_LOOP)) return;
+    primask = __get_PRIMASK();
+    __disable_irq();
+    g_angle_source = source;
+    if (source == MOTOR_ANGLE_SOURCE_ENCODER) g_angle_source_fault = 0U;
+    if (primask == 0U) __enable_irq();
+}
+
+MotorAngleSource Motor_CurrentLoop_GetAngleSource(void)
+{
+    return g_angle_source;
+}
+
+void Motor_CurrentLoop_SetOpenLoopElectricalAngle(float angle_rad)
+{
+    const float two_pi = 6.28318530718f;
+    if (!isfinite(angle_rad)) return;
+    while (angle_rad >= two_pi) angle_rad -= two_pi;
+    while (angle_rad < 0.0f) angle_rad += two_pi;
+    g_open_loop_electrical_angle_rad = angle_rad;
+}
+
+void Motor_CurrentLoop_SetOpenLoopElectricalSpeed(float speed_rad_s)
+{
+    if (!isfinite(speed_rad_s)) speed_rad_s = 0.0f;
+    g_open_loop_electrical_speed_rad_s = speed_rad_s;
+}
+
+uint8_t Motor_CurrentLoop_TakeAngleSourceFault(void)
+{
+    uint32_t primask = __get_PRIMASK();
+    uint8_t fault;
+    __disable_irq();
+    fault = g_angle_source_fault;
+    g_angle_source_fault = 0U;
+    if (primask == 0U) __enable_irq();
+    return fault;
 }
 
 // 根据辨识出的电机 R/L 自动计算最优电流环 PI 参数。

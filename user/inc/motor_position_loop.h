@@ -6,7 +6,7 @@
 
 /*
  * 无外加负载的位置环基线参数，恢复自惯性补偿引入前的 b7cc543。
- * 输入误差单位为MT6826S 15位count，输出单位为机械RPM。
+ * 输入误差单位为编码器15位count，输出单位为机械RPM。
  */
 #define MOTOR_POSITION_PID_KP       0.0275f
 #define MOTOR_POSITION_PID_KI       0.025f

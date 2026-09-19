@@ -6,6 +6,7 @@
 #include "motor_config.h"
 #include "motor_feedforward.h"
 #include "motor_cogging.h"
+#include "motor_current_loop.h"
 
 // 电机运行状态。
 typedef enum
@@ -48,6 +49,21 @@ typedef enum
 
 typedef enum
 {
+    MOTOR_STARTUP_AS5600 = 0,
+    MOTOR_STARTUP_FORCED_SENSORLESS
+} MotorStartupMode;
+
+typedef enum
+{
+    MOTOR_STARTUP_PHASE_IDLE = 0,
+    MOTOR_STARTUP_PHASE_ALIGN,
+    MOTOR_STARTUP_PHASE_RAMP,
+    MOTOR_STARTUP_PHASE_WAIT_LOCK,
+    MOTOR_STARTUP_PHASE_COMPLETE
+} MotorStartupPhase;
+
+typedef enum
+{
     MOTOR_CMD_OK = 0,
     MOTOR_CMD_INVALID_LENGTH,
     MOTOR_CMD_INVALID_VALUE,
@@ -78,6 +94,10 @@ typedef struct
     MotorInputSource source;
     MotorControlOwner owner;
     uint8_t run_requested;
+    MotorAngleSource angle_source;
+    MotorStartupMode startup_mode;
+    MotorStartupPhase startup_phase;
+    float startup_handover_rpm;
     float iq_limit_a;
     float continuous_angle_rad;
     float relative_center_angle_rad;
@@ -153,6 +173,9 @@ MotorCommandResult Motor_System_HostReadCoggingChunk(uint16_t offset,
 MotorCommandResult Motor_System_HostSaveCogging(void);
 MotorCommandResult Motor_System_HostSetSpeed(float speed_rpm,
                                              float *accepted_speed_rpm);
+MotorCommandResult Motor_System_HostSetAngleSource(MotorAngleSource source);
+MotorCommandResult Motor_System_HostSetStartupConfig(MotorStartupMode mode,
+                                                      float handover_rpm);
 void Motor_System_GetHapticParams(MotorHapticParams *params);
 void Motor_System_GetFrictionConfig(MotorFrictionConfig *config);
 void Motor_System_GetCoggingConfig(MotorCoggingConfig *config);
@@ -181,7 +204,7 @@ uint8_t Motor_System_PlaySong(const MotorMusicNote *song,
 uint8_t Motor_System_PlaySongLoop(const MotorMusicNote *song,
                                   uint16_t note_count);
 void Motor_System_StopMusic(void);
-/* 当前仅启停并行无感观测器，不会替换MT6826S SPI换相角度。 */
+/* 仅启停并行无感观测器；角度源切换由独立接口显式完成。 */
 uint8_t Motor_System_EnableSensorlessObserver(uint8_t enable);
 // OLED上显示临时调试信息。
 void Motor_ShowDebugInfo_OLED(void);

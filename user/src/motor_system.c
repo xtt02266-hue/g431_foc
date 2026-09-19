@@ -49,6 +49,11 @@ static float g_host_speed_applied_rpm = 0.0f;
 static float g_debug_speed_loop_iq_a = 0.0f;
 static float g_debug_friction_iq_a = 0.0f;
 static float g_debug_cogging_iq_a = 0.0f;
+static volatile MotorStartupMode g_startup_mode = MOTOR_STARTUP_AS5600;
+static volatile MotorStartupPhase g_startup_phase = MOTOR_STARTUP_PHASE_IDLE;
+static volatile float g_startup_handover_rpm = MOTOR_SENSORLESS_HANDOVER_DEFAULT_RPM;
+static uint32_t g_startup_phase_elapsed_ms = 0U;
+static float g_startup_open_loop_rpm = 0.0f;
 static float g_continuous_angle_rad = 0.0f;
 static float g_haptic_center_rad = 0.0f;
 static uint16_t g_last_angle_counts = 0U;
@@ -62,6 +67,7 @@ static void Motor_System_ForceSafeStop(void);
 static void Motor_System_UpdateOperatingState(void);
 static void Motor_System_TuneCurrentLoopBandwidth(float bandwidth_hz);
 static void Motor_System_ResetControlHistory(void);
+static uint8_t Motor_System_RunForcedStartup1ms(int8_t identified_direction);
 
 // 电位器滤波量参与力矩/位置控制，同时供 VOFA+ 只读观测。
 static float g_pot_target_filtered = 0.0f;         // 反向映射并滤波后的 ADC 计数，供位置/力矩模式共用
@@ -93,6 +99,11 @@ void Motor_System_Init(void)
     g_debug_speed_loop_iq_a = 0.0f;
     g_debug_friction_iq_a = 0.0f;
     g_debug_cogging_iq_a = 0.0f;
+    g_startup_mode = MOTOR_STARTUP_AS5600;
+    g_startup_phase = MOTOR_STARTUP_PHASE_IDLE;
+    g_startup_handover_rpm = MOTOR_SENSORLESS_HANDOVER_DEFAULT_RPM;
+    g_startup_phase_elapsed_ms = 0U;
+    g_startup_open_loop_rpm = 0.0f;
     g_config_revision = 0U;
     g_angle_initialized = 0U;
     g_torque_current_a = 0.0f;
@@ -120,7 +131,7 @@ void Motor_System_Init(void)
     // 仅初始化音乐模块；当前自动播放宏为 0，需要主动调用播放接口才会发声。
     Motor_Music_Init();
 
-    // Sensorless estimation is observation-only and disabled by default.
+    // 无感观测器默认关闭，运行时按所选启动模式启用。
     Motor_Sensorless_Init();
 }
 
@@ -240,18 +251,39 @@ void Motor_System_HostHeartbeat(void)
 
 MotorCommandResult Motor_System_HostStart(void)
 {
+    int8_t direction;
     if (g_control_owner != MOTOR_OWNER_HOST) return MOTOR_CMD_NOT_OWNER;
     if (g_motor_system.state == MOTOR_STATE_FAULT) return MOTOR_CMD_FAULT_ACTIVE;
     if (Motor_Parameters_IsBusy() != 0U) return MOTOR_CMD_BUSY;
     if ((g_control_mode >= MOTOR_CONTROL_FREE) &&
         (g_control_mode <= MOTOR_CONTROL_SPEED)) {
-        int8_t direction = Motor_Identify_GetResult().uvw_dir;
+        direction = Motor_Identify_GetResult().uvw_dir;
         if ((direction != 1) && (direction != -1)) return MOTOR_CMD_NOT_READY;
     }
-    if (Motor_System_StartControl() == 0U) return MOTOR_CMD_NOT_READY;
+    if (g_startup_mode == MOTOR_STARTUP_FORCED_SENSORLESS) {
+#if !FOC_PROFILE_SENSORLESS
+        return MOTOR_CMD_UNSUPPORTED;
+#else
+        if ((g_control_mode != MOTOR_CONTROL_SPEED) ||
+            (g_input_source != MOTOR_INPUT_HOST)) return MOTOR_CMD_INVALID_COMBINATION;
+        direction = Motor_Identify_GetResult().uvw_dir;
+        Motor_Sensorless_SetDirection(
+            ((g_startup_handover_rpm * (float)direction) >= 0.0f) ? 1 : -1);
+        g_startup_phase = MOTOR_STARTUP_PHASE_ALIGN;
+        g_startup_phase_elapsed_ms = 0U;
+        g_startup_open_loop_rpm = 0.0f;
+#endif
+    } else {
+        g_startup_phase = MOTOR_STARTUP_PHASE_IDLE;
+    }
+    if (Motor_System_StartControl() == 0U) {
+        g_startup_phase = MOTOR_STARTUP_PHASE_IDLE;
+        return MOTOR_CMD_NOT_READY;
+    }
     g_torque_current_a = 0.0f;
     g_host_iq_applied_a = 0.0f;
-    g_host_speed_target_rpm = 0.0f;
+    g_host_speed_target_rpm = (g_startup_mode == MOTOR_STARTUP_FORCED_SENSORLESS)
+                                  ? g_startup_handover_rpm : 0.0f;
     g_host_speed_applied_rpm = 0.0f;
     Motor_Cogging_RuntimeStart();
     if ((g_control_mode >= MOTOR_CONTROL_SPRING) &&
@@ -271,6 +303,7 @@ MotorCommandResult Motor_System_HostSetMode(MotorControlMode mode,
         return MOTOR_CMD_INVALID_COMBINATION;
     }
     if ((g_control_mode != mode) || (g_input_source != source)) {
+        Motor_CurrentLoop_SetAngleSource(MOTOR_ANGLE_SOURCE_ENCODER);
         g_control_mode = mode;
         g_input_source = source;
         g_torque_current_a = 0.0f;
@@ -280,6 +313,58 @@ MotorCommandResult Motor_System_HostSetMode(MotorControlMode mode,
         Motor_System_ResetOuterLoops();
         ++g_config_revision;
     }
+    return MOTOR_CMD_OK;
+}
+
+MotorCommandResult Motor_System_HostSetAngleSource(MotorAngleSource source)
+{
+    if (g_control_owner != MOTOR_OWNER_HOST) return MOTOR_CMD_NOT_OWNER;
+    if ((source != MOTOR_ANGLE_SOURCE_ENCODER) &&
+        (source != MOTOR_ANGLE_SOURCE_SENSORLESS)) return MOTOR_CMD_INVALID_VALUE;
+    if ((g_motor_system.state != MOTOR_STATE_SENSORED_RUN) ||
+        (g_control_mode != MOTOR_CONTROL_SPEED) ||
+        (g_input_source != MOTOR_INPUT_HOST)) return MOTOR_CMD_INVALID_COMBINATION;
+    if ((g_startup_phase == MOTOR_STARTUP_PHASE_ALIGN) ||
+        (g_startup_phase == MOTOR_STARTUP_PHASE_RAMP) ||
+        (g_startup_phase == MOTOR_STARTUP_PHASE_WAIT_LOCK)) return MOTOR_CMD_BUSY;
+    if (source == MOTOR_ANGLE_SOURCE_SENSORLESS) {
+#if !FOC_PROFILE_SENSORLESS
+        return MOTOR_CMD_UNSUPPORTED;
+#else
+        if ((Motor_Sensorless_IsEnabled() == 0U) ||
+            (Motor_Sensorless_IsValid() == 0U)) return MOTOR_CMD_NOT_READY;
+#endif
+    }
+    Motor_CurrentLoop_SetAngleSource(source);
+    ++g_config_revision;
+    return MOTOR_CMD_OK;
+}
+
+MotorCommandResult Motor_System_HostSetStartupConfig(MotorStartupMode mode,
+                                                      float handover_rpm)
+{
+    float abs_rpm;
+    if (g_control_owner != MOTOR_OWNER_HOST) return MOTOR_CMD_NOT_OWNER;
+    if (g_motor_system.state != MOTOR_STATE_STOPPED) return MOTOR_CMD_MUST_STOP_FIRST;
+    if ((mode != MOTOR_STARTUP_AS5600) &&
+        (mode != MOTOR_STARTUP_FORCED_SENSORLESS)) return MOTOR_CMD_INVALID_VALUE;
+#if !FOC_PROFILE_SENSORLESS
+    if (mode == MOTOR_STARTUP_FORCED_SENSORLESS) return MOTOR_CMD_UNSUPPORTED;
+#endif
+    if (!isfinite(handover_rpm)) return MOTOR_CMD_INVALID_VALUE;
+    abs_rpm = Motor_AbsFloat(handover_rpm);
+    if (mode == MOTOR_STARTUP_FORCED_SENSORLESS) {
+        if ((abs_rpm < MOTOR_SENSORLESS_HANDOVER_MIN_RPM) ||
+            (abs_rpm > MOTOR_SENSORLESS_HANDOVER_MAX_RPM)) {
+            return MOTOR_CMD_INVALID_VALUE;
+        }
+    }
+    g_startup_mode = mode;
+    if (mode == MOTOR_STARTUP_FORCED_SENSORLESS) {
+        g_startup_handover_rpm = handover_rpm;
+    }
+    g_startup_phase = MOTOR_STARTUP_PHASE_IDLE;
+    ++g_config_revision;
     return MOTOR_CMD_OK;
 }
 
@@ -442,6 +527,10 @@ void Motor_System_GetControlSnapshot(MotorControlSnapshot *s)
     s->source = g_input_source;
     s->owner = g_control_owner;
     s->run_requested = g_run_requested;
+    s->angle_source = Motor_CurrentLoop_GetAngleSource();
+    s->startup_mode = g_startup_mode;
+    s->startup_phase = g_startup_phase;
+    s->startup_handover_rpm = g_startup_handover_rpm;
     s->iq_limit_a = g_host_iq_limit_a;
     s->continuous_angle_rad = g_continuous_angle_rad;
     s->relative_center_angle_rad = ((g_control_mode >= MOTOR_CONTROL_SPRING) &&
@@ -677,6 +766,10 @@ static void Motor_System_ForceSafeStop(void)
     /* 所有功能统一从这里撤销转矩输出。 */
     Motor_Cogging_RuntimeStop();
     g_torque_current_a = 0.0f;
+    g_startup_phase = MOTOR_STARTUP_PHASE_IDLE;
+    g_startup_phase_elapsed_ms = 0U;
+    g_startup_open_loop_rpm = 0.0f;
+    Motor_CurrentLoop_SetOpenLoopElectricalSpeed(0.0f);
     Motor_System_ResetOuterLoops();
     if (Motor_Music_IsPlaying() != 0U) {
         Motor_Music_Stop();
@@ -694,6 +787,12 @@ static void Motor_System_ForceSafeStop(void)
 
 static void Motor_System_UpdateOperatingState(void)
 {
+    if (Motor_CurrentLoop_TakeAngleSourceFault() != 0U) {
+        g_run_requested = 0U;
+        Motor_System_ForceSafeStop();
+        g_motor_system.state = MOTOR_STATE_STOPPED;
+        return;
+    }
 #if !BOARD_SENSORED_CONTROL_ENABLE
     /* Development foundation only: no sensorless startup/handover yet. */
     Motor_System_ForceSafeStop();
@@ -722,7 +821,8 @@ static void Motor_System_UpdateOperatingState(void)
         return;
     }
 
-    /* MT6826S SPI是当前实际换相角度源，数据过期必须立即停机。 */
+    /* 编码器抽象层提供实际换相角；本分支sensorless配置使用AS5600。
+     * 无论底层是哪种编码器，数据过期都必须立即停机。 */
     if ((g_fault_latched != 0U) ||
         (Motor_Encoder_IsDataFresh(MOTOR_ENCODER_MAX_SAMPLE_AGE_MS) == 0U)) {
         g_fault_latched = 1U;
@@ -746,8 +846,20 @@ static void Motor_System_UpdateOperatingState(void)
         (void)Motor_Sensorless_ConfigureMotor(id.resistance,
                                               id.inductance,
                                               id.pole_pairs);
-        SVPWM_Enable();
+#if FOC_PROFILE_SENSORLESS
+        /* 先开启观测器；AS5600启动时它并行运行，强拖启动时它等待交接。 */
+        Motor_Sensorless_Enable(1U);
+#endif
+        if ((g_startup_mode == MOTOR_STARTUP_FORCED_SENSORLESS) &&
+            (g_startup_phase == MOTOR_STARTUP_PHASE_ALIGN)) {
+            Motor_CurrentLoop_SetOpenLoopElectricalAngle(0.0f);
+            Motor_CurrentLoop_SetOpenLoopElectricalSpeed(0.0f);
+            Motor_CurrentLoop_SetAngleSource(MOTOR_ANGLE_SOURCE_OPEN_LOOP);
+        } else {
+            Motor_CurrentLoop_SetAngleSource(MOTOR_ANGLE_SOURCE_ENCODER);
+        }
         Motor_CurrentLoop_Enable(1U);
+        SVPWM_Enable();
     }
 
     g_motor_system.state = (Motor_Music_IsPlaying() != 0U)
@@ -866,6 +978,93 @@ static float Motor_System_SlewHostIq(float target_iq, float slew_a_per_s)
     return g_host_iq_applied_a;
 }
 
+/* 强拖启动只在Speed模式的1ms任务中执行。返回1表示本拍仍由启动流程接管。 */
+static uint8_t Motor_System_RunForcedStartup1ms(int8_t identified_direction)
+{
+    const float rpm_to_rad_s = 6.28318530718f / 60.0f;
+    MotorIdentifiedParams id;
+    float startup_current;
+    float electrical_speed_rad_s;
+    float align_scale;
+    float ramp_scale;
+    uint16_t pole_pairs;
+
+    if ((g_startup_phase != MOTOR_STARTUP_PHASE_ALIGN) &&
+        (g_startup_phase != MOTOR_STARTUP_PHASE_RAMP) &&
+        (g_startup_phase != MOTOR_STARTUP_PHASE_WAIT_LOCK)) {
+        return 0U;
+    }
+
+    id = Motor_Identify_GetResult();
+    pole_pairs = (id.pole_pairs != 0U) ? id.pole_pairs : 1U;
+    startup_current = MOTOR_SENSORLESS_STARTUP_CURRENT_A;
+    if (startup_current > g_host_iq_limit_a) startup_current = g_host_iq_limit_a;
+
+    g_debug_speed_loop_iq_a = 0.0f;
+    g_debug_friction_iq_a = 0.0f;
+    g_debug_cogging_iq_a = 0.0f;
+    g_foc_state.target_q = 0.0f;
+
+    if (g_startup_phase == MOTOR_STARTUP_PHASE_ALIGN) {
+        align_scale = (float)(g_startup_phase_elapsed_ms + 1U) /
+                      (float)MOTOR_SENSORLESS_STARTUP_ALIGN_MS;
+        if (align_scale > 1.0f) align_scale = 1.0f;
+        g_foc_state.target_d = startup_current * align_scale;
+        Motor_CurrentLoop_SetOpenLoopElectricalAngle(0.0f);
+        Motor_CurrentLoop_SetOpenLoopElectricalSpeed(0.0f);
+        if (++g_startup_phase_elapsed_ms >= MOTOR_SENSORLESS_STARTUP_ALIGN_MS) {
+            g_startup_phase = MOTOR_STARTUP_PHASE_RAMP;
+            g_startup_phase_elapsed_ms = 0U;
+        }
+        return 1U;
+    }
+
+    g_foc_state.target_d = startup_current;
+    if (g_startup_phase == MOTOR_STARTUP_PHASE_RAMP) {
+        ramp_scale = (float)(g_startup_phase_elapsed_ms + 1U) /
+                     (float)MOTOR_SENSORLESS_STARTUP_RAMP_MS;
+        if (ramp_scale > 1.0f) ramp_scale = 1.0f;
+        g_startup_open_loop_rpm = g_startup_handover_rpm * ramp_scale;
+    } else {
+        g_startup_open_loop_rpm = g_startup_handover_rpm;
+    }
+
+    electrical_speed_rad_s = g_startup_open_loop_rpm *
+                             (float)identified_direction *
+                             (float)pole_pairs * rpm_to_rad_s;
+    Motor_CurrentLoop_SetOpenLoopElectricalSpeed(electrical_speed_rad_s);
+
+    if (g_startup_phase == MOTOR_STARTUP_PHASE_RAMP) {
+        if (++g_startup_phase_elapsed_ms >= MOTOR_SENSORLESS_STARTUP_RAMP_MS) {
+            g_startup_phase = MOTOR_STARTUP_PHASE_WAIT_LOCK;
+            g_startup_phase_elapsed_ms = 0U;
+        }
+        return 1U;
+    }
+
+    if (Motor_Sensorless_IsReadyForHandover() != 0U) {
+        g_foc_state.target_d = 0.0f;
+        g_foc_state.target_q = 0.0f;
+        g_host_iq_applied_a = 0.0f;
+        g_host_speed_applied_rpm = g_startup_handover_rpm;
+        Motor_SpeedLoop_SetTarget(
+            g_startup_handover_rpm * (float)identified_direction);
+        PID_Reset(&speed_pid);
+        Motor_CurrentLoop_SetAngleSource(MOTOR_ANGLE_SOURCE_SENSORLESS);
+        Motor_CurrentLoop_SetOpenLoopElectricalSpeed(0.0f);
+        g_startup_phase = MOTOR_STARTUP_PHASE_COMPLETE;
+        return 1U;
+    }
+
+    if (++g_startup_phase_elapsed_ms >= MOTOR_SENSORLESS_STARTUP_LOCK_TIMEOUT_MS) {
+        /* 强拖到目标速度仍未锁定：按用户策略直接关PWM并停机。 */
+        g_run_requested = 0U;
+        Motor_System_ForceSafeStop();
+        g_motor_system.state = MOTOR_STATE_STOPPED;
+    }
+    return 1U;
+}
+
 static void Motor_System_RunSpeedMode(float mechanical_speed_rpm,
                                       int8_t identified_direction,
                                       uint16_t mechanical_angle_counts)
@@ -953,6 +1152,8 @@ void Motor_System_Task(void)
         Motor_System_ReleaseHost();
     }
 
+    /* current_rpm already includes identified_direction; multiplying by
+     * uvw_dir again would reverse the observer direction for negative wiring. */
     if (current_rpm > 20.0f) {
         Motor_Sensorless_SetDirection(1);
     } else if (current_rpm < -20.0f) {
@@ -1013,6 +1214,9 @@ void Motor_System_Task(void)
             return;
         }
         if (g_control_mode == MOTOR_CONTROL_SPEED) {
+            if (Motor_System_RunForcedStartup1ms(identified_direction) != 0U) {
+                return;
+            }
             Motor_System_RunSpeedMode(g_motor_system.run_data.speed_rpm,
                                       identified_direction, angle_counts);
             return;

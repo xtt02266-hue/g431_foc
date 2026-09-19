@@ -11,6 +11,13 @@
  *      相位误差为预测矢量与实测矢量的叉积，PI 调节后修正角度/速度。
  *   4. 通过锁相误差与 BEMF 幅值判断“锁定/丢失”状态，供上层判断是否可切换闭环。
  *
+ * 当前是并行观测调试，角度有两条路径：
+ *   ADC -> Clarke -> iαβ -> Park(θ_AS5600) -> 电流环 -> SVPWM -> 电机
+ *                         \-> Observer(uαβ 上一拍) -> eαβ -> PLL -> θ估算/遥测
+ * 这里的 uαβ 是上一拍保存的 SVPWM 电压指令，不是实测端电压；
+ * 默认由 AS5600 角度参与 Park 和电流环控制；Speed 模式也可选择
+ * 开环电角度强拖，到达交接速度且观测器锁定后切换为 PLL 估算角。
+ *
  * 所有 Update 由 20 kHz 电流环中断调用；配置/使能等接口做了中断保护，可与中断并发。
  */
 
@@ -105,10 +112,10 @@ void Motor_Sensorless_GetDefaultConfig(MotorSensorlessConfig *config)
 
     config->sample_time_sec = MOTOR_SENSORLESS_SAMPLE_TIME_SEC; /* 50us -> 20kHz */
     config->resistance_ohm = 1.0f;              /* 相电阻默认值 (Ω) */
-    config->inductance_h = 0.0006f;             /* 相电感默认值 (H) */
+    config->inductance_h = 0.0012f;             /* BM3514H标称相电感；运行前仍由电机参数覆盖 */
     config->pole_pairs = 1U;                    /* 极对数默认值 */
     config->bemf_filter_alpha = 0.05f;          /* BEMF 一阶低通系数，越小越平滑但滞后越大 */
-    config->minimum_bemf_volts = 0.40f;         /* 判定“有反电动势”的最低幅值 (V) */
+    config->minimum_bemf_volts = 0.20f;         /* 并行观测调试门槛 (V)；低速更易跟踪，但须防噪声误锁 */
     config->pll_kp = 250.0f;                    /* PLL 比例增益 */
     config->pll_ki = 12000.0f;                  /* PLL 积分增益 */
     config->maximum_electrical_speed_rad_s = 8000.0f; /* 电角速度限幅 (rad/s) */
@@ -218,40 +225,24 @@ void Motor_Sensorless_SetDirection(int8_t direction)
     }
 }
 
-/*
- * 观测器主更新，由 20 kHz 电流环调用。
- * 输入为 alpha/beta 轴电压与电流；内部完成 BEMF 估算、滤波及 PLL 跟踪。
- */
-void Motor_Sensorless_Update(float voltage_alpha,
-                             float voltage_beta,
-                             float current_alpha,
-                             float current_beta)
+/* 电流差分与电压方程：首拍只保存电流基准，不产生 BEMF。 */
+static uint8_t Motor_Sensorless_EstimateBemf(float voltage_alpha,
+                                              float voltage_beta,
+                                              float current_alpha,
+                                              float current_beta,
+                                              float *raw_bemf_alpha,
+                                              float *raw_bemf_beta)
 {
     MotorSensorlessConfig *config = &g_sensorless.config;
-    MotorSensorlessOutput *output = &g_sensorless.output;
     float derivative_alpha;
     float derivative_beta;
-    float raw_bemf_alpha;
-    float raw_bemf_beta;
-    float bemf_magnitude;
-    float measured_alpha;
-    float measured_beta;
-    float predicted_alpha;
-    float predicted_beta;
-    float pll_dt;
-    float speed_limit;
-    float phase_error;
-
-    if (g_sensorless.enabled == 0U) {
-        return; /* 未使能时不做任何观测 */
-    }
 
     /* 首拍没有历史电流，仅记录基准，无法进行差分 */
     if (g_sensorless.current_initialized == 0U) {
         g_sensorless.last_current_alpha = current_alpha;
         g_sensorless.last_current_beta = current_beta;
         g_sensorless.current_initialized = 1U;
-        return;
+        return 0U;
     }
 
     /* 用相邻采样差分近似电流导数 di/dt */
@@ -263,12 +254,21 @@ void Motor_Sensorless_Update(float voltage_alpha,
     g_sensorless.last_current_beta = current_beta;
 
     /* 电机电压方程反推反电动势：e = v - R*i - L*di/dt */
-    raw_bemf_alpha = voltage_alpha -
-                     config->resistance_ohm * current_alpha -
-                     config->inductance_h * derivative_alpha;
-    raw_bemf_beta = voltage_beta -
-                    config->resistance_ohm * current_beta -
-                    config->inductance_h * derivative_beta;
+    *raw_bemf_alpha = voltage_alpha -
+                      config->resistance_ohm * current_alpha -
+                      config->inductance_h * derivative_alpha;
+    *raw_bemf_beta = voltage_beta -
+                     config->resistance_ohm * current_beta -
+                     config->inductance_h * derivative_beta;
+    return 1U;
+}
+
+/* 每拍滤波并发布 eαβ；PLL 分频未到时也能读取最新 BEMF。 */
+static void Motor_Sensorless_FilterBemf(float raw_bemf_alpha,
+                                         float raw_bemf_beta)
+{
+    MotorSensorlessConfig *config = &g_sensorless.config;
+    MotorSensorlessOutput *output = &g_sensorless.output;
 
     /* 一阶低通滤波，抑制差分与 PWM 引入的高频噪声 */
     g_sensorless.filtered_bemf_alpha +=
@@ -281,42 +281,54 @@ void Motor_Sensorless_Update(float voltage_alpha,
     /* 即使本拍不跑 PLL，也先把最新的 BEMF 发布出去 */
     output->bemf_alpha_volts = g_sensorless.filtered_bemf_alpha;
     output->bemf_beta_volts = g_sensorless.filtered_bemf_beta;
+}
 
+/* 每 pll_divider 拍才跟踪一次，首拍差分初始化不计入分频。 */
+static uint8_t Motor_Sensorless_PllTickDue(void)
+{
     /* PLL 降速运行：每 pll_divider 拍执行一次，降低计算量 */
     g_sensorless.pll_counter++;
-    if (g_sensorless.pll_counter < config->pll_divider) {
-        return;
+    if (g_sensorless.pll_counter < g_sensorless.config.pll_divider) {
+        return 0U;
     }
     g_sensorless.pll_counter = 0U;
+    return 1U;
+}
 
-    /* BEMF 矢量幅值，用于判断转子是否已转起来（幅值太小则无法辨向） */
-    bemf_magnitude = sqrtf(g_sensorless.filtered_bemf_alpha *
-                           g_sensorless.filtered_bemf_alpha +
-                           g_sensorless.filtered_bemf_beta *
-                           g_sensorless.filtered_bemf_beta);
-    output->bemf_magnitude_volts = bemf_magnitude;
-    pll_dt = config->sample_time_sec * (float)config->pll_divider; /* PLL 实际步长 */
+/* 低 BEMF：累计丢失、保持原有有效标志时序，并以当前速度外推角度。 */
+static void Motor_Sensorless_HandleWeakBemf(float pll_dt)
+{
+    MotorSensorlessConfig *config = &g_sensorless.config;
+    MotorSensorlessOutput *output = &g_sensorless.output;
 
-    /* BEMF 过小：认为转子未转动或观测失效，按当前速度做角度外推并累计丢失计数 */
-    if (bemf_magnitude < config->minimum_bemf_volts) {
-        g_sensorless.lock_counter = 0U;
-        if (g_sensorless.loss_counter < UINT16_MAX) {
-            g_sensorless.loss_counter++;
-        }
-        if (g_sensorless.loss_counter >= config->loss_updates) {
-            output->valid = 0U;
-            /* 曾捕获过相位才算“丢失”，否则仍处于搜索阶段 */
-            output->status = g_sensorless.phase_initialized
-                                 ? MOTOR_SENSORLESS_LOST
-                                 : MOTOR_SENSORLESS_SEARCHING;
-        }
-        output->electrical_angle_rad = Motor_Sensorless_WrapAngle(
-            output->electrical_angle_rad +
-            output->electrical_speed_rad_s * pll_dt);
-        return;
+    g_sensorless.lock_counter = 0U;
+    if (g_sensorless.loss_counter < UINT16_MAX) {
+        g_sensorless.loss_counter++;
     }
+    if (g_sensorless.loss_counter >= config->loss_updates) {
+        output->valid = 0U;
+        /* 曾捕获过相位才算“丢失”，否则仍处于搜索阶段 */
+        output->status = g_sensorless.phase_initialized
+                             ? MOTOR_SENSORLESS_LOST
+                             : MOTOR_SENSORLESS_SEARCHING;
+    }
+    output->electrical_angle_rad = Motor_Sensorless_WrapAngle(
+        output->electrical_angle_rad +
+        output->electrical_speed_rad_s * pll_dt);
+}
 
-    g_sensorless.loss_counter = 0U;
+/* 用 eαβ 的方向做相位捕获与 PLL 跟踪，返回本次锁定判据所需的相位误差。 */
+static float Motor_Sensorless_TrackPll(float bemf_magnitude, float pll_dt)
+{
+    MotorSensorlessConfig *config = &g_sensorless.config;
+    MotorSensorlessOutput *output = &g_sensorless.output;
+    float measured_alpha;
+    float measured_beta;
+    float predicted_alpha;
+    float predicted_beta;
+    float speed_limit;
+    float phase_error;
+
     /* 归一化为单位矢量，仅保留方向信息 */
     measured_alpha = g_sensorless.filtered_bemf_alpha / bemf_magnitude;
     measured_beta = g_sensorless.filtered_bemf_beta / bemf_magnitude;
@@ -367,8 +379,15 @@ void Motor_Sensorless_Update(float voltage_alpha,
     output->mechanical_speed_rpm =
         output->electrical_speed_rad_s * MOTOR_SENSORLESS_RPM_SCALE /
         (float)config->pole_pairs;
+    return phase_error;
+}
 
-    /* 锁相判据：相位误差持续足够小才认为 PLL 已锁定 */
+/* 相位误差连续合格才发布锁定状态；不合格立即退回搜索。 */
+static void Motor_Sensorless_UpdateLockState(float phase_error)
+{
+    MotorSensorlessConfig *config = &g_sensorless.config;
+    MotorSensorlessOutput *output = &g_sensorless.output;
+
     if (Motor_Sensorless_Abs(phase_error) <= config->lock_phase_error) {
         if (g_sensorless.lock_counter < UINT16_MAX) {
             g_sensorless.lock_counter++;
@@ -384,6 +403,52 @@ void Motor_Sensorless_Update(float voltage_alpha,
         output->valid = 1U;
         output->status = MOTOR_SENSORLESS_TRACKING;
     }
+}
+
+/* 20 kHz 电流环调用：eαβ 每拍更新，PLL 与锁定判断按分频执行。 */
+void Motor_Sensorless_Update(float voltage_alpha,
+                             float voltage_beta,
+                             float current_alpha,
+                             float current_beta)
+{
+    MotorSensorlessConfig *config = &g_sensorless.config;
+    MotorSensorlessOutput *output = &g_sensorless.output;
+    float raw_bemf_alpha;
+    float raw_bemf_beta;
+    float bemf_magnitude;
+    float pll_dt;
+    float phase_error;
+
+    if (g_sensorless.enabled == 0U) {
+        return; /* 未使能时不做任何观测 */
+    }
+    if (Motor_Sensorless_EstimateBemf(voltage_alpha, voltage_beta,
+                                       current_alpha, current_beta,
+                                       &raw_bemf_alpha, &raw_bemf_beta) == 0U) {
+        return;
+    }
+    Motor_Sensorless_FilterBemf(raw_bemf_alpha, raw_bemf_beta);
+    if (Motor_Sensorless_PllTickDue() == 0U) {
+        return;
+    }
+
+    /* BEMF 矢量幅值，用于判断转子是否已转起来（幅值太小则无法辨向） */
+    bemf_magnitude = sqrtf(g_sensorless.filtered_bemf_alpha *
+                           g_sensorless.filtered_bemf_alpha +
+                           g_sensorless.filtered_bemf_beta *
+                           g_sensorless.filtered_bemf_beta);
+    output->bemf_magnitude_volts = bemf_magnitude;
+    pll_dt = config->sample_time_sec * (float)config->pll_divider; /* PLL 实际步长 */
+
+    /* BEMF 过小：认为转子未转动或观测失效，按当前速度做角度外推并累计丢失计数 */
+    if (bemf_magnitude < config->minimum_bemf_volts) {
+        Motor_Sensorless_HandleWeakBemf(pll_dt);
+        return;
+    }
+
+    g_sensorless.loss_counter = 0U;
+    phase_error = Motor_Sensorless_TrackPll(bemf_magnitude, pll_dt);
+    Motor_Sensorless_UpdateLockState(phase_error);
 }
 
 /* 原子读取一份输出快照，避免读到中断更新到一半的数据。 */

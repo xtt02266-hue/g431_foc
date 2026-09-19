@@ -5,8 +5,8 @@
 
 void Motor_AngleReference_Init(void);
 void Motor_AngleReference_BackgroundTask(void);
-/* Independent AS5600 calibration: offset is mechanical radians; direction +/-1.
- * Returns 0 on stale/unavailable data or invalid arguments; never controls FOC. */
+/* sensorless混合配置下，从同一个AS5600样本计算对比用参考电角度。
+ * offset为机械弧度，direction为+/-1；数据过期或参数非法时返回0。 */
 uint8_t Motor_AngleReference_GetElectricalAngle(uint16_t pole_pairs,
                                                int8_t direction,
                                                float mechanical_offset_rad,

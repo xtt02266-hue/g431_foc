@@ -65,7 +65,6 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     user/src/motor_songs.c
     user/src/motor_sensorless.c
     user/src/motor_trajectory.c
-    user/src/mt6826s.c
     user/src/motor_encoder.c
     user/src/oled.c
     user/src/pid.c
@@ -80,6 +79,7 @@ if(FOC_PROFILE STREQUAL "sensorless")
     target_sources(${CMAKE_PROJECT_NAME} PRIVATE user/src/as5600.c)
     target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE FOC_PROFILE_SENSORLESS=1)
 else()
+    target_sources(${CMAKE_PROJECT_NAME} PRIVATE user/src/mt6826s.c)
     target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE FOC_PROFILE_SENSORLESS=0)
 endif()
 message(STATUS "FOC development profile: ${FOC_PROFILE}")

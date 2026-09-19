@@ -1,10 +1,12 @@
 #include "pc_protocol.h"
 #include "motor_system.h"
 #include "motor_parameters.h"
+#include "motor_identify.h"
 #include "motor_current_loop.h"
 #include "motor_debug.h"
 #include "motor_encoder.h"
-#include "mt6826s.h"
+#include "motor_sensorless.h"
+#include "motor_angle_reference.h"
 #include "usart.h"
 #include <math.h>
 #include <string.h>
@@ -28,7 +30,8 @@ enum { CMD_HELLO=0x01, CMD_GET_STATUS=0x02, CMD_CLAIM=0x03,
        CMD_SET_SPEED=0x27, CMD_SET_COGGING_CONFIG=0x28,
        CMD_GET_COGGING_CONFIG=0x29, CMD_COGGING_TABLE_BEGIN=0x2A,
        CMD_COGGING_TABLE_CHUNK=0x2B, CMD_COGGING_TABLE_COMMIT=0x2C,
-       CMD_GET_COGGING_TABLE_CHUNK=0x2D, CMD_SAVE_COGGING=0x2E };
+       CMD_GET_COGGING_TABLE_CHUNK=0x2D, CMD_SAVE_COGGING=0x2E,
+       CMD_SET_ANGLE_SOURCE=0x2F, CMD_SET_STARTUP_CONFIG=0x30 };
 
 static volatile uint8_t s_ring[RX_RING_SIZE];
 static volatile uint16_t s_head, s_tail;
@@ -111,11 +114,12 @@ static uint16_t build_status(uint8_t *p)
     put_u32(&p[0],HAL_GetTick()); p[4]=(uint8_t)s.state; p[5]=(uint8_t)s.mode;
     p[6]=(uint8_t)s.source; p[7]=(uint8_t)s.owner; p[8]=s.run_requested;
     p[9]=(uint8_t)Motor_Parameters_GetStatus();
-    p[10]=Motor_Encoder_IsDataFresh(2U); p[11]=MT6826S_GetStatus();
+    p[10]=Motor_Encoder_IsDataFresh(2U); p[11]=Motor_Encoder_GetStatus();
     uint32_t faults = 0U;
     if (p[10] == 0U) faults |= 1U;
     if (p[9] == (uint8_t)MOTOR_PARAMETERS_ERROR) faults |= 2U;
-    put_u32(&p[12],faults); p[16]=0U; p[17]=p[18]=p[19]=0U;
+    put_u32(&p[12],faults); p[16]=0U; p[17]=(uint8_t)s.angle_source;
+    p[18]=(uint8_t)s.startup_mode; p[19]=(uint8_t)s.startup_phase;
     put_u32(&p[20],s.config_revision); put_f32(&p[24],s.iq_limit_a);
     put_u32(&p[28],s_crc_errors); put_u32(&p[32],s_overflows);
     put_u32(&p[36],s_telemetry_drops); return 40U;
@@ -167,7 +171,7 @@ static void handle_command(uint16_t seq, const uint8_t *p, uint16_t n)
         else {
             out[0]=1U; out[1]=4U; out[2]=0U; put_u16(&out[3],4U);
             put_u32(&out[5],HAL_GetUIDw0()); put_u32(&out[9],HAL_GetUIDw1()); put_u32(&out[13],HAL_GetUIDw2());
-            put_u32(&out[17],0xFFU); put_u32(&out[21],0x7FU);
+            put_u32(&out[17],0xFFU); put_u32(&out[21],0xFFU);
             put_f32(&out[25],MOTOR_TORQUE_CURRENT_LIMIT_A); put_f32(&out[29],MOTOR_HOST_DEFAULT_IQ_LIMIT_A);
             put_u16(&out[33],PC_PROTOCOL_MAX_PAYLOAD); put_u16(&out[35],MOTOR_HOST_HEARTBEAT_TIMEOUT_MS); out_n=37U;
         }
@@ -207,9 +211,15 @@ static void handle_command(uint16_t seq, const uint8_t *p, uint16_t n)
         if (bn!=22U) r=MOTOR_CMD_INVALID_LENGTH;
         else { hp.spring_k_a_per_rad=get_f32(&b[0]); hp.damping_b_a_per_rad_s=get_f32(&b[4]); hp.detent_k_a_per_rad=get_f32(&b[8]); hp.limit_k_a_per_rad=get_f32(&b[12]); hp.limit_half_range_deg=get_f32(&b[16]); hp.detent_count=get_u16(&b[20]); r=Motor_System_HostSetHapticParams(&hp); }
     } else if (cmd == CMD_GET_PARAMS) {
-        MotorControlSnapshot cs; MotorHapticParams hp; Motor_System_GetControlSnapshot(&cs); Motor_System_GetHapticParams(&hp);
+        MotorControlSnapshot cs; MotorHapticParams hp;
+        MotorIdentifiedParams motor = Motor_Identify_GetResult();
+        Motor_System_GetControlSnapshot(&cs); Motor_System_GetHapticParams(&hp);
         out[0]=(uint8_t)cs.mode; out[1]=(uint8_t)cs.source; put_f32(&out[2],cs.iq_limit_a); put_f32(&out[6],MOTOR_IQ_SLEW_A_PER_S);
         put_f32(&out[10],hp.spring_k_a_per_rad); put_f32(&out[14],hp.damping_b_a_per_rad_s); put_f32(&out[18],hp.detent_k_a_per_rad); put_f32(&out[22],hp.limit_k_a_per_rad); put_f32(&out[26],hp.limit_half_range_deg); put_u16(&out[30],hp.detent_count); out_n=32U;
+        put_f32(&out[32],motor.resistance); put_f32(&out[36],motor.inductance);
+        put_f32(&out[40],motor.zero_angle_offset); put_u16(&out[44],motor.pole_pairs);
+        out[46]=(uint8_t)motor.uvw_dir; out[47]=(uint8_t)Motor_Parameters_GetStatus(); out_n=48U;
+        out[48]=(uint8_t)cs.startup_mode; put_f32(&out[49],cs.startup_handover_rpm); out_n=53U;
     } else if (cmd == CMD_SET_FRICTION) {
         MotorFrictionConfig fc;
         if (bn!=17U) r=MOTOR_CMD_INVALID_LENGTH;
@@ -234,6 +244,12 @@ static void handle_command(uint16_t seq, const uint8_t *p, uint16_t n)
         float accepted=0.0f;
         if (bn!=4U) r=MOTOR_CMD_INVALID_LENGTH;
         else { r=Motor_System_HostSetSpeed(get_f32(b),&accepted); put_f32(out,accepted); out_n=4U; }
+    } else if (cmd == CMD_SET_ANGLE_SOURCE) {
+        if (bn!=1U) r=MOTOR_CMD_INVALID_LENGTH;
+        else { r=Motor_System_HostSetAngleSource((MotorAngleSource)b[0]); out[0]=(uint8_t)Motor_CurrentLoop_GetAngleSource(); out_n=1U; }
+    } else if (cmd == CMD_SET_STARTUP_CONFIG) {
+        if (bn!=5U) r=MOTOR_CMD_INVALID_LENGTH;
+        else { r=Motor_System_HostSetStartupConfig((MotorStartupMode)b[0],get_f32(&b[1])); }
     } else if (cmd == CMD_SET_COGGING_CONFIG) {
         MotorCoggingConfig cc;
         if (bn!=19U) r=MOTOR_CMD_INVALID_LENGTH;
@@ -369,9 +385,24 @@ void PC_Protocol_Task(void)
 
 void PC_Protocol_SendTelemetry(void)
 {
-    uint8_t p[86]; MotorControlSnapshot s; Motor_System_GetControlSnapshot(&s);
-    put_u16(&p[0],4U); put_u32(&p[2],HAL_GetTick()); put_u32(&p[6],++s_sample_seq);
-    float values[19] = { Motor_System_GetDebugPotTarget(), g_foc_state.pi_q.target,
+    uint8_t p[102];
+    MotorControlSnapshot s;
+    MotorSensorlessOutput sensorless;
+    MotorCurrentParams current_params;
+    float reference_electrical_angle_rad = 0.0f;
+    uint8_t reference_valid;
+
+    Motor_System_GetControlSnapshot(&s);
+    sensorless = Motor_Sensorless_GetOutput();
+    current_params = Motor_CurrentLoop_GetParams();
+    reference_valid = Motor_AngleReference_GetElectricalAngle(
+        current_params.pole_pairs,
+        current_params.uvw_dir,
+        current_params.zero_angle_offset,
+        &reference_electrical_angle_rad);
+
+    put_u16(&p[0],5U); put_u32(&p[2],HAL_GetTick()); put_u32(&p[6],++s_sample_seq);
+    float values[23] = { Motor_System_GetDebugPotTarget(), g_foc_state.pi_q.target,
         g_foc_state.park.q, g_foc_state.park.d, g_motor_system.run_data.speed_rpm,
         g_foc_state.pi_q.output, (float)Motor_Encoder_GetRawAngle()*MOTOR_ENCODER_RAD_PER_COUNT,
         s.continuous_angle_rad, g_foc_state.target_q, s.relative_center_angle_rad,
@@ -379,7 +410,11 @@ void PC_Protocol_SendTelemetry(void)
         s.speed_loop_iq_a + s.friction_iq_a, s.cogging_iq_a,
         s.cogging_effective_gain, (float)s.cogging_table_revision,
         (float)(s.cogging_table_crc & 0xFFFFU),
-        (float)(s.cogging_table_crc >> 16U) };
+        (float)(s.cogging_table_crc >> 16U),
+        sensorless.electrical_angle_rad,
+        reference_electrical_angle_rad,
+        (float)sensorless.valid,
+        (float)reference_valid };
     memcpy(&p[10],values,sizeof(values));
     if (queue_frame(TYPE_TELEMETRY,++s_telemetry_seq,p,sizeof(p),0U)==0U) ++s_telemetry_drops;
 }

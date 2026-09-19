@@ -13,10 +13,18 @@
 #define MOTOR_HOST_DEFAULT_IQ_LIMIT_A  0.10f
 #define MOTOR_HOST_HEARTBEAT_TIMEOUT_MS 500U
 #define MOTOR_IQ_SLEW_A_PER_S          1.0f
-#define MOTOR_HOST_SPEED_MAX_RPM       400.0f
+#define MOTOR_HOST_SPEED_MAX_RPM       1200.0f
 #define MOTOR_HOST_SPEED_SLEW_RPM_PER_S 1000.0f
 /* Speed闭环需要及时从驱动切换到制动；Free触觉仍使用上面的柔和斜率。 */
 #define MOTOR_SPEED_IQ_SLEW_A_PER_S    5.0f
+/* 无感强拖启动：先定向，再线性拉升开环电角速度。 */
+#define MOTOR_SENSORLESS_STARTUP_ALIGN_MS          300U
+#define MOTOR_SENSORLESS_STARTUP_RAMP_MS          1500U
+#define MOTOR_SENSORLESS_STARTUP_LOCK_TIMEOUT_MS  2500U
+#define MOTOR_SENSORLESS_STARTUP_CURRENT_A        0.10f
+#define MOTOR_SENSORLESS_HANDOVER_DEFAULT_RPM     300.0f
+#define MOTOR_SENSORLESS_HANDOVER_MIN_RPM         100.0f
+#define MOTOR_SENSORLESS_HANDOVER_MAX_RPM         600.0f
 #define MOTOR_PARAMETERS_AUTO_IDENTIFY 0
 /* BM3514H 商品页：291 KV。按常用 FOC 近似 Kt=8.27/KV 估算。
  * 单位 N·m/A，Iq 峰值定义；非实测标定，现有 R/L 辨识不测 Kt。
@@ -45,7 +53,7 @@
 
 #define MOTOR_SYSTEM_TASK_DT_SEC       0.001f
 /*
- * MT6826S 15位SPI角度的速度估算始终每1 ms发布；只调整滚动位置窗长度。
+ * 编码器抽象层的15位角度速度估算始终每1 ms发布；只调整滚动位置窗长度。
  * 窗口切换使用迟滞，避免临界转速附近来回切换。
  */
 #define SPEED_EST_WINDOW_TICKS         20U

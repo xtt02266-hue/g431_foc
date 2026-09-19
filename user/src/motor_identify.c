@@ -266,7 +266,7 @@ static void Identify_Align(void)
                             MOTOR_IDENTIFY_ALIGN_SAMPLE_MS))
     {
         // 极点吸固后，读取此刻的磁编码器角度作为机械零点
-        // 将MT6826S的0~32767原始值换算为弧度(0~2π)。
+        // 将编码器抽象层的0~32767角度值换算为弧度(0~2π)。
         float align_mech_angle;
 
         if (g_align_sample_count == 0U) {

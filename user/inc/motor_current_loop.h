@@ -88,6 +88,13 @@ typedef struct
     float q;
 } MotorParkFrame;
 
+typedef enum
+{
+    MOTOR_ANGLE_SOURCE_ENCODER = 0,
+    MOTOR_ANGLE_SOURCE_SENSORLESS,
+    MOTOR_ANGLE_SOURCE_OPEN_LOOP
+} MotorAngleSource;
+
 // 电流环/FOC 全局状态。
 typedef struct
 {
@@ -121,6 +128,11 @@ void Motor_CurrentLoop_SetMotorIdentityParams(uint16_t pole_pairs, float zero_an
 // FOC 闭环启停开关
 void Motor_CurrentLoop_Enable(uint8_t enable);
 uint8_t Motor_CurrentLoop_IsEnabled(void);
+void Motor_CurrentLoop_SetAngleSource(MotorAngleSource source);
+MotorAngleSource Motor_CurrentLoop_GetAngleSource(void);
+void Motor_CurrentLoop_SetOpenLoopElectricalAngle(float angle_rad);
+void Motor_CurrentLoop_SetOpenLoopElectricalSpeed(float speed_rad_s);
+uint8_t Motor_CurrentLoop_TakeAngleSourceFault(void);
 // 根据辨识出的 R/L 自动整定电流环 PID（辨识完成后调用）
 void Motor_CurrentLoop_AutoTunePID(float resistance, float inductance, float bus_voltage);
 void Motor_CurrentLoop_AutoTunePIDWithBandwidth(float resistance,
