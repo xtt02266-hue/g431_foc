@@ -29,6 +29,11 @@ set_property(CACHE FOC_PROFILE PROPERTY STRINGS sensored sensorless)
 if(NOT FOC_PROFILE MATCHES "^(sensored|sensorless)$")
     message(FATAL_ERROR "FOC_PROFILE must be sensored or sensorless")
 endif()
+set(COMM_BACKEND "uart" CACHE STRING "uart or usb")
+set_property(CACHE COMM_BACKEND PROPERTY STRINGS uart usb)
+if(NOT COMM_BACKEND MATCHES "^(uart|usb)$")
+    message(FATAL_ERROR "COMM_BACKEND must be uart or usb")
+endif()
 
 # Core project settings
 project(${CMAKE_PROJECT_NAME})
@@ -69,10 +74,36 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     user/src/oled.c
     user/src/pid.c
     user/src/pc_protocol.c
+    user/src/pc_transport.c
     user/src/svpwm.c
     user/src/user_io.c
-    user/src/vofa_usart.c
 )
+
+if(COMM_BACKEND STREQUAL "usb")
+    target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+        Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_pcd.c
+        Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_pcd_ex.c
+        Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_ll_usb.c
+        Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_core.c
+        Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_ctlreq.c
+        Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_ioreq.c
+        Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c
+        USB_Device/App/usb_device.c
+        USB_Device/App/usbd_desc.c
+        USB_Device/App/usbd_cdc_if.c
+        USB_Device/Target/usbd_conf.c
+    )
+    target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
+        Middlewares/ST/STM32_USB_Device_Library/Core/Inc
+        Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc
+        USB_Device/App
+        USB_Device/Target
+    )
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE COMM_BACKEND_USB=1)
+else()
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE COMM_BACKEND_USB=0)
+endif()
+message(STATUS "PC communication backend: ${COMM_BACKEND}")
 
 # Add include paths
 if(FOC_PROFILE STREQUAL "sensorless")

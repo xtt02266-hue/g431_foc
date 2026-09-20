@@ -7,7 +7,8 @@
 #include "motor_current_loop.h"
 #include "motor_identify.h"
 #include "svpwm.h"
-#include "vofa_usart.h" // 包含 VOFA 系列函数
+#include "pc_protocol.h"
+#include "pc_transport.h"
 #include "motor_encoder.h"
 #include "motor_system.h"
 #include "motor_parameters.h"
@@ -43,13 +44,11 @@ static void Hardware_CalibrateCurrentBias(void)
     // 计算平均原始值并求出基准电压
     float bias_raw_u = (float)bias_sum_u / calibrate_count;
     float bias_raw_w = (float)bias_sum_w / calibrate_count;
-    // 取两相偏置平均作为系统的基准偏置电压 （也可以单相独立处理，这里合并计算平均）
-    float actual_bias_raw = (bias_raw_u + bias_raw_w) / 2.0f;
-    
-    // 原始值 -> 电压
+    // 两路运放零点并不完全相同，分别换算并保存，避免公共偏置制造相反零漂。
     MotorCurrentParams params = Motor_CurrentLoop_GetParams();
-    float actual_bias_volts = (actual_bias_raw * params.vref_volts) / params.adc_max;
-    Motor_CurrentLoop_SetBiasVolts(actual_bias_volts);
+    float bias_u_volts = (bias_raw_u * params.vref_volts) / params.adc_max;
+    float bias_w_volts = (bias_raw_w * params.vref_volts) / params.adc_max;
+    Motor_CurrentLoop_SetPhaseBiasVolts(bias_u_volts, bias_w_volts);
     HAL_ADCEx_InjectedStop(&hadc1);
     
 }
@@ -98,8 +97,9 @@ void hardware_init(void)
 
     // 5. 启动 TIM2 (用于 1ms / 1000Hz 周期任务调度)
 
-    // 6. 启动串口接收 (与 VOFA+ 上位机通信)
-    VOFA_Init(); 
+    // 6. 启动所选的上位机传输后端（UART DMA 或 USB CDC）。
+    PC_Protocol_Init();
+    PC_Transport_Init();
 
     OLED_Init();
     HAL_Delay(50);

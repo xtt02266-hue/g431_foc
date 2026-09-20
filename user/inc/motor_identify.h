@@ -3,10 +3,7 @@
 
 #include <stdint.h>
 
-/* BM3514H 标称相电感：用户已确认 1.2mH 是相电感，不是线间电感，不再除以 2。
- * 当前没有实测电感算法；辨识流程和 Flash 参数加载统一使用此值整定电流环。
- */
-#define MOTOR_NOMINAL_PHASE_INDUCTANCE_H  0.0012f
+/* R/L/极对数的标称值统一定义在 motor_config.h；这里仅声明辨识接口。 */
 
 // 电机辨识状态机枚举。
 typedef enum

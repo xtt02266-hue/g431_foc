@@ -8,6 +8,7 @@
 
 void PC_Protocol_Init(void);
 void PC_Protocol_FeedFromISR(const uint8_t *data, uint16_t length);
+void PC_Protocol_NotifyTxCompleteFromISR(void);
 void PC_Protocol_Task(void);
 void PC_Protocol_SendTelemetry(void);
 uint32_t PC_Protocol_GetCrcErrorCount(void);

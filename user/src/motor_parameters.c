@@ -198,10 +198,24 @@ void Motor_Parameters_Init(void)
         g_auto_identify_pending = 0U;
         g_parameters_status = MOTOR_PARAMETERS_READY;
     } else {
+#if FOC_PROFILE_SENSORLESS
+        /* 纯无感强拖不需要编码器零偏。空白 Flash 时直接装入数据表参数，
+         * 相序先按 +1；AS5600 启动仍由系统层要求已有真实标定记录。 */
+        params.resistance = MOTOR_NOMINAL_PHASE_RESISTANCE_OHM;
+        params.inductance = MOTOR_NOMINAL_PHASE_INDUCTANCE_H;
+        params.zero_angle_offset = 0.0f;
+        params.pole_pairs = MOTOR_NOMINAL_POLE_PAIRS;
+        params.uvw_dir = MOTOR_NOMINAL_UVW_DIRECTION;
+        Motor_Identify_UseResult(&params);
+        g_has_stored_data = 0U;
+        g_auto_identify_pending = 0U;
+        g_parameters_status = MOTOR_PARAMETERS_READY;
+#else
         g_has_stored_data = 0U;
         g_auto_identify_pending = (BOARD_SENSORED_CONTROL_ENABLE &&
                                    (MOTOR_PARAMETERS_AUTO_IDENTIFY != 0)) ? 1U : 0U;
         g_parameters_status = MOTOR_PARAMETERS_NO_DATA;
+#endif
     }
 }
 
@@ -231,6 +245,10 @@ uint8_t Motor_Parameters_IdentifyAndSave(void)
     Motor_CurrentLoop_Enable(0U);
     SVPWM_Disable();
     Motor_OpenLoop_Drive(0.0f, 0.0f);
+
+    /* STOP 现在会关闭 TIM1 MOE 使功率桥高阻；参数辨识直接写 CCR，
+     * 因此开始辨识前显式重新打开功率级，结束/失败仍由统一停止路径关闭。 */
+    SVPWM_Enable();
 
     g_parameters_status = MOTOR_PARAMETERS_IDENTIFYING;
     Motor_Identify_Start();

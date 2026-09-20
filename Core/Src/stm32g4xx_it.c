@@ -364,6 +364,15 @@ void USART2_IRQHandler(void)
   /* USER CODE END USART2_IRQn 1 */
 }
 
+#if defined(COMM_BACKEND_USB) && (COMM_BACKEND_USB != 0)
+extern PCD_HandleTypeDef hpcd_USB_FS;
+
+void USB_LP_IRQHandler(void)
+{
+  HAL_PCD_IRQHandler(&hpcd_USB_FS);
+}
+#endif
+
 /**
   * @brief This function handles DMA2 channel1 global interrupt.
   */

@@ -28,6 +28,16 @@
             "cacheVariables": { "FOC_PROFILE": "sensorless" }
         },
         {
+            "name": "sensored-usb-debug",
+            "inherits": "Debug",
+            "cacheVariables": { "FOC_PROFILE": "sensored", "COMM_BACKEND": "usb" }
+        },
+        {
+            "name": "sensorless-usb-debug",
+            "inherits": "Debug",
+            "cacheVariables": { "FOC_PROFILE": "sensorless", "COMM_BACKEND": "usb" }
+        },
+        {
             "name": "Release",
             "inherits": "default",
             "cacheVariables": {
@@ -43,6 +53,14 @@
         {
             "name": "sensorless-debug",
             "configurePreset": "sensorless-debug"
+        },
+        {
+            "name": "sensored-usb-debug",
+            "configurePreset": "sensored-usb-debug"
+        },
+        {
+            "name": "sensorless-usb-debug",
+            "configurePreset": "sensorless-usb-debug"
         },
         {
             "name": "Debug",

@@ -2,6 +2,7 @@
 #include "motor_config.h"
 #include "motor_encoder.h"
 #include "pid.h"
+#include <math.h>
 
 // 速度环PID控制器实例
 PID_Controller speed_pid;
@@ -206,6 +207,39 @@ float Motor_SpeedLoop_Update(float current_speed_rpm) {
     
     // 3. 返回计算的输出值 (作为电流环的 Iq 目标值)
     return speed_pid.output;
+}
+
+/*
+ * 在开环强拖切换到速度环前，反算积分初值，使速度 PI 的首拍输出与
+ * 交接前的 Iq 连续。否则 PID_Reset() 会把输出瞬间拉到纯比例项。
+ */
+void Motor_SpeedLoop_Preload(float target_speed_rpm,
+                             float current_speed_rpm,
+                             float output_a)
+{
+    float error;
+    float integral;
+
+    if (!isfinite(target_speed_rpm) ||
+        !isfinite(current_speed_rpm) ||
+        !isfinite(output_a)) {
+        PID_Reset(&speed_pid);
+        return;
+    }
+
+    if (output_a > speed_pid.out_max) output_a = speed_pid.out_max;
+    if (output_a < speed_pid.out_min) output_a = speed_pid.out_min;
+    error = target_speed_rpm - current_speed_rpm;
+    integral = output_a - speed_pid.kp * error;
+    if (integral > speed_pid.out_max) integral = speed_pid.out_max;
+    if (integral < speed_pid.out_min) integral = speed_pid.out_min;
+
+    speed_pid.target = target_speed_rpm;
+    speed_pid.measure = current_speed_rpm;
+    speed_pid.integral = integral;
+    speed_pid.prev_error = error;
+    speed_pid.prev_measure = current_speed_rpm;
+    speed_pid.output = output_a;
 }
 
 

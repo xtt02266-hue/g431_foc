@@ -54,7 +54,9 @@
 typedef struct
 {
     float vref_volts;
-    float bias_volts;
+    float bias_volts;       // 两通道平均零点，保留给状态/兼容接口
+    float bias_u_volts;     // U 相采样放大器独立零点
+    float bias_w_volts;     // W 相采样放大器独立零点
     float shunt_ohms;
     float gain;
     float adc_max;
@@ -87,6 +89,16 @@ typedef struct
     float d;
     float q;
 } MotorParkFrame;
+
+/* 遥测所需的同一拍 FOC 数据，避免主循环读取时被 20 kHz ISR 拆帧。 */
+typedef struct
+{
+    MotorCurrentSample sample;
+    MotorParkFrame park;
+    float target_q;
+    float pi_q_target;
+    float pi_q_output;
+} MotorCurrentTelemetrySnapshot;
 
 typedef enum
 {
@@ -130,6 +142,8 @@ void Motor_CurrentLoop_Enable(uint8_t enable);
 uint8_t Motor_CurrentLoop_IsEnabled(void);
 void Motor_CurrentLoop_SetAngleSource(MotorAngleSource source);
 MotorAngleSource Motor_CurrentLoop_GetAngleSource(void);
+/* 原子地旋转目标电流和PI积分状态，并切换到无感坐标系。 */
+MotorParkFrame Motor_CurrentLoop_HandoverToSensorless(float electrical_angle_rad);
 void Motor_CurrentLoop_SetOpenLoopElectricalAngle(float angle_rad);
 void Motor_CurrentLoop_SetOpenLoopElectricalSpeed(float speed_rad_s);
 uint8_t Motor_CurrentLoop_TakeAngleSourceFault(void);
@@ -143,6 +157,8 @@ void Motor_CurrentLoop_AutoTunePIDWithBandwidth(float resistance,
 MotorCurrentParams Motor_CurrentLoop_GetParams(void);
 // 设置偏置电压。
 void Motor_CurrentLoop_SetBiasVolts(float bias_volts);
+void Motor_CurrentLoop_SetPhaseBiasVolts(float bias_u_volts,
+                                         float bias_w_volts);
 // 设置参考电压。
 void Motor_CurrentLoop_SetVrefVolts(float vref_volts);
 // 设置放大器增益。
@@ -154,6 +170,7 @@ void Motor_CurrentLoop_Run(uint16_t iu_raw, uint16_t iw_raw);
 
 // 获取最近一次采样。
 MotorCurrentSample Motor_CurrentLoop_GetLastSample(void);
+MotorCurrentTelemetrySnapshot Motor_CurrentLoop_GetTelemetrySnapshot(void);
 
 // Clarke 变换（两相电流输入，三相假设 iU + iV + iW = 0）。
 MotorClarkeFrame Motor_CurrentLoop_Clarke(float iu_a, float iw_a);

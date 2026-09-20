@@ -37,11 +37,12 @@ void SVPWM_Init(void)
     g_svpwm.mod_index = 0.0f;
     g_svpwm.enabled = 0;
 
-    // 初始化 PWM 输出为 50% 零矢量（上电安全状态）
+    // 先写入中点，再关闭 TIM1 主输出；上电保持三相桥高阻滑行状态。
     uint32_t half_arr = SVPWM_ARR / 2U;
     __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, half_arr);
     __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, half_arr);
     __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, half_arr);
+    __HAL_TIM_MOE_DISABLE(&htim1);
 }
 
 // ---------------------------------------------------------
@@ -167,7 +168,14 @@ void SVPWM_SetVoltage(float v_alpha, float v_beta, float v_bus)
 
 void SVPWM_Enable(void)
 {
+    uint32_t primask = __get_PRIMASK();
+
+    __disable_irq();
     g_svpwm.enabled = 1U;
+    __HAL_TIM_MOE_ENABLE(&htim1);
+    if (primask == 0U) {
+        __enable_irq();
+    }
 }
 
 uint8_t SVPWM_IsEnabled(void)
@@ -175,7 +183,9 @@ uint8_t SVPWM_IsEnabled(void)
     return g_svpwm.enabled;
 }
 
-// 禁用 SVPWM 输出：三相 50% 占空比（零矢量）。
+/* 禁用 SVPWM 输出：先把比较值复位到中点，再关闭高级定时器 MOE。
+ * 仅写三相 50% 会形成同步零矢量并产生动态制动；关闭 MOE 后六路栅极
+ * 输出回到配置的 RESET 空闲态，STOP/故障路径改为滑行而不是主动急停。 */
 void SVPWM_Disable(void)
 {
     uint32_t primask = __get_PRIMASK();
@@ -187,6 +197,7 @@ void SVPWM_Disable(void)
     __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, half_arr);
     __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, half_arr);
     __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, half_arr);
+    __HAL_TIM_MOE_DISABLE(&htim1);
 
     g_svpwm.duty_a = 0.5f;
     g_svpwm.duty_b = 0.5f;

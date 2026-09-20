@@ -21,8 +21,8 @@ extern MotorSpeedEstimator speed_est;
  * 无外加负载、摩擦前馈配合下的保守速度环基线参数。
  * 输入误差单位为机械 RPM，输出单位为 q 轴电流 A。
  */
-#define MOTOR_SPEED_PID_KP          0.0016f
-#define MOTOR_SPEED_PID_KI          0.0001f
+#define MOTOR_SPEED_PID_KP          0.003f
+#define MOTOR_SPEED_PID_KI          0.0010f
 #define MOTOR_SPEED_PID_KD          0.0f
 #define MOTOR_SPEED_PID_OUT_MAX     1.1f
 #define MOTOR_SPEED_PID_OUT_MIN     -1.1f
@@ -32,6 +32,9 @@ extern MotorSpeedEstimator speed_est;
 void Motor_SpeedLoop_Init(void);
 void Motor_SpeedLoop_SetTarget(float target_speed_rpm);
 float Motor_SpeedLoop_Update(float current_speed_rpm);
+void Motor_SpeedLoop_Preload(float target_speed_rpm,
+                             float current_speed_rpm,
+                             float output_a);
 
 // 速度测算相关
 void Motor_SpeedEstimator_Init(float filter_alpha);

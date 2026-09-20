@@ -7,7 +7,7 @@
             "command": "C:\\Users\\scott\\AppData\\Local\\stm32cube\\bundles\\cmake\\4.3.1+st.1\\bin\\cmake.exe",
             "args": [
                 "--preset",
-                "Debug"
+                "sensorless-usb-debug"
             ],
             "options": {
                 "env": {
@@ -23,7 +23,7 @@
             "args": [
                 "--build",
                 "--preset",
-                "Debug"
+                "sensorless-usb-debug"
             ],
             "options": {
                 "env": {
@@ -60,7 +60,7 @@
                 "-f",
                 "800000",
                 "--no-wait",
-                "${workspaceFolder}\\build\\Debug\\g431_foc.elf"
+                "${workspaceFolder}\\build\\sensorless-usb-debug\\g431_foc.elf"
             ],
             "dependsOn": [
                 "CMake: Build Debug"

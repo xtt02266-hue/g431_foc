@@ -33,6 +33,7 @@
 #include "motor_system.h" // 引入了我们要用的显示测试接口
 #include "motor_parameters.h"
 #include "motor_angle_reference.h"
+#include "board_profile.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -102,7 +103,9 @@ int main(void)
   MX_TIM2_Init();
   MX_ADC2_Init();
   MX_I2C1_Init();
+#if !BOARD_COMM_USB_CDC
   MX_USART2_UART_Init();
+#endif
   MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
   hardware_init();

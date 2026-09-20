@@ -146,12 +146,13 @@ void Motor_Identify_UseResult(const MotorIdentifiedParams *params)
     }
 
     g_identified_params = *params;
-    /* 旧固件曾保存 0.6mH 占位值，不能让旧 Flash 覆盖已确认的相电感。
-     * 仅更新 RAM 中的标称电感，保留原来的电阻、极对数、方向和零点标定。
-     * 不在开机时擦写 Flash；下次主动辨识保存时才将新电感一并写入。
+    /* R/L/极对数采用已确认的数据表值；Flash 只继续提供相序和零点标定。
+     * 不在开机时擦写 Flash；下次主动辨识保存时再写入新标称值。
      */
+    g_identified_params.resistance = MOTOR_NOMINAL_PHASE_RESISTANCE_OHM;
     g_identified_params.inductance = MOTOR_NOMINAL_PHASE_INDUCTANCE_H;
-    Motor_CurrentLoop_SetMotorIdentityParams(params->pole_pairs,
+    g_identified_params.pole_pairs = MOTOR_NOMINAL_POLE_PAIRS;
+    Motor_CurrentLoop_SetMotorIdentityParams(g_identified_params.pole_pairs,
                                              params->zero_angle_offset,
                                              params->uvw_dir);
     g_identify_timer = 0U;
@@ -224,8 +225,7 @@ static void Identify_MeasureR(void)
 // 目的：给电流环 PI 整定提供已确认的相电感，避免使用旧的 0.6mH 占位值。
 static void Identify_MeasureL(void)
 {
-    // 当前 1ms 辨识任务没有实现电流瞬态采样，采用 BM3514H 标称相电感 1.2mH。
-    // 用户已确认这是相电感，直接换算为 0.0012H，不做线间到相的除以 2 操作。
+    // 当前 1ms 辨识任务没有实现电流瞬态采样，采用数据表相电感 0.097mH。
 
     g_identify_timer++;
 
@@ -287,6 +287,10 @@ static void Identify_Align(void)
         {
             g_identified_params.uvw_dir = 1;
         }
+
+        g_identified_params.resistance = MOTOR_NOMINAL_PHASE_RESISTANCE_OHM;
+        g_identified_params.inductance = MOTOR_NOMINAL_PHASE_INDUCTANCE_H;
+        g_identified_params.pole_pairs = MOTOR_NOMINAL_POLE_PAIRS;
 
         float elec_align_angle = MOTOR_OPEN_LOOP_ALIGN_ANGLE + MOTOR_OPEN_LOOP_VECTOR_SHIFT;
         float mech_zero_offset = elec_align_angle /
@@ -367,7 +371,7 @@ static void Identify_UvwAndPoles(void)
         // 1. 判断相序方向 (累加的角度是正还是负一目了然)
         g_identified_params.uvw_dir = (g_accumulated_mech_angle >= 0.0f) ? 1 : -1;
         
-        // 2. 计算极对数（累计机械计数/32768=机械圈数）。
+        // 2. 位移只用于确认电机确实跟随；极对数采用数据表值。
         float mech_turns = fabsf(g_accumulated_mech_angle) /
                            MOTOR_ENCODER_COUNTS_PER_REV_F;
         
@@ -377,8 +381,7 @@ static void Identify_UvwAndPoles(void)
             return;
         }
 
-        g_identified_params.pole_pairs =
-            (uint16_t)roundf(MOTOR_IDENTIFY_UVW_CYCLES / mech_turns);
+        g_identified_params.pole_pairs = MOTOR_NOMINAL_POLE_PAIRS;
 
         if ((g_identified_params.pole_pairs == 0U) ||
             (g_identified_params.pole_pairs > MOTOR_IDENTIFY_MAX_POLE_PAIRS)) {

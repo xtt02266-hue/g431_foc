@@ -23,12 +23,15 @@ typedef struct
 
     float bemf_filter_alpha;
     float minimum_bemf_volts;
+    float lock_bemf_volts;
     float pll_kp;
     float pll_ki;
     float maximum_electrical_speed_rad_s;
     float lock_phase_error;
+    float unlock_phase_error;
 
     uint16_t lock_updates;
+    uint16_t unlock_updates;
     uint16_t loss_updates;
     uint8_t pll_divider;
 } MotorSensorlessConfig;
@@ -42,6 +45,7 @@ typedef struct
     float bemf_beta_volts;
     float bemf_magnitude_volts;
     float pll_phase_error;
+    float pll_phase_alignment;
     MotorSensorlessStatus status;
     uint8_t valid;
 } MotorSensorlessOutput;

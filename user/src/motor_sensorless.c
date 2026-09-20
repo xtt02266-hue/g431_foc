@@ -22,6 +22,7 @@
  */
 
 #include "motor_sensorless.h"
+#include "motor_config.h"
 #include "main.h"
 #include <math.h>
 #include <stddef.h>
@@ -42,6 +43,7 @@ typedef struct
     float pll_integral_speed;       /* PLL 积分项累积的转速估计 (rad/s) */
 
     uint16_t lock_counter;          /* 相位误差持续在阈值内的次数，达 lock_updates 判定锁定 */
+    uint16_t unlock_counter;        /* 锁定后误差持续越界的次数，达 unlock_updates 才判定失锁 */
     uint16_t loss_counter;          /* BEMF 幅值持续偏低的次数，达 loss_updates 判定丢失 */
     uint8_t pll_counter;            /* PLL 分频计数，每 pll_divider 拍运行一次 PLL */
     uint8_t current_initialized;    /* 是否已记录上一拍电流（首拍只做初始化） */
@@ -97,6 +99,7 @@ static void Motor_Sensorless_ResetState(void)
     g_sensorless.filtered_bemf_beta = 0.0f;
     g_sensorless.pll_integral_speed = 0.0f;
     g_sensorless.lock_counter = 0U;
+    g_sensorless.unlock_counter = 0U;
     g_sensorless.loss_counter = 0U;
     g_sensorless.pll_counter = 0U;
     g_sensorless.current_initialized = 0U;
@@ -111,16 +114,19 @@ void Motor_Sensorless_GetDefaultConfig(MotorSensorlessConfig *config)
     }
 
     config->sample_time_sec = MOTOR_SENSORLESS_SAMPLE_TIME_SEC; /* 50us -> 20kHz */
-    config->resistance_ohm = 1.0f;              /* 相电阻默认值 (Ω) */
-    config->inductance_h = 0.0012f;             /* BM3514H标称相电感；运行前仍由电机参数覆盖 */
-    config->pole_pairs = 1U;                    /* 极对数默认值 */
+    config->resistance_ohm = MOTOR_NOMINAL_PHASE_RESISTANCE_OHM;
+    config->inductance_h = MOTOR_NOMINAL_PHASE_INDUCTANCE_H;
+    config->pole_pairs = MOTOR_NOMINAL_POLE_PAIRS;
     config->bemf_filter_alpha = 0.05f;          /* BEMF 一阶低通系数，越小越平滑但滞后越大 */
-    config->minimum_bemf_volts = 0.20f;         /* 并行观测调试门槛 (V)；低速更易跟踪，但须防噪声误锁 */
-    config->pll_kp = 250.0f;                    /* PLL 比例增益 */
-    config->pll_ki = 12000.0f;                  /* PLL 积分增益 */
+    config->minimum_bemf_volts = 0.20f;         /* 已锁定后的退出门槛 (V) */
+    config->lock_bemf_volts = 0.25f;            /* 未锁定时的进入门槛 (V)，与退出门槛形成迟滞 */
+    config->pll_kp = 150.0f;                    /* PLL 比例增益 */
+    config->pll_ki = 6000.0f;                  /* PLL 积分增益 */
     config->maximum_electrical_speed_rad_s = 8000.0f; /* 电角速度限幅 (rad/s) */
-    config->lock_phase_error = 0.30f;           /* 判定锁定的相位误差阈值 (rad) */
-    config->lock_updates = 100U;                /* 连续多少次相位误差合格才判定锁定 */
+    config->lock_phase_error = 0.30f;           /* 归一化叉积进入阈值（不是弧度） */
+    config->unlock_phase_error = 0.60f;         /* 归一化叉积退出阈值 */
+    config->lock_updates = 100U;               /* 5kHz下连续20ms合格才判定锁定 */
+    config->unlock_updates = 50U;              /* 5kHz下连续10ms越界才判定失锁 */
     config->loss_updates = 250U;                /* 连续多少次 BEMF 偏低才判定丢失 */
     config->pll_divider = 4U;                   /* PLL 降速运行分频，实际 5 kHz */
 }
@@ -151,11 +157,14 @@ uint8_t Motor_Sensorless_Configure(const MotorSensorlessConfig *config)
         !(config->bemf_filter_alpha > 0.0f) ||
         (config->bemf_filter_alpha > 1.0f) ||
         !(config->minimum_bemf_volts > 0.0f) ||
+        !(config->lock_bemf_volts >= config->minimum_bemf_volts) ||
         !(config->pll_kp > 0.0f) ||
         !(config->pll_ki > 0.0f) ||
         !(config->maximum_electrical_speed_rad_s > 0.0f) ||
         !(config->lock_phase_error > 0.0f) ||
+        !(config->unlock_phase_error > config->lock_phase_error) ||
         (config->lock_updates == 0U) ||
+        (config->unlock_updates == 0U) ||
         (config->loss_updates == 0U) ||
         (config->pll_divider == 0U)) {
         return 0U;
@@ -302,6 +311,7 @@ static void Motor_Sensorless_HandleWeakBemf(float pll_dt)
     MotorSensorlessOutput *output = &g_sensorless.output;
 
     g_sensorless.lock_counter = 0U;
+    g_sensorless.unlock_counter = 0U;
     if (g_sensorless.loss_counter < UINT16_MAX) {
         g_sensorless.loss_counter++;
     }
@@ -318,7 +328,9 @@ static void Motor_Sensorless_HandleWeakBemf(float pll_dt)
 }
 
 /* 用 eαβ 的方向做相位捕获与 PLL 跟踪，返回本次锁定判据所需的相位误差。 */
-static float Motor_Sensorless_TrackPll(float bemf_magnitude, float pll_dt)
+static float Motor_Sensorless_TrackPll(float bemf_magnitude,
+                                       float pll_dt,
+                                       float *phase_alignment)
 {
     MotorSensorlessConfig *config = &g_sensorless.config;
     MotorSensorlessOutput *output = &g_sensorless.output;
@@ -348,7 +360,10 @@ static float Motor_Sensorless_TrackPll(float bemf_magnitude, float pll_dt)
                      cosf(output->electrical_angle_rad);
     phase_error = predicted_alpha * measured_beta -
                   predicted_beta * measured_alpha;
+    *phase_alignment = predicted_alpha * measured_alpha +
+                       predicted_beta * measured_beta;
     output->pll_phase_error = phase_error;
+    output->pll_phase_alignment = *phase_alignment;
 
     /* PLL 积分支路：累积转速。按方向限幅，禁止反向积分 */
     speed_limit = config->maximum_electrical_speed_rad_s;
@@ -382,26 +397,50 @@ static float Motor_Sensorless_TrackPll(float bemf_magnitude, float pll_dt)
     return phase_error;
 }
 
-/* 相位误差连续合格才发布锁定状态；不合格立即退回搜索。 */
-static void Motor_Sensorless_UpdateLockState(float phase_error)
+/*
+ * 锁定和失锁使用不同阈值与连续计数。点积必须为正，避免叉积在相差约π时
+ * 也接近零而产生180°假锁；短时毛刺只累计，不立即撤销 valid。
+ */
+static void Motor_Sensorless_UpdateLockState(float phase_error,
+                                              float phase_alignment)
 {
     MotorSensorlessConfig *config = &g_sensorless.config;
     MotorSensorlessOutput *output = &g_sensorless.output;
 
-    if (Motor_Sensorless_Abs(phase_error) <= config->lock_phase_error) {
-        if (g_sensorless.lock_counter < UINT16_MAX) {
-            g_sensorless.lock_counter++;
+    if (output->valid == 0U) {
+        if ((Motor_Sensorless_Abs(phase_error) <= config->lock_phase_error) &&
+            (phase_alignment > 0.0f)) {
+            if (g_sensorless.lock_counter < UINT16_MAX) {
+                g_sensorless.lock_counter++;
+            }
+        } else {
+            g_sensorless.lock_counter = 0U;
+            output->status = MOTOR_SENSORLESS_SEARCHING;
         }
-    } else {
-        g_sensorless.lock_counter = 0U;
-        output->valid = 0U;
-        output->status = MOTOR_SENSORLESS_SEARCHING;
+
+        if (g_sensorless.lock_counter >= config->lock_updates) {
+            output->valid = 1U;
+            output->status = MOTOR_SENSORLESS_TRACKING;
+            g_sensorless.unlock_counter = 0U;
+        }
+        return;
     }
 
-    /* 连续 lock_updates 次满足误差要求，输出可用并进入跟踪状态 */
-    if (g_sensorless.lock_counter >= config->lock_updates) {
-        output->valid = 1U;
-        output->status = MOTOR_SENSORLESS_TRACKING;
+    output->status = MOTOR_SENSORLESS_TRACKING;
+    if ((Motor_Sensorless_Abs(phase_error) > config->unlock_phase_error) ||
+        (phase_alignment <= 0.0f)) {
+        if (g_sensorless.unlock_counter < UINT16_MAX) {
+            g_sensorless.unlock_counter++;
+        }
+    } else {
+        g_sensorless.unlock_counter = 0U;
+    }
+
+    if (g_sensorless.unlock_counter >= config->unlock_updates) {
+        output->valid = 0U;
+        output->status = MOTOR_SENSORLESS_LOST;
+        g_sensorless.lock_counter = 0U;
+        g_sensorless.unlock_counter = 0U;
     }
 }
 
@@ -418,6 +457,8 @@ void Motor_Sensorless_Update(float voltage_alpha,
     float bemf_magnitude;
     float pll_dt;
     float phase_error;
+    float phase_alignment;
+    float bemf_threshold;
 
     if (g_sensorless.enabled == 0U) {
         return; /* 未使能时不做任何观测 */
@@ -440,15 +481,35 @@ void Motor_Sensorless_Update(float voltage_alpha,
     output->bemf_magnitude_volts = bemf_magnitude;
     pll_dt = config->sample_time_sec * (float)config->pll_divider; /* PLL 实际步长 */
 
-    /* BEMF 过小：认为转子未转动或观测失效，按当前速度做角度外推并累计丢失计数 */
-    if (bemf_magnitude < config->minimum_bemf_volts) {
+    if (!isfinite(bemf_magnitude)) {
+        output->valid = 0U;
+        output->status = MOTOR_SENSORLESS_LOST;
+        output->electrical_speed_rad_s = 0.0f;
+        output->mechanical_speed_rpm = 0.0f;
+        g_sensorless.pll_integral_speed = 0.0f;
+        g_sensorless.lock_counter = 0U;
+        g_sensorless.unlock_counter = 0U;
+        return;
+    }
+
+    /* 未锁定时要求更强的BEMF；锁定后用较低阈值保持，避免门槛附近反复跳变。 */
+    bemf_threshold = (output->valid != 0U)
+                         ? config->minimum_bemf_volts
+                         : config->lock_bemf_volts;
+    if (bemf_magnitude < bemf_threshold) {
         Motor_Sensorless_HandleWeakBemf(pll_dt);
         return;
     }
 
     g_sensorless.loss_counter = 0U;
-    phase_error = Motor_Sensorless_TrackPll(bemf_magnitude, pll_dt);
-    Motor_Sensorless_UpdateLockState(phase_error);
+    phase_error = Motor_Sensorless_TrackPll(
+        bemf_magnitude, pll_dt, &phase_alignment);
+    if (!isfinite(phase_error) || !isfinite(phase_alignment)) {
+        output->valid = 0U;
+        output->status = MOTOR_SENSORLESS_LOST;
+        return;
+    }
+    Motor_Sensorless_UpdateLockState(phase_error, phase_alignment);
 }
 
 /* 原子读取一份输出快照，避免读到中断更新到一半的数据。 */

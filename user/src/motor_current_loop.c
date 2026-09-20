@@ -8,10 +8,9 @@
 #include "motor_sensorless.h"
 #include <math.h>
 
-    // 一阶低通滤波：滤除 PWM 开关噪声和 ADC 采样毛刺
-    // alpha 越大滤波越弱（响应越快），越小滤波越强（越平滑）
-    // 20kHz 采样下，alpha=0.2 对应截止频率约 500Hz
-#define ADC_FILTER_ALPHA  0.25f
+/* 一阶低通滤波：滤除 PWM 开关噪声和 ADC 采样毛刺。
+ * alpha 越大响应越快；高速振动 A/B 验证时恢复 0.25，减小电流反馈滞后。
+ * U/W 两相零点仍独立校准，W 相硬件噪声需继续观察。 */
 
 // 电流环/FOC 全局运行状态与参数。
 MotorCurrentLoopState g_foc_state = {0};
@@ -21,10 +20,10 @@ static volatile float g_open_loop_electrical_angle_rad = 0.0f;
 static volatile float g_open_loop_electrical_speed_rad_s = 0.0f;
 
 // 将 ADC 原始值转换为相电流（安培）。
-static float Motor_CurrentLoop_RawToCurrent(uint16_t raw)
+static float Motor_CurrentLoop_RawToCurrent(uint16_t raw, float bias_volts)
 {
     float v_in = ((float)raw * g_foc_state.params.vref_volts) / g_foc_state.params.adc_max;
-    float v_shunt = v_in - g_foc_state.params.bias_volts;
+    float v_shunt = v_in - bias_volts;
     return v_shunt / (g_foc_state.params.shunt_ohms * g_foc_state.params.gain);
 }
 
@@ -32,8 +31,10 @@ static float Motor_CurrentLoop_RawToCurrent(uint16_t raw)
 void Motor_CurrentLoop_Run(uint16_t iu_raw, uint16_t iw_raw)
 {
     // 1. 将 ADC 原始值转换为实际相电流（安培）
-    float iu_a = Motor_CurrentLoop_RawToCurrent(iu_raw);
-    float iw_a = Motor_CurrentLoop_RawToCurrent(iw_raw);
+    float iu_a = Motor_CurrentLoop_RawToCurrent(
+        iu_raw, g_foc_state.params.bias_u_volts);
+    float iw_a = Motor_CurrentLoop_RawToCurrent(
+        iw_raw, g_foc_state.params.bias_w_volts);
 
     // 记录采样值（用于调试或显示）
     g_foc_state.sample.iu_raw = iu_raw;
@@ -150,12 +151,14 @@ void Motor_CurrentLoop_Init(void)
 {
     g_foc_state.params.vref_volts = MOTOR_CURRENT_VREF_VOLTS;
     g_foc_state.params.bias_volts = MOTOR_CURRENT_BIAS_VOLTS;
+    g_foc_state.params.bias_u_volts = MOTOR_CURRENT_BIAS_VOLTS;
+    g_foc_state.params.bias_w_volts = MOTOR_CURRENT_BIAS_VOLTS;
     g_foc_state.params.shunt_ohms = MOTOR_CURRENT_SHUNT_OHMS;
     g_foc_state.params.gain = MOTOR_CURRENT_GAIN;
     g_foc_state.params.adc_max = MOTOR_CURRENT_ADC_MAX;
 
-    // 提供默认安全的未标定参数（为了防爆，极对数默认1）
-    g_foc_state.params.pole_pairs = 1;
+    // 使用数据表极对数作为默认值；零偏和相序仍由板上标定提供。
+    g_foc_state.params.pole_pairs = MOTOR_NOMINAL_POLE_PAIRS;
     g_foc_state.params.zero_angle_offset = 0.0f;
     g_foc_state.params.uvw_dir = 1;
 
@@ -245,6 +248,66 @@ void Motor_CurrentLoop_SetAngleSource(MotorAngleSource source)
 MotorAngleSource Motor_CurrentLoop_GetAngleSource(void)
 {
     return g_angle_source;
+}
+
+MotorParkFrame Motor_CurrentLoop_HandoverToSensorless(float electrical_angle_rad)
+{
+    MotorParkFrame rotated_target = {
+        g_foc_state.target_d,
+        g_foc_state.target_q
+    };
+    MotorParkFrame old_target;
+    MotorParkFrame old_integral;
+    MotorParkFrame new_integral;
+    MotorClarkeFrame stationary;
+    float new_sin;
+    float new_cos;
+    uint32_t primask;
+
+    if (!isfinite(electrical_angle_rad)) {
+        return rotated_target;
+    }
+    new_sin = sinf(electrical_angle_rad);
+    new_cos = cosf(electrical_angle_rad);
+
+    primask = __get_PRIMASK();
+    __disable_irq();
+
+    /* 保持物理定子电流指令不变，只改变描述它的旋转坐标系。 */
+    old_target.d = g_foc_state.target_d;
+    old_target.q = g_foc_state.target_q;
+    stationary = Motor_CurrentLoop_InvPark(
+        old_target, g_foc_state.sin_theta, g_foc_state.cos_theta);
+    rotated_target = Motor_CurrentLoop_Park(stationary, new_sin, new_cos);
+
+    /* PI 积分项表示电压，也按同样方式旋转，避免交接时电压阶跃。 */
+    old_integral.d = g_foc_state.pi_d.integral;
+    old_integral.q = g_foc_state.pi_q.integral;
+    stationary = Motor_CurrentLoop_InvPark(
+        old_integral, g_foc_state.sin_theta, g_foc_state.cos_theta);
+    new_integral = Motor_CurrentLoop_Park(stationary, new_sin, new_cos);
+    if (new_integral.d > g_foc_state.pi_d.out_max) {
+        new_integral.d = g_foc_state.pi_d.out_max;
+    } else if (new_integral.d < g_foc_state.pi_d.out_min) {
+        new_integral.d = g_foc_state.pi_d.out_min;
+    }
+    if (new_integral.q > g_foc_state.pi_q.out_max) {
+        new_integral.q = g_foc_state.pi_q.out_max;
+    } else if (new_integral.q < g_foc_state.pi_q.out_min) {
+        new_integral.q = g_foc_state.pi_q.out_min;
+    }
+
+    g_foc_state.target_d = rotated_target.d;
+    g_foc_state.target_q = rotated_target.q;
+    g_foc_state.pi_d.integral = new_integral.d;
+    g_foc_state.pi_q.integral = new_integral.q;
+    g_foc_state.pi_d.prev_measure = g_foc_state.park.d;
+    g_foc_state.pi_q.prev_measure = g_foc_state.park.q;
+    g_angle_source = MOTOR_ANGLE_SOURCE_SENSORLESS;
+    g_angle_source_fault = 0U;
+
+    if (primask == 0U) __enable_irq();
+    return rotated_target;
 }
 
 void Motor_CurrentLoop_SetOpenLoopElectricalAngle(float angle_rad)
@@ -344,6 +407,22 @@ MotorCurrentParams Motor_CurrentLoop_GetParams(void)
 void Motor_CurrentLoop_SetBiasVolts(float bias_volts)
 {
     g_foc_state.params.bias_volts = bias_volts;
+    g_foc_state.params.bias_u_volts = bias_volts;
+    g_foc_state.params.bias_w_volts = bias_volts;
+}
+
+void Motor_CurrentLoop_SetPhaseBiasVolts(float bias_u_volts,
+                                         float bias_w_volts)
+{
+    uint32_t primask = __get_PRIMASK();
+
+    __disable_irq();
+    g_foc_state.params.bias_u_volts = bias_u_volts;
+    g_foc_state.params.bias_w_volts = bias_w_volts;
+    g_foc_state.params.bias_volts = 0.5f * (bias_u_volts + bias_w_volts);
+    if (primask == 0U) {
+        __enable_irq();
+    }
 }
 
 // 设置 ADC 参考电压。
@@ -377,6 +456,24 @@ MotorCurrentSample Motor_CurrentLoop_GetLastSample(void)
     }
 
     return sample;
+}
+
+MotorCurrentTelemetrySnapshot Motor_CurrentLoop_GetTelemetrySnapshot(void)
+{
+    MotorCurrentTelemetrySnapshot snapshot;
+    uint32_t primask = __get_PRIMASK();
+
+    __disable_irq();
+    snapshot.sample = g_foc_state.sample;
+    snapshot.park = g_foc_state.park;
+    snapshot.target_q = g_foc_state.target_q;
+    snapshot.pi_q_target = g_foc_state.pi_q.target;
+    snapshot.pi_q_output = g_foc_state.pi_q.output;
+    if (primask == 0U) {
+        __enable_irq();
+    }
+
+    return snapshot;
 }
 
 // Clarke 变换：两相电流（U/W）到 α-β（假设 iU + iV + iW = 0）。
@@ -441,9 +538,10 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
     }
     else
     {
-        iu_filtered += ADC_FILTER_ALPHA * ((float)iu_raw - iu_filtered);
-        iw_filtered += ADC_FILTER_ALPHA * ((float)iw_raw - iw_filtered);
+        iu_filtered += MOTOR_CURRENT_ADC_FILTER_ALPHA * ((float)iu_raw - iu_filtered);
+        iw_filtered += MOTOR_CURRENT_ADC_FILTER_ALPHA * ((float)iw_raw - iw_filtered);
     }
 
-    Motor_CurrentLoop_Run((uint16_t)iu_filtered, (uint16_t)iw_filtered);
+    Motor_CurrentLoop_Run((uint16_t)(iu_filtered + 0.5f),
+                          (uint16_t)(iw_filtered + 0.5f));
 }

@@ -1,6 +1,7 @@
 #include "user_io.h"
 #include "adc.h"
 #include "gpio.h"
+#include "board_profile.h"
 
 volatile uint16_t g_user_pot_raw = 0;
 
@@ -11,8 +12,8 @@ volatile uint16_t g_user_pot_raw = 0;
 #define BUTTON2_GPIO_PORT GPIOB
 #define BUTTON2_PIN GPIO_PIN_11
 
-#define LED_GPIO_PORT GPIOB
-#define LED_PIN GPIO_PIN_6
+#define LED_GPIO_PORT BOARD_STATUS_LED_GPIO_PORT
+#define LED_PIN BOARD_STATUS_LED_GPIO_PIN
 
 HAL_StatusTypeDef UserIO_StartDma(void)
 {

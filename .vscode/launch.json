@@ -9,7 +9,7 @@
             "servertype": "pyocd",
             "serverpath": "C:\\Users\\scott\\AppData\\Roaming\\uv\\tools\\pyocd\\Scripts\\pyocd.exe",
             "armToolchainPath": "D:\\software\\arm-gnu-toolchain-14.3.rel1\\bin",
-            "executable": "${workspaceFolder}\\build\\Debug\\g431_foc.elf",
+            "executable": "${workspaceFolder}\\build\\sensorless-usb-debug\\g431_foc.elf",
             "targetId": "stm32g431cbux",
             "serverArgs": [
                 "--pack",

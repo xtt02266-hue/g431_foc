@@ -1,4 +1,5 @@
 #include "pc_protocol.h"
+#include "main.h"
 #include "motor_system.h"
 #include "motor_parameters.h"
 #include "motor_identify.h"
@@ -7,7 +8,7 @@
 #include "motor_encoder.h"
 #include "motor_sensorless.h"
 #include "motor_angle_reference.h"
-#include "usart.h"
+#include "pc_transport.h"
 #include <math.h>
 #include <string.h>
 
@@ -96,9 +97,9 @@ static uint8_t queue_frame(uint8_t type, uint16_t seq,
 {
     uint8_t frame[MAX_FRAME_SIZE];
     uint16_t n = make_frame(frame,type,seq,payload,length);
-    if ((s_tx_busy == 0U) && (huart2.gState == HAL_UART_STATE_READY)) {
+    if (s_tx_busy == 0U) {
         memcpy(s_tx,frame,n); s_tx_busy=1U;
-        if (HAL_UART_Transmit_DMA(&huart2,s_tx,n) == HAL_OK) return 1U;
+        if (PC_Transport_TrySend(s_tx,n) != 0U) return 1U;
         s_tx_busy=0U;
     }
     if ((priority != 0U) && (s_tx_pending_len == 0U)) {
@@ -110,13 +111,19 @@ static uint8_t queue_frame(uint8_t type, uint16_t seq,
 static uint16_t build_status(uint8_t *p)
 {
     MotorControlSnapshot s;
+    uint8_t encoder_required = 1U;
     Motor_System_GetControlSnapshot(&s);
     put_u32(&p[0],HAL_GetTick()); p[4]=(uint8_t)s.state; p[5]=(uint8_t)s.mode;
     p[6]=(uint8_t)s.source; p[7]=(uint8_t)s.owner; p[8]=s.run_requested;
     p[9]=(uint8_t)Motor_Parameters_GetStatus();
     p[10]=Motor_Encoder_IsDataFresh(2U); p[11]=Motor_Encoder_GetStatus();
     uint32_t faults = 0U;
-    if (p[10] == 0U) faults |= 1U;
+#if FOC_PROFILE_SENSORLESS
+    if (s.startup_mode == MOTOR_STARTUP_FORCED_SENSORLESS) {
+        encoder_required = 0U;
+    }
+#endif
+    if ((encoder_required != 0U) && (p[10] == 0U)) faults |= 1U;
     if (p[9] == (uint8_t)MOTOR_PARAMETERS_ERROR) faults |= 2U;
     put_u32(&p[12],faults); p[16]=0U; p[17]=(uint8_t)s.angle_source;
     p[18]=(uint8_t)s.startup_mode; p[19]=(uint8_t)s.startup_phase;
@@ -385,27 +392,42 @@ void PC_Protocol_Task(void)
 
 void PC_Protocol_SendTelemetry(void)
 {
-    uint8_t p[102];
+    uint8_t p[122];
     MotorControlSnapshot s;
     MotorSensorlessOutput sensorless;
     MotorCurrentParams current_params;
+    MotorCurrentTelemetrySnapshot current;
     float reference_electrical_angle_rad = 0.0f;
+    float iv_a;
+    float iu_adc_volts;
+    float iw_adc_volts;
     uint8_t reference_valid;
 
     Motor_System_GetControlSnapshot(&s);
     sensorless = Motor_Sensorless_GetOutput();
     current_params = Motor_CurrentLoop_GetParams();
+    current = Motor_CurrentLoop_GetTelemetrySnapshot();
     reference_valid = Motor_AngleReference_GetElectricalAngle(
         current_params.pole_pairs,
         current_params.uvw_dir,
         current_params.zero_angle_offset,
         &reference_electrical_angle_rad);
 
-    put_u16(&p[0],5U); put_u32(&p[2],HAL_GetTick()); put_u32(&p[6],++s_sample_seq);
-    float values[23] = { Motor_System_GetDebugPotTarget(), g_foc_state.pi_q.target,
-        g_foc_state.park.q, g_foc_state.park.d, g_motor_system.run_data.speed_rpm,
-        g_foc_state.pi_q.output, (float)Motor_Encoder_GetRawAngle()*MOTOR_ENCODER_RAD_PER_COUNT,
-        s.continuous_angle_rad, g_foc_state.target_q, s.relative_center_angle_rad,
+    /* Hardware has two current-sense amplifiers (U/W).  V is reconstructed
+     * from the balanced three-phase relationship so the host can compare all
+     * three phase currents while the two amplifier output voltages expose an
+     * offset, saturation, or dead channel directly. */
+    iv_a = -current.sample.iu_a - current.sample.iw_a;
+    iu_adc_volts = ((float)current.sample.iu_raw * current_params.vref_volts) /
+                   current_params.adc_max;
+    iw_adc_volts = ((float)current.sample.iw_raw * current_params.vref_volts) /
+                   current_params.adc_max;
+
+    put_u16(&p[0],6U); put_u32(&p[2],HAL_GetTick()); put_u32(&p[6],++s_sample_seq);
+    float values[28] = { Motor_System_GetDebugPotTarget(), current.pi_q_target,
+        current.park.q, current.park.d, g_motor_system.run_data.speed_rpm,
+        current.pi_q_output, (float)Motor_Encoder_GetRawAngle()*MOTOR_ENCODER_RAD_PER_COUNT,
+        s.continuous_angle_rad, current.target_q, s.relative_center_angle_rad,
         s.target_speed_rpm, s.speed_loop_iq_a, s.friction_iq_a,
         s.speed_loop_iq_a + s.friction_iq_a, s.cogging_iq_a,
         s.cogging_effective_gain, (float)s.cogging_table_revision,
@@ -414,18 +436,22 @@ void PC_Protocol_SendTelemetry(void)
         sensorless.electrical_angle_rad,
         reference_electrical_angle_rad,
         (float)sensorless.valid,
-        (float)reference_valid };
+        (float)reference_valid,
+        current.sample.iu_a,
+        iv_a,
+        current.sample.iw_a,
+        iu_adc_volts,
+        iw_adc_volts };
     memcpy(&p[10],values,sizeof(values));
     if (queue_frame(TYPE_TELEMETRY,++s_telemetry_seq,p,sizeof(p),0U)==0U) ++s_telemetry_drops;
 }
 
-void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+void PC_Protocol_NotifyTxCompleteFromISR(void)
 {
-    if (huart->Instance!=USART2) return;
     s_tx_busy=0U;
     if (s_tx_pending_len!=0U) {
         uint16_t n=s_tx_pending_len; memcpy(s_tx,s_tx_pending,n); s_tx_pending_len=0U; s_tx_busy=1U;
-        if (HAL_UART_Transmit_DMA(&huart2,s_tx,n)!=HAL_OK) s_tx_busy=0U;
+        if (PC_Transport_TrySend(s_tx,n)==0U) s_tx_busy=0U;
     }
 }
 

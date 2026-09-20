@@ -75,7 +75,7 @@ eβ = uβ - R·iβ - L·diβ/dt
 | `sample_time_sec` | 电流环采样周期 | 50 µs |
 | `resistance_ohm` | 电机相电阻模型参数 | 1.0 Ω |
 | `inductance_h` | 电机相电感模型参数 | 1.2 mH |
-| `pole_pairs` | 极对数，用于电角速度换机械转速 | 1 |
+| `pole_pairs` | 极对数，用于电角速度换机械转速 | 7 |
 | `bemf_filter_alpha` | BEMF 一阶低通系数 | 0.05 |
 | `minimum_bemf_volts` | 允许 PLL 跟踪的最低 BEMF 幅值 | 0.20 V |
 | `pll_kp` | PLL 比例增益 | 250 |

@@ -18,7 +18,7 @@
 #include "motor_debug.h"
 
 #define MOTOR_ENCODER_MAX_SAMPLE_AGE_MS  2U
-#define MOTOR_CURRENT_LOOP_CONTROL_BW_HZ 250.0f
+#define MOTOR_CURRENT_LOOP_CONTROL_BW_HZ 200.0f
 #define MOTOR_CURRENT_LOOP_MUSIC_BW_HZ  2000.0f
 
 // 电位器低通滤波系数 (一阶 EMA, 1kHz 更新率)
@@ -54,6 +54,10 @@ static volatile MotorStartupPhase g_startup_phase = MOTOR_STARTUP_PHASE_IDLE;
 static volatile float g_startup_handover_rpm = MOTOR_SENSORLESS_HANDOVER_DEFAULT_RPM;
 static uint32_t g_startup_phase_elapsed_ms = 0U;
 static float g_startup_open_loop_rpm = 0.0f;
+static uint16_t g_startup_lock_stable_ms = 0U;
+static uint16_t g_startup_handover_blend_ms = 0U;
+static uint8_t g_startup_handover_blending = 0U;
+static MotorParkFrame g_startup_handover_initial_current = {0.0f, 0.0f};
 static float g_continuous_angle_rad = 0.0f;
 static float g_haptic_center_rad = 0.0f;
 static uint16_t g_last_angle_counts = 0U;
@@ -68,6 +72,16 @@ static void Motor_System_UpdateOperatingState(void);
 static void Motor_System_TuneCurrentLoopBandwidth(float bandwidth_hz);
 static void Motor_System_ResetControlHistory(void);
 static uint8_t Motor_System_RunForcedStartup1ms(int8_t identified_direction);
+static uint8_t Motor_System_EncoderRequired(void);
+
+static uint8_t Motor_System_EncoderRequired(void)
+{
+#if FOC_PROFILE_SENSORLESS
+    return (g_startup_mode == MOTOR_STARTUP_FORCED_SENSORLESS) ? 0U : 1U;
+#else
+    return 1U;
+#endif
+}
 
 // 电位器滤波量参与力矩/位置控制，同时供 VOFA+ 只读观测。
 static float g_pot_target_filtered = 0.0f;         // 反向映射并滤波后的 ADC 计数，供位置/力矩模式共用
@@ -104,6 +118,10 @@ void Motor_System_Init(void)
     g_startup_handover_rpm = MOTOR_SENSORLESS_HANDOVER_DEFAULT_RPM;
     g_startup_phase_elapsed_ms = 0U;
     g_startup_open_loop_rpm = 0.0f;
+    g_startup_lock_stable_ms = 0U;
+    g_startup_handover_blend_ms = 0U;
+    g_startup_handover_blending = 0U;
+    g_startup_handover_initial_current = (MotorParkFrame){0.0f, 0.0f};
     g_config_revision = 0U;
     g_angle_initialized = 0U;
     g_torque_current_a = 0.0f;
@@ -147,7 +165,8 @@ uint8_t Motor_System_StartControl(void)
 #endif
     if ((Motor_Parameters_IsReady() == 0U) ||
         (g_fault_latched != 0U) ||
-        (Motor_Encoder_IsDataFresh(MOTOR_ENCODER_MAX_SAMPLE_AGE_MS) == 0U)) {
+        ((Motor_System_EncoderRequired() != 0U) &&
+         (Motor_Encoder_IsDataFresh(MOTOR_ENCODER_MAX_SAMPLE_AGE_MS) == 0U))) {
         return 0U;
     }
 
@@ -266,14 +285,22 @@ MotorCommandResult Motor_System_HostStart(void)
 #else
         if ((g_control_mode != MOTOR_CONTROL_SPEED) ||
             (g_input_source != MOTOR_INPUT_HOST)) return MOTOR_CMD_INVALID_COMBINATION;
-        direction = Motor_Identify_GetResult().uvw_dir;
+        /* 纯无感电机不沿用旧编码器标定的相序方向。 */
+        direction = MOTOR_NOMINAL_UVW_DIRECTION;
         Motor_Sensorless_SetDirection(
             ((g_startup_handover_rpm * (float)direction) >= 0.0f) ? 1 : -1);
         g_startup_phase = MOTOR_STARTUP_PHASE_ALIGN;
         g_startup_phase_elapsed_ms = 0U;
         g_startup_open_loop_rpm = 0.0f;
+        g_startup_lock_stable_ms = 0U;
+        g_startup_handover_blend_ms = 0U;
+        g_startup_handover_blending = 0U;
 #endif
     } else {
+        /* 空白 Flash 的固定参数只足够纯无感启动；AS5600 换相仍需零偏标定。 */
+        if (Motor_Parameters_HasStoredData() == 0U) {
+            return MOTOR_CMD_NOT_READY;
+        }
         g_startup_phase = MOTOR_STARTUP_PHASE_IDLE;
     }
     if (Motor_System_StartControl() == 0U) {
@@ -327,6 +354,10 @@ MotorCommandResult Motor_System_HostSetAngleSource(MotorAngleSource source)
     if ((g_startup_phase == MOTOR_STARTUP_PHASE_ALIGN) ||
         (g_startup_phase == MOTOR_STARTUP_PHASE_RAMP) ||
         (g_startup_phase == MOTOR_STARTUP_PHASE_WAIT_LOCK)) return MOTOR_CMD_BUSY;
+    if ((source == MOTOR_ANGLE_SOURCE_ENCODER) &&
+        (Motor_Encoder_IsDataFresh(MOTOR_ENCODER_MAX_SAMPLE_AGE_MS) == 0U)) {
+        return MOTOR_CMD_NOT_READY;
+    }
     if (source == MOTOR_ANGLE_SOURCE_SENSORLESS) {
 #if !FOC_PROFILE_SENSORLESS
         return MOTOR_CMD_UNSUPPORTED;
@@ -654,7 +685,8 @@ static float Motor_System_PotTorqueNm(float filtered_pot)
 uint8_t Motor_System_ClearFault(void)
 {
     if ((Motor_Parameters_IsReady() == 0U) ||
-        (Motor_Encoder_IsDataFresh(MOTOR_ENCODER_MAX_SAMPLE_AGE_MS) == 0U)) {
+        ((Motor_System_EncoderRequired() != 0U) &&
+         (Motor_Encoder_IsDataFresh(MOTOR_ENCODER_MAX_SAMPLE_AGE_MS) == 0U))) {
         return 0U;
     }
 
@@ -769,6 +801,9 @@ static void Motor_System_ForceSafeStop(void)
     g_startup_phase = MOTOR_STARTUP_PHASE_IDLE;
     g_startup_phase_elapsed_ms = 0U;
     g_startup_open_loop_rpm = 0.0f;
+    g_startup_lock_stable_ms = 0U;
+    g_startup_handover_blend_ms = 0U;
+    g_startup_handover_blending = 0U;
     Motor_CurrentLoop_SetOpenLoopElectricalSpeed(0.0f);
     Motor_System_ResetOuterLoops();
     if (Motor_Music_IsPlaying() != 0U) {
@@ -821,19 +856,20 @@ static void Motor_System_UpdateOperatingState(void)
         return;
     }
 
-    /* 编码器抽象层提供实际换相角；本分支sensorless配置使用AS5600。
-     * 无论底层是哪种编码器，数据过期都必须立即停机。 */
-    if ((g_fault_latched != 0U) ||
-        (Motor_Encoder_IsDataFresh(MOTOR_ENCODER_MAX_SAMPLE_AGE_MS) == 0U)) {
-        g_fault_latched = 1U;
-        Motor_System_ForceSafeStop();
-        g_motor_system.state = MOTOR_STATE_FAULT;
-        return;
-    }
-
+    /* 停止时允许主机先接管并选择强拖，即使板上完全没有编码器。 */
     if (g_run_requested == 0U) {
         Motor_System_ForceSafeStop();
         g_motor_system.state = MOTOR_STATE_STOPPED;
+        return;
+    }
+
+    /* AS5600启动仍要求编码器；强拖及PLL接管路径不依赖编码器。 */
+    if ((g_fault_latched != 0U) ||
+        ((Motor_System_EncoderRequired() != 0U) &&
+         (Motor_Encoder_IsDataFresh(MOTOR_ENCODER_MAX_SAMPLE_AGE_MS) == 0U))) {
+        g_fault_latched = 1U;
+        Motor_System_ForceSafeStop();
+        g_motor_system.state = MOTOR_STATE_FAULT;
         return;
     }
 
@@ -955,6 +991,7 @@ static void Motor_System_RunPositionMode(float target_pos, float current_rpm)
     g_debug_friction_iq_a = 0.0f;
     g_debug_cogging_iq_a = 0.0f;
     g_foc_state.target_q = g_debug_speed_loop_iq_a;
+    g_foc_state.target_d = 0.0f;
 }
 
 static float Motor_System_ClampHostIq(float iq)
@@ -987,6 +1024,8 @@ static uint8_t Motor_System_RunForcedStartup1ms(int8_t identified_direction)
     float electrical_speed_rad_s;
     float align_scale;
     float ramp_scale;
+    float expected_sensorless_rpm;
+    float speed_tolerance_rpm;
     uint16_t pole_pairs;
 
     if ((g_startup_phase != MOTOR_STARTUP_PHASE_ALIGN) &&
@@ -996,13 +1035,46 @@ static uint8_t Motor_System_RunForcedStartup1ms(int8_t identified_direction)
     }
 
     id = Motor_Identify_GetResult();
-    pole_pairs = (id.pole_pairs != 0U) ? id.pole_pairs : 1U;
+    pole_pairs = (id.pole_pairs != 0U) ? id.pole_pairs : MOTOR_NOMINAL_POLE_PAIRS;
     startup_current = MOTOR_SENSORLESS_STARTUP_CURRENT_A;
     if (startup_current > g_host_iq_limit_a) startup_current = g_host_iq_limit_a;
 
     g_debug_speed_loop_iq_a = 0.0f;
     g_debug_friction_iq_a = 0.0f;
     g_debug_cogging_iq_a = 0.0f;
+
+    if (g_startup_handover_blending != 0U) {
+        MotorSensorlessOutput sensorless = Motor_Sensorless_GetOutput();
+        float target_controller_rpm =
+            g_startup_handover_rpm * (float)identified_direction;
+        float feedback_controller_rpm =
+            sensorless.mechanical_speed_rpm * (float)identified_direction;
+        float blend = (float)(g_startup_handover_blend_ms + 1U) /
+                      (float)MOTOR_SENSORLESS_HANDOVER_BLEND_MS;
+
+        if (blend > 1.0f) blend = 1.0f;
+        speed_pid.out_max = g_host_iq_limit_a;
+        speed_pid.out_min = -g_host_iq_limit_a;
+        Motor_SpeedLoop_SetTarget(target_controller_rpm);
+        g_debug_speed_loop_iq_a =
+            Motor_SpeedLoop_Update(feedback_controller_rpm);
+        g_foc_state.target_d =
+            g_startup_handover_initial_current.d * (1.0f - blend);
+        g_foc_state.target_q =
+            g_startup_handover_initial_current.q +
+            blend * (g_debug_speed_loop_iq_a -
+                     g_startup_handover_initial_current.q);
+        g_host_iq_applied_a = g_foc_state.target_q;
+        g_motor_system.run_data.speed_rpm = sensorless.mechanical_speed_rpm;
+
+        if (++g_startup_handover_blend_ms >=
+            MOTOR_SENSORLESS_HANDOVER_BLEND_MS) {
+            g_startup_handover_blending = 0U;
+            g_startup_phase = MOTOR_STARTUP_PHASE_COMPLETE;
+        }
+        return 1U;
+    }
+
     g_foc_state.target_q = 0.0f;
 
     if (g_startup_phase == MOTOR_STARTUP_PHASE_ALIGN) {
@@ -1012,6 +1084,7 @@ static uint8_t Motor_System_RunForcedStartup1ms(int8_t identified_direction)
         g_foc_state.target_d = startup_current * align_scale;
         Motor_CurrentLoop_SetOpenLoopElectricalAngle(0.0f);
         Motor_CurrentLoop_SetOpenLoopElectricalSpeed(0.0f);
+        g_motor_system.run_data.speed_rpm = 0.0f;
         if (++g_startup_phase_elapsed_ms >= MOTOR_SENSORLESS_STARTUP_ALIGN_MS) {
             g_startup_phase = MOTOR_STARTUP_PHASE_RAMP;
             g_startup_phase_elapsed_ms = 0U;
@@ -1033,27 +1106,65 @@ static uint8_t Motor_System_RunForcedStartup1ms(int8_t identified_direction)
                              (float)identified_direction *
                              (float)pole_pairs * rpm_to_rad_s;
     Motor_CurrentLoop_SetOpenLoopElectricalSpeed(electrical_speed_rad_s);
+    g_motor_system.run_data.speed_rpm =
+        g_startup_open_loop_rpm * (float)identified_direction;
 
     if (g_startup_phase == MOTOR_STARTUP_PHASE_RAMP) {
         if (++g_startup_phase_elapsed_ms >= MOTOR_SENSORLESS_STARTUP_RAMP_MS) {
             g_startup_phase = MOTOR_STARTUP_PHASE_WAIT_LOCK;
             g_startup_phase_elapsed_ms = 0U;
+            g_startup_lock_stable_ms = 0U;
         }
         return 1U;
     }
 
-    if (Motor_Sensorless_IsReadyForHandover() != 0U) {
-        g_foc_state.target_d = 0.0f;
-        g_foc_state.target_q = 0.0f;
-        g_host_iq_applied_a = 0.0f;
-        g_host_speed_applied_rpm = g_startup_handover_rpm;
-        Motor_SpeedLoop_SetTarget(
-            g_startup_handover_rpm * (float)identified_direction);
-        PID_Reset(&speed_pid);
-        Motor_CurrentLoop_SetAngleSource(MOTOR_ANGLE_SOURCE_SENSORLESS);
-        Motor_CurrentLoop_SetOpenLoopElectricalSpeed(0.0f);
-        g_startup_phase = MOTOR_STARTUP_PHASE_COMPLETE;
-        return 1U;
+    expected_sensorless_rpm =
+        g_startup_handover_rpm * (float)identified_direction;
+    speed_tolerance_rpm = 0.15f * fabsf(expected_sensorless_rpm);
+    if (speed_tolerance_rpm < 30.0f) speed_tolerance_rpm = 30.0f;
+
+    {
+        MotorSensorlessOutput sensorless = Motor_Sensorless_GetOutput();
+        uint8_t speed_matches =
+            (fabsf(sensorless.mechanical_speed_rpm - expected_sensorless_rpm) <=
+             speed_tolerance_rpm) ? 1U : 0U;
+        uint8_t direction_matches =
+            ((sensorless.mechanical_speed_rpm * expected_sensorless_rpm) > 0.0f)
+                ? 1U : 0U;
+
+        if ((sensorless.valid != 0U) &&
+            (sensorless.status == MOTOR_SENSORLESS_TRACKING) &&
+            (speed_matches != 0U) &&
+            (direction_matches != 0U)) {
+            if (g_startup_lock_stable_ms < UINT16_MAX) {
+                g_startup_lock_stable_ms++;
+            }
+        } else {
+            g_startup_lock_stable_ms = 0U;
+        }
+
+        if (g_startup_lock_stable_ms >= MOTOR_SENSORLESS_LOCK_STABLE_MS) {
+            float target_controller_rpm =
+                g_startup_handover_rpm * (float)identified_direction;
+            float feedback_controller_rpm =
+                sensorless.mechanical_speed_rpm * (float)identified_direction;
+
+            /* 先保持定子电流/电压矢量连续地换坐标系，再渐变到速度PI。 */
+            g_startup_handover_initial_current =
+                Motor_CurrentLoop_HandoverToSensorless(
+                    sensorless.electrical_angle_rad);
+            speed_pid.out_max = g_host_iq_limit_a;
+            speed_pid.out_min = -g_host_iq_limit_a;
+            Motor_SpeedLoop_Preload(target_controller_rpm,
+                                    feedback_controller_rpm,
+                                    g_startup_handover_initial_current.q);
+            g_host_iq_applied_a = g_startup_handover_initial_current.q;
+            g_host_speed_applied_rpm = g_startup_handover_rpm;
+            g_startup_handover_blend_ms = 0U;
+            g_startup_handover_blending = 1U;
+            Motor_CurrentLoop_SetOpenLoopElectricalSpeed(0.0f);
+            return 1U;
+        }
     }
 
     if (++g_startup_phase_elapsed_ms >= MOTOR_SENSORLESS_STARTUP_LOCK_TIMEOUT_MS) {
@@ -1083,8 +1194,11 @@ static void Motor_System_RunSpeedMode(float mechanical_speed_rpm,
      * 避免只能等待积分累积后突然挣脱。FREE仍使用实际速度，防止静止自驱。 */
     g_debug_friction_iq_a = Motor_Feedforward_FrictionCompensation(
         g_host_speed_applied_rpm) * (float)identified_direction;
-    g_debug_cogging_iq_a = Motor_Cogging_Compensation(
-        mechanical_angle_counts, mechanical_speed_rpm);
+    g_debug_cogging_iq_a =
+        (Motor_CurrentLoop_GetAngleSource() == MOTOR_ANGLE_SOURCE_SENSORLESS)
+            ? 0.0f
+            : Motor_Cogging_Compensation(mechanical_angle_counts,
+                                         mechanical_speed_rpm);
     float feedforward_iq = g_debug_friction_iq_a + g_debug_cogging_iq_a;
 
     /* 将前馈占用的电流余量反馈给PI抗饱和，防止总Iq已经限幅时积分仍增长。 */
@@ -1110,9 +1224,15 @@ void Motor_System_Task(void)
     static uint8_t demo_autoplay_checked = 0U;
 #endif
 
-    // ========== 步骤 1: 速度估算（20/10/5 ms自适应滚动位置窗） ==========
-    // 始终每1ms更新反馈；带迟滞切换窗口，兼顾低速分辨率和中高速延迟。
-    if (Motor_Encoder_IsDataFresh(MOTOR_ENCODER_MAX_SAMPLE_AGE_MS) != 0U) {
+    // ========== 步骤 1: 速度反馈 ==========
+    // 无感接管后直接使用 PLL 电角速度换算的机械转速；有感路径保持编码器估算。
+    if ((Motor_CurrentLoop_GetAngleSource() == MOTOR_ANGLE_SOURCE_SENSORLESS) &&
+        (Motor_Sensorless_IsValid() != 0U)) {
+        g_motor_system.run_data.speed_rpm =
+            Motor_Sensorless_GetMechanicalSpeedRpm();
+    } else if (Motor_CurrentLoop_GetAngleSource() == MOTOR_ANGLE_SOURCE_OPEN_LOOP) {
+        /* 强拖函数会在本拍更新为当前开环指令转速。 */
+    } else if (Motor_Encoder_IsDataFresh(MOTOR_ENCODER_MAX_SAMPLE_AGE_MS) != 0U) {
         g_motor_system.run_data.speed_rpm =
             Motor_SpeedEstimator_UpdateAdaptive(g_motor_system.run_data.speed_rpm);
     } else {
@@ -1122,6 +1242,9 @@ void Motor_System_Task(void)
     // 如果编码器接线/电机相序不同，编码器读数的正反方向可能会和 Iq 的正扭矩方向相反。
     // 我们必须用系统辨识出的 uvw_dir (1 或 -1) 来把转速的正负号与电机电磁正方向统一，否则会导致 PID 变成正反馈（越差越使劲）！
     int8_t identified_direction = Motor_Identify_GetResult().uvw_dir;
+    if (g_startup_mode == MOTOR_STARTUP_FORCED_SENSORLESS) {
+        identified_direction = MOTOR_NOMINAL_UVW_DIRECTION;
+    }
     if ((identified_direction != 1) && (identified_direction != -1)) {
         identified_direction = 1;
     }
@@ -1161,7 +1284,8 @@ void Motor_System_Task(void)
     }
     
     float target_pos = Motor_System_UpdatePotTarget();
-    g_foc_state.target_d = 0.0f;
+    /* 不在模式分发前清零 Id：强拖启动需要连续的定向电流，且 ADC
+     * 中断会抢占本 1 ms 任务；各普通模式在各自分支明确设置 Id=0。 */
     Motor_Cogging_Task1ms(
         (g_motor_system.state == MOTOR_STATE_SENSORED_RUN) &&
         ((g_control_mode == MOTOR_CONTROL_SPEED) ||

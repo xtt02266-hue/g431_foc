@@ -4,34 +4,48 @@
 // -----------------------------------------
 // 全局软硬件核心参数配置区
 // -----------------------------------------
-// 实际使用固定 15V 电源，硬件未采样母线电压，因此算法使用此配置值。
+// 电机型号：3508（减速器已拆除）；下列输出轴规格换算为电机轴参数使用。
+// 当前仍使用固定 15V 电源；电机额定 24V 不等于实际母线电压。
 // 更换供电电压时须同步修改，供电压降不会被软件自动补偿。
 #define SYSTEM_BUS_VOLTAGE    15.0f
+#define MOTOR_OUTPUT_SPEED_CONSTANT_RPM_PER_V 24.48f
+#define MOTOR_GEAR_RATIO                    (3591.0f / 187.0f)
+#define MOTOR_ROTOR_SPEED_CONSTANT_RPM_PER_V \
+    (MOTOR_OUTPUT_SPEED_CONSTANT_RPM_PER_V * MOTOR_GEAR_RATIO)
+#define MOTOR_THEORETICAL_MAX_RPM \
+    (SYSTEM_BUS_VOLTAGE * MOTOR_ROTOR_SPEED_CONSTANT_RPM_PER_V)
+#define MOTOR_NOMINAL_PHASE_RESISTANCE_OHM 0.194f
+#define MOTOR_NOMINAL_PHASE_INDUCTANCE_H   0.000097f
+#define MOTOR_NOMINAL_POLE_PAIRS           7U
+#define MOTOR_NOMINAL_UVW_DIRECTION        1
 // -----------------------------------------
 
 #define MOTOR_TORQUE_CURRENT_LIMIT_A   1.5f // 力矩给定最终换算出的 Iq 绝对值上限，单位 A
-#define MOTOR_HOST_DEFAULT_IQ_LIMIT_A  0.10f
+#define MOTOR_HOST_DEFAULT_IQ_LIMIT_A  0.40f
 #define MOTOR_HOST_HEARTBEAT_TIMEOUT_MS 500U
 #define MOTOR_IQ_SLEW_A_PER_S          1.0f
-#define MOTOR_HOST_SPEED_MAX_RPM       1200.0f
+#define MOTOR_HOST_SPEED_MAX_RPM       MOTOR_THEORETICAL_MAX_RPM
 #define MOTOR_HOST_SPEED_SLEW_RPM_PER_S 1000.0f
 /* Speed闭环需要及时从驱动切换到制动；Free触觉仍使用上面的柔和斜率。 */
 #define MOTOR_SPEED_IQ_SLEW_A_PER_S    5.0f
-/* 无感强拖启动：先定向，再线性拉升开环电角速度。 */
-#define MOTOR_SENSORLESS_STARTUP_ALIGN_MS          300U
-#define MOTOR_SENSORLESS_STARTUP_RAMP_MS          1500U
+/* 无感强拖启动：缩短低速找位阶段；250 rpm 交接门槛保持不变。
+ * 无编码器时仍可能有一次转子定向动作，不能保证任意初始角度零抖动。 */
+#define MOTOR_SENSORLESS_STARTUP_ALIGN_MS          250U
+#define MOTOR_SENSORLESS_STARTUP_RAMP_MS          4000U
 #define MOTOR_SENSORLESS_STARTUP_LOCK_TIMEOUT_MS  2500U
-#define MOTOR_SENSORLESS_STARTUP_CURRENT_A        0.10f
-#define MOTOR_SENSORLESS_HANDOVER_DEFAULT_RPM     300.0f
+#define MOTOR_SENSORLESS_LOCK_STABLE_MS             100U
+#define MOTOR_SENSORLESS_HANDOVER_BLEND_MS           100U
+#define MOTOR_SENSORLESS_STARTUP_CURRENT_A        0.40f
+#define MOTOR_SENSORLESS_HANDOVER_DEFAULT_RPM     250.0f
 #define MOTOR_SENSORLESS_HANDOVER_MIN_RPM         100.0f
 #define MOTOR_SENSORLESS_HANDOVER_MAX_RPM         600.0f
 #define MOTOR_PARAMETERS_AUTO_IDENTIFY 0
-/* BM3514H 商品页：291 KV。按常用 FOC 近似 Kt=8.27/KV 估算。
- * 单位 N·m/A，Iq 峰值定义；非实测标定，现有 R/L 辨识不测 Kt。
- * 参考 https://docs.odriverobotics.com/v/latest/manual/control.html
- * 设为 0 表示未配置，电位器力矩输出为零。
- */
-#define MOTOR_TORQUE_CONSTANT_NM_PER_A  (8.27f / 291.0f)
+/* 数据表的 0.3 N.m/A 是减速器输出轴指标；拆除减速器后换算到电机轴。 */
+#define MOTOR_OUTPUT_TORQUE_CONSTANT_NM_PER_A 0.3f
+#define MOTOR_TORQUE_CONSTANT_NM_PER_A \
+    (MOTOR_OUTPUT_TORQUE_CONSTANT_NM_PER_A / MOTOR_GEAR_RATIO)
+/* 20 kHz ADC 电流采样一阶低通系数；恢复到 0.25 以减小高速相位滞后。 */
+#define MOTOR_CURRENT_ADC_FILTER_ALPHA 0.25f
 /* 保留旧宏供现有代码兼容；运行时由 MotorInputSource 决定 POT/HOST。 */
 #define MOTOR_TORQUE_USE_POT           1
 #define MOTOR_TORQUE_POT_CENTER        2047.5f // 12 位 ADC 的中点，对应零力矩
@@ -39,13 +53,13 @@
 /* 电位器两端先按 N·m 生成目标力矩，再由 Iq=T/Kt 换算进电流环。
  * 当前调试范围限制为 +/-0.2 A 对应的电磁力矩；修改电机 Kt 时会自动同步。
  Iq	估算扭矩
-0.05 A	0.00142 N·m
-0.10 A	0.00284 N·m
-0.20 A	0.00568 N·m
-0.50 A	0.01421 N·m
-1.00 A	0.02842 N·m
+0.05 A	0.00078 N·m
+0.10 A	0.00156 N·m
+0.20 A	0.00312 N·m
+0.50 A	0.00781 N·m
+1.00 A	0.01562 N·m
  */
-#define MOTOR_TORQUE_POT_MAX_CURRENT_A 0.2f//±5.68 mN·m
+#define MOTOR_TORQUE_POT_MAX_CURRENT_A 0.2f // 约 ±3.12 mN·m（电机轴）
 
 
 #define MOTOR_TORQUE_POT_MAX_NM        \
