@@ -6,16 +6,25 @@
 #include "oled.h"
 #include "vofa_usart.h"
 #include "pc_protocol.h"
+#include "board_profile.h"
 
 // 详细诊断 OLED 界面开关；默认关闭，仅用于本地调试，不作为全局配置。
 #define MOTOR_DEBUG_OLED_DETAILS 0
+/* 28 路遥测帧连同协议开销共 132 字节。UART 保守运行在 500 Hz；
+ * USB CDC 不受虚拟波特率限制，运行在 1 kHz。发送忙时协议层会丢弃
+ * 本拍遥测并累计 telemetry drop，不阻塞电流环。 */
+#if BOARD_COMM_USB_CDC
+#define MOTOR_TELEMETRY_PERIOD_MS 1U
+#else
+#define MOTOR_TELEMETRY_PERIOD_MS 2U
+#endif
 
 void Motor_ShowDebugInfo_OLED(void)
 {
     static uint32_t last_refresh_ms = 0U;
     uint32_t now = HAL_GetTick();
 
-    if ((uint32_t)(now - last_refresh_ms) < 5U) {
+    if ((uint32_t)(now - last_refresh_ms) < MOTOR_TELEMETRY_PERIOD_MS) {
         return;
     }
     last_refresh_ms = now;

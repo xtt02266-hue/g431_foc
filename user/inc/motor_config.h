@@ -21,7 +21,7 @@
 // -----------------------------------------
 
 #define MOTOR_TORQUE_CURRENT_LIMIT_A   1.5f // 力矩给定最终换算出的 Iq 绝对值上限，单位 A
-#define MOTOR_HOST_DEFAULT_IQ_LIMIT_A  0.40f
+#define MOTOR_HOST_DEFAULT_IQ_LIMIT_A  1.00f // 上位机接管时的默认运行限流；仍受 1.5 A 硬上限约束
 #define MOTOR_HOST_HEARTBEAT_TIMEOUT_MS 500U
 #define MOTOR_IQ_SLEW_A_PER_S          1.0f
 #define MOTOR_HOST_SPEED_MAX_RPM       MOTOR_THEORETICAL_MAX_RPM

@@ -18,8 +18,20 @@
 #include "motor_debug.h"
 
 #define MOTOR_ENCODER_MAX_SAMPLE_AGE_MS  2U
-#define MOTOR_CURRENT_LOOP_CONTROL_BW_HZ 200.0f
+#define MOTOR_CURRENT_LOOP_CONTROL_BW_HZ 250.0f
 #define MOTOR_CURRENT_LOOP_MUSIC_BW_HZ  2000.0f
+
+/* 纯无感配置默认停在 Speed + HOST + 强拖启动的待命组合；这里只选择
+ * 配置，不置 run_requested，仍必须由上位机显式发送 START。 */
+#if FOC_PROFILE_SENSORLESS
+#define MOTOR_PROFILE_DEFAULT_CONTROL_MODE MOTOR_CONTROL_SPEED
+#define MOTOR_PROFILE_DEFAULT_INPUT_SOURCE MOTOR_INPUT_HOST
+#define MOTOR_PROFILE_DEFAULT_STARTUP_MODE MOTOR_STARTUP_FORCED_SENSORLESS
+#else
+#define MOTOR_PROFILE_DEFAULT_CONTROL_MODE MOTOR_DEFAULT_CONTROL_MODE
+#define MOTOR_PROFILE_DEFAULT_INPUT_SOURCE MOTOR_INPUT_POT
+#define MOTOR_PROFILE_DEFAULT_STARTUP_MODE MOTOR_STARTUP_AS5600
+#endif
 
 // 电位器低通滤波系数 (一阶 EMA, 1kHz 更新率)
 // α 越小滤波越强、响应越慢; α=1.0 则无滤波
@@ -36,9 +48,9 @@ static volatile uint8_t g_run_requested = 0U;
 /* 故障采用锁存方式，传感器恢复后仍需调用 ClearFault。 */
 static volatile uint8_t g_fault_latched = 0U;
 /* 主循环接口和 1ms 中断共用；volatile 保证读取最新值，多变量切换另用临界区保护。 */
-static volatile MotorControlMode g_control_mode = MOTOR_DEFAULT_CONTROL_MODE;
+static volatile MotorControlMode g_control_mode = MOTOR_PROFILE_DEFAULT_CONTROL_MODE;
 static volatile float g_torque_current_a = 0.0f; // 限幅后的 Iq 给定，供力矩分支送入电流环
-static volatile MotorInputSource g_input_source = MOTOR_INPUT_POT;
+static volatile MotorInputSource g_input_source = MOTOR_PROFILE_DEFAULT_INPUT_SOURCE;
 static volatile MotorControlOwner g_control_owner = MOTOR_OWNER_LOCAL;
 static volatile uint32_t g_host_last_heartbeat_ms = 0U;
 static volatile uint32_t g_config_revision = 0U;
@@ -49,7 +61,7 @@ static float g_host_speed_applied_rpm = 0.0f;
 static float g_debug_speed_loop_iq_a = 0.0f;
 static float g_debug_friction_iq_a = 0.0f;
 static float g_debug_cogging_iq_a = 0.0f;
-static volatile MotorStartupMode g_startup_mode = MOTOR_STARTUP_AS5600;
+static volatile MotorStartupMode g_startup_mode = MOTOR_PROFILE_DEFAULT_STARTUP_MODE;
 static volatile MotorStartupPhase g_startup_phase = MOTOR_STARTUP_PHASE_IDLE;
 static volatile float g_startup_handover_rpm = MOTOR_SENSORLESS_HANDOVER_DEFAULT_RPM;
 static uint32_t g_startup_phase_elapsed_ms = 0U;
@@ -94,8 +106,9 @@ static float Motor_AbsFloat(float value)
 }
 
 /* 初始化系统状态与目标值，清除上次运行残留的力矩和电位器滤波状态。
- * 默认选择力矩模式，但实际输出仍须等待参数有效、编码器新鲜且状态机允许运行。
- * 保留外环初始化，是为了以后切回位置模式时可直接使用，并非默认执行外环。
+ * sensorless profile 默认选择 Speed/HOST/强拖无感，其余 profile 保持
+ * Torque/POT/有感；两者都只配置待命状态，不会在未收到 START 时输出。
+ * 保留外环初始化，是为了以后切换模式时可直接使用。
  */
 void Motor_System_Init(void)
 {
@@ -103,8 +116,8 @@ void Motor_System_Init(void)
     g_run_requested = 0U;
     g_fault_latched = 0U;
 
-    g_control_mode = MOTOR_DEFAULT_CONTROL_MODE;
-    g_input_source = MOTOR_INPUT_POT;
+    g_control_mode = MOTOR_PROFILE_DEFAULT_CONTROL_MODE;
+    g_input_source = MOTOR_PROFILE_DEFAULT_INPUT_SOURCE;
     g_control_owner = MOTOR_OWNER_LOCAL;
     g_host_iq_limit_a = MOTOR_HOST_DEFAULT_IQ_LIMIT_A;
     g_host_iq_applied_a = 0.0f;
@@ -113,7 +126,7 @@ void Motor_System_Init(void)
     g_debug_speed_loop_iq_a = 0.0f;
     g_debug_friction_iq_a = 0.0f;
     g_debug_cogging_iq_a = 0.0f;
-    g_startup_mode = MOTOR_STARTUP_AS5600;
+    g_startup_mode = MOTOR_PROFILE_DEFAULT_STARTUP_MODE;
     g_startup_phase = MOTOR_STARTUP_PHASE_IDLE;
     g_startup_handover_rpm = MOTOR_SENSORLESS_HANDOVER_DEFAULT_RPM;
     g_startup_phase_elapsed_ms = 0U;
@@ -253,8 +266,8 @@ void Motor_System_ReleaseHost(void)
 {
     Motor_System_StopControl();
     g_control_owner = MOTOR_OWNER_LOCAL;
-    g_control_mode = MOTOR_CONTROL_TORQUE;
-    g_input_source = MOTOR_INPUT_POT;
+    g_control_mode = MOTOR_PROFILE_DEFAULT_CONTROL_MODE;
+    g_input_source = MOTOR_PROFILE_DEFAULT_INPUT_SOURCE;
     g_host_iq_limit_a = MOTOR_HOST_DEFAULT_IQ_LIMIT_A;
     g_torque_current_a = 0.0f;
     g_host_iq_applied_a = 0.0f;
@@ -416,10 +429,24 @@ MotorCommandResult Motor_System_HostSetIq(float iq_a, float *accepted_iq_a)
 MotorCommandResult Motor_System_HostSetIqLimit(float limit_a)
 {
     if (g_control_owner != MOTOR_OWNER_HOST) return MOTOR_CMD_NOT_OWNER;
-    if (g_motor_system.state != MOTOR_STATE_STOPPED) return MOTOR_CMD_MUST_STOP_FIRST;
+    /* Speed 模式允许运行中调整限流；其余模式仍需停机。 */
+    uint8_t running_speed =
+        (g_motor_system.state == MOTOR_STATE_SENSORED_RUN) &&
+        (g_control_mode == MOTOR_CONTROL_SPEED) &&
+        (g_input_source == MOTOR_INPUT_HOST);
+    if ((g_motor_system.state != MOTOR_STATE_STOPPED) && !running_speed) {
+        return MOTOR_CMD_MUST_STOP_FIRST;
+    }
     if (!isfinite(limit_a) || (limit_a < 0.02f) ||
         (limit_a > MOTOR_TORQUE_CURRENT_LIMIT_A)) return MOTOR_CMD_INVALID_VALUE;
     g_host_iq_limit_a = limit_a;
+    /* 下调时立即收紧已施加的 Iq，不能再按斜率慢慢越过新上限。 */
+    if (running_speed) {
+        if (g_host_iq_applied_a > limit_a) g_host_iq_applied_a = limit_a;
+        if (g_host_iq_applied_a < -limit_a) g_host_iq_applied_a = -limit_a;
+        if (g_foc_state.target_q > limit_a) g_foc_state.target_q = limit_a;
+        if (g_foc_state.target_q < -limit_a) g_foc_state.target_q = -limit_a;
+    }
     ++g_config_revision;
     return MOTOR_CMD_OK;
 }
