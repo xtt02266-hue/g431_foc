@@ -21,11 +21,11 @@ extern MotorSpeedEstimator speed_est;
  * 无外加负载、摩擦前馈配合下的保守速度环基线参数。
  * 输入误差单位为机械 RPM，输出单位为 q 轴电流 A。
  */
-#define MOTOR_SPEED_PID_KP          0.0020f
-#define MOTOR_SPEED_PID_KI          0.0010f
+#define MOTOR_SPEED_PID_KP          0.004f
+#define MOTOR_SPEED_PID_KI          0.003f
 #define MOTOR_SPEED_PID_KD          0.0f
-#define MOTOR_SPEED_PID_OUT_MAX     1.1f
-#define MOTOR_SPEED_PID_OUT_MIN     -1.1f
+#define MOTOR_SPEED_PID_OUT_MAX     3.0f
+#define MOTOR_SPEED_PID_OUT_MIN     -3.0f
 
 /* 函数声明 */
 // PID 相关

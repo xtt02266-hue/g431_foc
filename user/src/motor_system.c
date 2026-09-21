@@ -18,7 +18,7 @@
 #include "motor_debug.h"
 
 #define MOTOR_ENCODER_MAX_SAMPLE_AGE_MS  2U
-#define MOTOR_CURRENT_LOOP_CONTROL_BW_HZ 250.0f
+#define MOTOR_CURRENT_LOOP_CONTROL_BW_HZ 450.0f
 #define MOTOR_CURRENT_LOOP_MUSIC_BW_HZ  2000.0f
 
 /* 纯无感配置默认停在 Speed + HOST + 强拖启动的待命组合；这里只选择
