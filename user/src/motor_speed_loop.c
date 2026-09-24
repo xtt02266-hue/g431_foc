@@ -30,6 +30,7 @@ static uint16_t g_speed_window_ticks = SPEED_EST_WINDOW_TICKS;
 void Motor_SpeedEstimator_Init(float filter_alpha) {
     speed_est.last_angle_raw = 0;
     speed_est.speed_rpm = 0.0f;
+    speed_est.instant_speed_rpm = 0.0f;
     speed_est.filter_alpha = filter_alpha;
     speed_est.initialized = 0;
     g_speed_unwrapped_counts = 0;
@@ -112,6 +113,7 @@ float Motor_SpeedEstimator_UpdateAdaptive(float published_speed_rpm)
     if (!speed_est.initialized) {
         speed_est.last_angle_raw = current_angle_raw;
         speed_est.speed_rpm = 0.0f;
+        speed_est.instant_speed_rpm = 0.0f;
         speed_est.initialized = 1U;
         g_speed_unwrapped_counts = (int32_t)current_angle_raw;
         g_speed_history_index = 0U;
@@ -163,6 +165,7 @@ float Motor_SpeedEstimator_UpdateAdaptive(float published_speed_rpm)
         ((float)(g_speed_unwrapped_counts - old_position) * 60.0f) /
         (MOTOR_ENCODER_COUNTS_PER_REV_F * dt_seconds);
 
+    speed_est.instant_speed_rpm = instant_rpm;
     speed_est.speed_rpm = speed_est.filter_alpha * instant_rpm +
         (1.0f - speed_est.filter_alpha) * speed_est.speed_rpm;
     return speed_est.speed_rpm;

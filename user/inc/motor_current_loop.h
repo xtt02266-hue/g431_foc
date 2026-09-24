@@ -54,7 +54,8 @@
 typedef struct
 {
     float vref_volts;
-    float bias_volts;
+    float bias_u_volts;
+    float bias_w_volts;
     float shunt_ohms;
     float gain;
     float adc_max;
@@ -107,6 +108,7 @@ typedef struct
     
     float sin_theta;             // 当前电角度的正弦值
     float cos_theta;             // 当前电角度的余弦值
+    float electrical_angle_rad;  // FOC实际使用的归一化电角度 [0, 2π)
 } MotorCurrentLoopState;
 
 // 暴露全局状态以供其他模块读取/调试，或作为对外统一接口。
@@ -131,6 +133,9 @@ void Motor_CurrentLoop_AutoTunePIDWithBandwidth(float resistance,
 MotorCurrentParams Motor_CurrentLoop_GetParams(void);
 // 设置偏置电压。
 void Motor_CurrentLoop_SetBiasVolts(float bias_volts);
+// 分别设置 U/W 两路零电流偏置电压。
+void Motor_CurrentLoop_SetPhaseBiasVolts(float bias_u_volts,
+                                         float bias_w_volts);
 // 设置参考电压。
 void Motor_CurrentLoop_SetVrefVolts(float vref_volts);
 // 设置放大器增益。

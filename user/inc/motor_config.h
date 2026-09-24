@@ -10,11 +10,19 @@
 // -----------------------------------------
 
 #define MOTOR_TORQUE_CURRENT_LIMIT_A   1.5f // 力矩给定最终换算出的 Iq 绝对值上限，单位 A
-#define MOTOR_HOST_DEFAULT_IQ_LIMIT_A  0.10f
+#define MOTOR_HOST_DEFAULT_IQ_LIMIT_A  1.10f
 #define MOTOR_HOST_HEARTBEAT_TIMEOUT_MS 500U
 #define MOTOR_IQ_SLEW_A_PER_S          1.0f
-#define MOTOR_HOST_SPEED_MAX_RPM       400.0f
-#define MOTOR_HOST_SPEED_SLEW_RPM_PER_S 1000.0f
+#define MOTOR_HOST_SPEED_MAX_RPM       2000.0f
+#define MOTOR_HOST_SPEED_SLEW_RPM_PER_S 0.0f
+#define MOTOR_HOST_SPEED_SLEW_MAX_RPM_PER_S 100000.0f
+/* 诊断用开环强拖：旋转磁场固定为机械 200 rpm，不经过位置/速度/电流闭环。
+ * amplitude 是 Motor_OpenLoop_Drive 的 0..500 调制度，100 约为 20% 最大相电压。
+ */
+#define MOTOR_FORCE_DRAG_SPEED_RPM       200.0f
+#define MOTOR_FORCE_DRAG_POLE_PAIRS      7U
+#define MOTOR_FORCE_DRAG_AMPLITUDE       100.0f
+#define MOTOR_FORCE_DRAG_ALIGN_MS        300U
 /* Speed闭环需要及时从驱动切换到制动；Free触觉仍使用上面的柔和斜率。 */
 #define MOTOR_SPEED_IQ_SLEW_A_PER_S    5.0f
 #define MOTOR_PARAMETERS_AUTO_IDENTIFY 0

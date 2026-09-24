@@ -9,6 +9,7 @@
 typedef struct {
     uint16_t last_angle_raw; // 上一次15位编码器原始读数 (0~32767)
     float speed_rpm;         // 滤波后的转速 (RPM)
+    float instant_speed_rpm; // 自适应窗口直接计算的未滤波转速 (RPM)
     float filter_alpha;      // 一阶低通滤波系数 (0~1)
     uint8_t initialized;     // 是否已初始化首个角度
 } MotorSpeedEstimator;
@@ -21,8 +22,8 @@ extern MotorSpeedEstimator speed_est;
  * 无外加负载、摩擦前馈配合下的保守速度环基线参数。
  * 输入误差单位为机械 RPM，输出单位为 q 轴电流 A。
  */
-#define MOTOR_SPEED_PID_KP          0.0016f
-#define MOTOR_SPEED_PID_KI          0.0001f
+#define MOTOR_SPEED_PID_KP          0.0008f
+#define MOTOR_SPEED_PID_KI          0.0005f
 #define MOTOR_SPEED_PID_KD          0.0f
 #define MOTOR_SPEED_PID_OUT_MAX     1.1f
 #define MOTOR_SPEED_PID_OUT_MIN     -1.1f

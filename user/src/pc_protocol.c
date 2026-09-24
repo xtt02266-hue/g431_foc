@@ -2,6 +2,7 @@
 #include "motor_system.h"
 #include "motor_parameters.h"
 #include "motor_current_loop.h"
+#include "motor_speed_loop.h"
 #include "motor_debug.h"
 #include "motor_encoder.h"
 #include "mt6826s.h"
@@ -28,7 +29,8 @@ enum { CMD_HELLO=0x01, CMD_GET_STATUS=0x02, CMD_CLAIM=0x03,
        CMD_SET_SPEED=0x27, CMD_SET_COGGING_CONFIG=0x28,
        CMD_GET_COGGING_CONFIG=0x29, CMD_COGGING_TABLE_BEGIN=0x2A,
        CMD_COGGING_TABLE_CHUNK=0x2B, CMD_COGGING_TABLE_COMMIT=0x2C,
-       CMD_GET_COGGING_TABLE_CHUNK=0x2D, CMD_SAVE_COGGING=0x2E };
+       CMD_GET_COGGING_TABLE_CHUNK=0x2D, CMD_SAVE_COGGING=0x2E,
+       CMD_FORCE_DRAG_200=0x2F };
 
 static volatile uint8_t s_ring[RX_RING_SIZE];
 static volatile uint16_t s_head, s_tail;
@@ -42,7 +44,7 @@ static uint32_t s_token;
 static uint32_t s_token_counter;
 static uint32_t s_crc_errors, s_overflows, s_telemetry_drops;
 static uint16_t s_telemetry_seq, s_status_seq;
-static uint32_t s_sample_seq, s_last_status_ms;
+static uint32_t s_sample_seq, s_last_status_ms, s_last_telemetry_ms;
 static uint8_t s_last_request[PC_PROTOCOL_MAX_PAYLOAD];
 static uint16_t s_last_request_len, s_last_request_seq;
 static uint8_t s_last_response[PC_PROTOCOL_MAX_PAYLOAD];
@@ -192,6 +194,9 @@ static void handle_command(uint16_t seq, const uint8_t *p, uint16_t n)
         Motor_System_HostHeartbeat(); out_n=build_status(out);
     } else if (cmd == CMD_START) {
         r=Motor_System_HostStart();
+    } else if (cmd == CMD_FORCE_DRAG_200) {
+        if (bn!=0U) r=MOTOR_CMD_INVALID_LENGTH;
+        else r=Motor_System_HostStartForceDrag200();
     } else if (cmd == CMD_SET_MODE) {
         if (bn!=2U) r=MOTOR_CMD_INVALID_LENGTH;
         else r=Motor_System_HostSetMode((MotorControlMode)b[0],(MotorInputSource)b[1]);
@@ -232,8 +237,12 @@ static void handle_command(uint16_t seq, const uint8_t *p, uint16_t n)
         }
     } else if (cmd == CMD_SET_SPEED) {
         float accepted=0.0f;
-        if (bn!=4U) r=MOTOR_CMD_INVALID_LENGTH;
-        else { r=Motor_System_HostSetSpeed(get_f32(b),&accepted); put_f32(out,accepted); out_n=4U; }
+        if ((bn!=4U) && (bn!=8U)) r=MOTOR_CMD_INVALID_LENGTH;
+        else {
+            float slew=(bn==8U)?get_f32(&b[4]):MOTOR_HOST_SPEED_SLEW_RPM_PER_S;
+            r=Motor_System_HostSetSpeed(get_f32(b),slew,&accepted);
+            put_f32(out,accepted); put_f32(&out[4],slew); out_n=8U;
+        }
     } else if (cmd == CMD_SET_COGGING_CONFIG) {
         MotorCoggingConfig cc;
         if (bn!=19U) r=MOTOR_CMD_INVALID_LENGTH;
@@ -326,7 +335,8 @@ void PC_Protocol_Init(void)
     s_head=s_tail=s_parse_len=0U; s_tx_busy=0U; s_tx_pending_len=0U;
     s_token=0U; s_token_counter=0U; s_crc_errors=s_overflows=s_telemetry_drops=0U;
     s_last_request_len=0U; s_last_request_seq=0U; s_last_response_len=0U;
-    s_sample_seq=0U; s_telemetry_seq=s_status_seq=0U; s_last_status_ms=HAL_GetTick();
+    s_sample_seq=0U; s_telemetry_seq=s_status_seq=0U;
+    s_last_status_ms=s_last_telemetry_ms=HAL_GetTick();
 }
 
 void PC_Protocol_FeedFromISR(const uint8_t *data, uint16_t length)
@@ -362,16 +372,25 @@ void PC_Protocol_Task(void)
     }
     uint32_t now=HAL_GetTick();
     if ((uint32_t)(now-s_last_status_ms)>=100U) {
-        uint8_t p[40]; s_last_status_ms=now;
-        (void)queue_frame(TYPE_STATUS,++s_status_seq,p,build_status(p),0U);
+        uint8_t p[40];
+        uint16_t next_status_seq=(uint16_t)(s_status_seq+1U);
+        if (queue_frame(TYPE_STATUS,next_status_seq,p,build_status(p),0U)!=0U) {
+            s_status_seq=next_status_seq;
+            s_last_status_ms=now;
+        }
+        return;
+    }
+    if ((uint32_t)(now-s_last_telemetry_ms)>=5U) {
+        s_last_telemetry_ms=now;
+        PC_Protocol_SendTelemetry();
     }
 }
 
 void PC_Protocol_SendTelemetry(void)
 {
-    uint8_t p[86]; MotorControlSnapshot s; Motor_System_GetControlSnapshot(&s);
-    put_u16(&p[0],4U); put_u32(&p[2],HAL_GetTick()); put_u32(&p[6],++s_sample_seq);
-    float values[19] = { Motor_System_GetDebugPotTarget(), g_foc_state.pi_q.target,
+    uint8_t p[126]; MotorControlSnapshot s; Motor_System_GetControlSnapshot(&s);
+    put_u16(&p[0],7U); put_u32(&p[2],HAL_GetTick()); put_u32(&p[6],++s_sample_seq);
+    float values[29] = { Motor_System_GetDebugPotTarget(), g_foc_state.pi_q.target,
         g_foc_state.park.q, g_foc_state.park.d, g_motor_system.run_data.speed_rpm,
         g_foc_state.pi_q.output, (float)Motor_Encoder_GetRawAngle()*MOTOR_ENCODER_RAD_PER_COUNT,
         s.continuous_angle_rad, g_foc_state.target_q, s.relative_center_angle_rad,
@@ -379,7 +398,12 @@ void PC_Protocol_SendTelemetry(void)
         s.speed_loop_iq_a + s.friction_iq_a, s.cogging_iq_a,
         s.cogging_effective_gain, (float)s.cogging_table_revision,
         (float)(s.cogging_table_crc & 0xFFFFU),
-        (float)(s.cogging_table_crc >> 16U) };
+        (float)(s.cogging_table_crc >> 16U), s.position_target_counts,
+        s.position_actual_counts, s.position_error_counts,
+        s.position_target_speed_rpm, g_foc_state.electrical_angle_rad,
+        speed_est.instant_speed_rpm, (float)Motor_Encoder_GetRawAngle(),
+        (float)MT6826S_GetStatus(), (float)MT6826S_GetCrcErrorCount(),
+        (float)MT6826S_GetTransferErrorCount() };
     memcpy(&p[10],values,sizeof(values));
     if (queue_frame(TYPE_TELEMETRY,++s_telemetry_seq,p,sizeof(p),0U)==0U) ++s_telemetry_drops;
 }

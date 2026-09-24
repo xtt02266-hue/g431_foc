@@ -83,6 +83,10 @@ typedef struct
     float relative_center_angle_rad;
     float target_speed_rpm;
     float speed_loop_iq_a;
+    float position_target_counts;
+    float position_actual_counts;
+    float position_error_counts;
+    float position_target_speed_rpm;
     float friction_iq_a;
     float cogging_iq_a;
     float cogging_effective_gain;
@@ -132,6 +136,8 @@ MotorCommandResult Motor_System_ClaimHost(void);
 void Motor_System_ReleaseHost(void);
 void Motor_System_HostHeartbeat(void);
 MotorCommandResult Motor_System_HostStart(void);
+/* 诊断模式：先对齐转子，再以固定 200 rpm 机械速度开环强拖。 */
+MotorCommandResult Motor_System_HostStartForceDrag200(void);
 MotorCommandResult Motor_System_HostSetMode(MotorControlMode mode,
                                             MotorInputSource source);
 MotorCommandResult Motor_System_HostSetIq(float iq_a, float *accepted_iq_a);
@@ -152,6 +158,7 @@ MotorCommandResult Motor_System_HostReadCoggingChunk(uint16_t offset,
                                                      int16_t *values);
 MotorCommandResult Motor_System_HostSaveCogging(void);
 MotorCommandResult Motor_System_HostSetSpeed(float speed_rpm,
+                                             float slew_rpm_per_s,
                                              float *accepted_speed_rpm);
 void Motor_System_GetHapticParams(MotorHapticParams *params);
 void Motor_System_GetFrictionConfig(MotorFrictionConfig *config);
@@ -181,9 +188,4 @@ uint8_t Motor_System_PlaySong(const MotorMusicNote *song,
 uint8_t Motor_System_PlaySongLoop(const MotorMusicNote *song,
                                   uint16_t note_count);
 void Motor_System_StopMusic(void);
-/* 当前仅启停并行无感观测器，不会替换MT6826S SPI换相角度。 */
-uint8_t Motor_System_EnableSensorlessObserver(uint8_t enable);
-// OLED上显示临时调试信息。
-void Motor_ShowDebugInfo_OLED(void);
-
 #endif

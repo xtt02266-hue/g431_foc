@@ -4,7 +4,6 @@
 #include "motor_current_loop.h"
 #include "motor_identify.h"
 #include "motor_music.h"
-#include "motor_sensorless.h"
 #include "svpwm.h"
 #include "stm32g4xx_hal.h"
 #include "motor_config.h"
@@ -225,7 +224,6 @@ uint8_t Motor_Parameters_IdentifyAndSave(void)
     primask = __get_PRIMASK();
     __disable_irq();
     Motor_Music_Stop();
-    Motor_Sensorless_Enable(0U);
     g_foc_state.target_d = 0.0f;
     g_foc_state.target_q = 0.0f;
     Motor_CurrentLoop_Enable(0U);

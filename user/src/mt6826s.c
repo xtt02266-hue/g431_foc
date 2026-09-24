@@ -101,12 +101,15 @@ uint16_t MT6826S_ReadRawAngle15(void)
         return g_mt6826s_last_angle;
     }
 
+    /*
+     * STATUS[2:0] are warning flags, not a frame-valid indication.  The
+     * datasheet still defines ANGLE and CRC for frames with warning bits set.
+     * Rejecting every warning frame used to hold the previous angle for whole
+     * rotor sectors (most visibly when the motor field asserted STATUS[1]),
+     * which then produced a large artificial speed spike when the warning
+     * cleared.  Keep publishing CRC-valid angles and report STATUS separately.
+     */
     g_mt6826s_status = rx_data[4] & 0x07U;
-    if (g_mt6826s_status != 0U) {
-        g_mt6826s_ok = 0U;
-        return g_mt6826s_last_angle;
-    }
-
     g_mt6826s_last_angle =
         ((((uint16_t)rx_data[2]) << 7) | (((uint16_t)rx_data[3]) >> 1)) &
         MT6826S_ANGLE_MAX_15BIT;

@@ -14,7 +14,6 @@
 #include "svpwm.h"
 #include "motor_music.h"
 #include "motor_parameters.h"
-#include "motor_sensorless.h"
 #include "motor_debug.h"
 
 #define MOTOR_ENCODER_MAX_SAMPLE_AGE_MS  2U
@@ -42,11 +41,19 @@ static volatile MotorInputSource g_input_source = MOTOR_INPUT_POT;
 static volatile MotorControlOwner g_control_owner = MOTOR_OWNER_LOCAL;
 static volatile uint32_t g_host_last_heartbeat_ms = 0U;
 static volatile uint32_t g_config_revision = 0U;
+static volatile uint8_t g_force_drag_active = 0U;
+static float g_force_drag_phase_rad = 0.0f;
+static uint16_t g_force_drag_align_ticks = 0U;
 static volatile float g_host_iq_limit_a = MOTOR_HOST_DEFAULT_IQ_LIMIT_A;
 static float g_host_iq_applied_a = 0.0f;
 static float g_host_speed_target_rpm = 0.0f;
 static float g_host_speed_applied_rpm = 0.0f;
+static float g_host_speed_slew_rpm_per_s = MOTOR_HOST_SPEED_SLEW_RPM_PER_S;
 static float g_debug_speed_loop_iq_a = 0.0f;
+static float g_debug_position_target_counts = 0.0f;
+static float g_debug_position_actual_counts = 0.0f;
+static float g_debug_position_error_counts = 0.0f;
+static float g_debug_position_target_speed_rpm = 0.0f;
 static float g_debug_friction_iq_a = 0.0f;
 static float g_debug_cogging_iq_a = 0.0f;
 static float g_continuous_angle_rad = 0.0f;
@@ -90,10 +97,18 @@ void Motor_System_Init(void)
     g_host_iq_applied_a = 0.0f;
     g_host_speed_target_rpm = 0.0f;
     g_host_speed_applied_rpm = 0.0f;
+    g_host_speed_slew_rpm_per_s = MOTOR_HOST_SPEED_SLEW_RPM_PER_S;
     g_debug_speed_loop_iq_a = 0.0f;
+    g_debug_position_target_counts = 0.0f;
+    g_debug_position_actual_counts = 0.0f;
+    g_debug_position_error_counts = 0.0f;
+    g_debug_position_target_speed_rpm = 0.0f;
     g_debug_friction_iq_a = 0.0f;
     g_debug_cogging_iq_a = 0.0f;
     g_config_revision = 0U;
+    g_force_drag_active = 0U;
+    g_force_drag_phase_rad = 0.0f;
+    g_force_drag_align_ticks = 0U;
     g_angle_initialized = 0U;
     g_torque_current_a = 0.0f;
     g_motor_system.run_data.target_torque_nm = 0.0f;
@@ -120,8 +135,6 @@ void Motor_System_Init(void)
     // 仅初始化音乐模块；当前自动播放宏为 0，需要主动调用播放接口才会发声。
     Motor_Music_Init();
 
-    // Sensorless estimation is observation-only and disabled by default.
-    Motor_Sensorless_Init();
 }
 
 MotorState Motor_System_GetState(void)
@@ -257,6 +270,40 @@ MotorCommandResult Motor_System_HostStart(void)
     if ((g_control_mode >= MOTOR_CONTROL_SPRING) &&
         (g_control_mode <= MOTOR_CONTROL_LIMIT)) {
         g_haptic_center_rad = g_continuous_angle_rad;
+    }
+    g_host_last_heartbeat_ms = HAL_GetTick();
+    return MOTOR_CMD_OK;
+}
+
+MotorCommandResult Motor_System_HostStartForceDrag200(void)
+{
+    uint32_t primask;
+
+    if (g_control_owner != MOTOR_OWNER_HOST) return MOTOR_CMD_NOT_OWNER;
+    if (g_motor_system.state == MOTOR_STATE_FAULT) return MOTOR_CMD_FAULT_ACTIVE;
+    if (g_motor_system.state != MOTOR_STATE_STOPPED) return MOTOR_CMD_MUST_STOP_FIRST;
+    if (Motor_Parameters_IsBusy() != 0U) return MOTOR_CMD_BUSY;
+    if ((Motor_Parameters_IsReady() == 0U) ||
+        (Motor_Encoder_IsDataFresh(MOTOR_ENCODER_MAX_SAMPLE_AGE_MS) == 0U)) {
+        return MOTOR_CMD_NOT_READY;
+    }
+
+    /* 使用固定相位先把转子吸到已知位置，再进入固定 200 rpm 旋转磁场。
+     * 这里故意不采用辨识出的零点、极对数和方向：BM3514H 已知为 7 极对，
+     * 这样强拖结果不会被待排查的编码器换相角或辨识参数污染。
+     */
+    primask = __get_PRIMASK();
+    __disable_irq();
+    g_force_drag_phase_rad = 0.0f;
+    g_force_drag_align_ticks = MOTOR_FORCE_DRAG_ALIGN_MS;
+    g_force_drag_active = 1U;
+    g_run_requested = 1U;
+    g_host_speed_target_rpm = MOTOR_FORCE_DRAG_SPEED_RPM;
+    g_host_speed_applied_rpm = 0.0f;
+    g_torque_current_a = 0.0f;
+    Motor_System_ResetOuterLoops();
+    if (primask == 0U) {
+        __enable_irq();
     }
     g_host_last_heartbeat_ms = HAL_GetTick();
     return MOTOR_CMD_OK;
@@ -415,13 +462,18 @@ void Motor_System_GetCoggingConfig(MotorCoggingConfig *p)
 }
 
 MotorCommandResult Motor_System_HostSetSpeed(float speed_rpm,
+                                             float slew_rpm_per_s,
                                              float *accepted_speed_rpm)
 {
     if (g_control_owner != MOTOR_OWNER_HOST) return MOTOR_CMD_NOT_OWNER;
     if ((g_control_mode != MOTOR_CONTROL_SPEED) ||
         (g_input_source != MOTOR_INPUT_HOST)) return MOTOR_CMD_INVALID_COMBINATION;
     if (g_motor_system.state != MOTOR_STATE_SENSORED_RUN) return MOTOR_CMD_NOT_RUNNING;
-    if (!isfinite(speed_rpm)) return MOTOR_CMD_INVALID_VALUE;
+    if (!isfinite(speed_rpm) || !isfinite(slew_rpm_per_s) ||
+        (slew_rpm_per_s < 0.0f) ||
+        (slew_rpm_per_s > MOTOR_HOST_SPEED_SLEW_MAX_RPM_PER_S)) {
+        return MOTOR_CMD_INVALID_VALUE;
+    }
     if (speed_rpm > MOTOR_HOST_SPEED_MAX_RPM) speed_rpm = MOTOR_HOST_SPEED_MAX_RPM;
     if (speed_rpm < -MOTOR_HOST_SPEED_MAX_RPM) speed_rpm = -MOTOR_HOST_SPEED_MAX_RPM;
     if ((speed_rpm == 0.0f) ||
@@ -430,6 +482,7 @@ MotorCommandResult Motor_System_HostSetSpeed(float speed_rpm,
         PID_Reset(&speed_pid);
     }
     g_host_speed_target_rpm = speed_rpm;
+    g_host_speed_slew_rpm_per_s = slew_rpm_per_s;
     if (accepted_speed_rpm != NULL) *accepted_speed_rpm = speed_rpm;
     return MOTOR_CMD_OK;
 }
@@ -449,6 +502,10 @@ void Motor_System_GetControlSnapshot(MotorControlSnapshot *s)
                                        ? g_continuous_angle_rad - g_haptic_center_rad : 0.0f;
     s->target_speed_rpm = g_host_speed_applied_rpm;
     s->speed_loop_iq_a = g_debug_speed_loop_iq_a;
+    s->position_target_counts = g_debug_position_target_counts;
+    s->position_actual_counts = g_debug_position_actual_counts;
+    s->position_error_counts = g_debug_position_error_counts;
+    s->position_target_speed_rpm = g_debug_position_target_speed_rpm;
     s->friction_iq_a = g_debug_friction_iq_a;
     s->cogging_iq_a = g_debug_cogging_iq_a;
     s->cogging_effective_gain = Motor_Cogging_GetEffectiveGain();
@@ -619,22 +676,6 @@ void Motor_System_StopMusic(void)
     Motor_Music_Stop();
 }
 
-uint8_t Motor_System_EnableSensorlessObserver(uint8_t enable)
-{
-    if (enable == 0U) {
-        Motor_Sensorless_Enable(0U);
-        return 1U;
-    }
-
-    if ((g_motor_system.state != MOTOR_STATE_SENSORED_RUN) ||
-        (Motor_CurrentLoop_IsEnabled() == 0U)) {
-        return 0U;
-    }
-
-    Motor_Sensorless_Enable(1U);
-    return 1U;
-}
-
 /* 为什么需要：位置/速度环历史复位在多处重复，集中为一处以免顺序漂移。
  * 功能：按固定顺序清目标速度、速度 PID、位置环和轨迹规划器历史量。
  * 参数：无；调用上下文：仅由模式切换、进入音乐和非运行清理复用。
@@ -649,6 +690,10 @@ static void Motor_System_ResetControlHistory(void)
     g_host_speed_target_rpm = 0.0f;
     g_host_speed_applied_rpm = 0.0f;
     g_debug_speed_loop_iq_a = 0.0f;
+    g_debug_position_target_counts = 0.0f;
+    g_debug_position_actual_counts = 0.0f;
+    g_debug_position_error_counts = 0.0f;
+    g_debug_position_target_speed_rpm = 0.0f;
     g_debug_friction_iq_a = 0.0f;
     g_debug_cogging_iq_a = 0.0f;
 }
@@ -675,14 +720,14 @@ static void Motor_System_TuneCurrentLoopBandwidth(float bandwidth_hz)
 static void Motor_System_ForceSafeStop(void)
 {
     /* 所有功能统一从这里撤销转矩输出。 */
+    g_force_drag_active = 0U;
+    g_force_drag_align_ticks = 0U;
+    Motor_OpenLoop_Drive(0.0f, 0.0f);
     Motor_Cogging_RuntimeStop();
     g_torque_current_a = 0.0f;
     Motor_System_ResetOuterLoops();
     if (Motor_Music_IsPlaying() != 0U) {
         Motor_Music_Stop();
-    }
-    if (Motor_Sensorless_IsEnabled() != 0U) {
-        Motor_Sensorless_Enable(0U);
     }
     if (Motor_CurrentLoop_IsEnabled() != 0U) {
         Motor_CurrentLoop_Enable(0U);
@@ -737,15 +782,24 @@ static void Motor_System_UpdateOperatingState(void)
         return;
     }
 
+    /* 强拖是独立诊断路径：保留编码器新鲜度、参数和通信超时保护，
+     * 但明确关闭闭环电流调制，PWM 只由 1 ms 开环旋转磁场更新。
+     */
+    if (g_force_drag_active != 0U) {
+        if (Motor_CurrentLoop_IsEnabled() != 0U) {
+            Motor_CurrentLoop_Enable(0U);
+        }
+        if (SVPWM_IsEnabled() == 0U) {
+            SVPWM_Enable();
+        }
+        g_motor_system.state = MOTOR_STATE_SENSORED_RUN;
+        return;
+    }
+
     /* 参数和传感器均有效后，统一完成整定与闭环使能。 */
     if (Motor_CurrentLoop_IsEnabled() == 0U) {
-        MotorIdentifiedParams id = Motor_Identify_GetResult();
-
         Motor_System_TuneCurrentLoopBandwidth(
             MOTOR_CURRENT_LOOP_CONTROL_BW_HZ);
-        (void)Motor_Sensorless_ConfigureMotor(id.resistance,
-                                              id.inductance,
-                                              id.pole_pairs);
         SVPWM_Enable();
         Motor_CurrentLoop_Enable(1U);
     }
@@ -821,6 +875,15 @@ static void Motor_System_RunTorqueMode(void)
 static void Motor_System_RunPositionMode(float target_pos, float current_rpm)
 {
     float actual_pos = (float)Motor_Encoder_GetRawAngle();
+    float position_error = target_pos - actual_pos;
+    if (position_error > MOTOR_ENCODER_HALF_REV_F) {
+        position_error -= MOTOR_ENCODER_COUNTS_PER_REV_F;
+    } else if (position_error < -MOTOR_ENCODER_HALF_REV_F) {
+        position_error += MOTOR_ENCODER_COUNTS_PER_REV_F;
+    }
+    g_debug_position_target_counts = target_pos;
+    g_debug_position_actual_counts = actual_pos;
+    g_debug_position_error_counts = position_error;
 
     /* SPEED 模式会按会话限流收紧速度 PI 输出；回到位置模式时恢复位置环基线。 */
     speed_pid.out_max = MOTOR_SPEED_PID_OUT_MAX;
@@ -829,6 +892,7 @@ static void Motor_System_RunPositionMode(float target_pos, float current_rpm)
     // 恢复无负载时期的纯级联结构：位置误差直接生成目标机械转速。
     float target_mech_rpm =
         Motor_PositionLoop_Run(target_pos, actual_pos);
+    g_debug_position_target_speed_rpm = target_mech_rpm;
 
     // 将机械期望转速乘以 uvw_dir 统一符号后给到速度环，防止正反馈。
     // target_signed_rpm 是按电磁转矩正方向统一符号的机械 RPM，没有乘极对数。
@@ -870,9 +934,11 @@ static void Motor_System_RunSpeedMode(float mechanical_speed_rpm,
                                       int8_t identified_direction,
                                       uint16_t mechanical_angle_counts)
 {
-    const float max_step = MOTOR_HOST_SPEED_SLEW_RPM_PER_S *
+    const float max_step = g_host_speed_slew_rpm_per_s *
                            MOTOR_SYSTEM_TASK_DT_SEC;
-    if (g_host_speed_target_rpm > g_host_speed_applied_rpm + max_step) {
+    if (g_host_speed_slew_rpm_per_s <= 0.0f) {
+        g_host_speed_applied_rpm = g_host_speed_target_rpm;
+    } else if (g_host_speed_target_rpm > g_host_speed_applied_rpm + max_step) {
         g_host_speed_applied_rpm += max_step;
     } else if (g_host_speed_target_rpm < g_host_speed_applied_rpm - max_step) {
         g_host_speed_applied_rpm -= max_step;
@@ -953,12 +1019,37 @@ void Motor_System_Task(void)
         Motor_System_ReleaseHost();
     }
 
-    if (current_rpm > 20.0f) {
-        Motor_Sensorless_SetDirection(1);
-    } else if (current_rpm < -20.0f) {
-        Motor_Sensorless_SetDirection(-1);
+    if ((g_force_drag_active != 0U) &&
+        (g_motor_system.state == MOTOR_STATE_SENSORED_RUN)) {
+        g_foc_state.target_q = 0.0f;
+        g_foc_state.target_d = 0.0f;
+        g_debug_speed_loop_iq_a = 0.0f;
+        g_debug_friction_iq_a = 0.0f;
+        g_debug_cogging_iq_a = 0.0f;
+        g_motor_system.run_data.target_torque_nm = 0.0f;
+
+        if (g_force_drag_align_ticks != 0U) {
+            --g_force_drag_align_ticks;
+            g_host_speed_applied_rpm = 0.0f;
+        } else {
+            const float phase_step = MOTOR_FORCE_DRAG_SPEED_RPM *
+                                     (6.28318530718f / 60.0f) *
+                                     (float)MOTOR_FORCE_DRAG_POLE_PAIRS *
+                                     MOTOR_SYSTEM_TASK_DT_SEC;
+            g_force_drag_phase_rad += phase_step;
+            while (g_force_drag_phase_rad >= 6.28318530718f) {
+                g_force_drag_phase_rad -= 6.28318530718f;
+            }
+            while (g_force_drag_phase_rad < 0.0f) {
+                g_force_drag_phase_rad += 6.28318530718f;
+            }
+            g_host_speed_applied_rpm = MOTOR_FORCE_DRAG_SPEED_RPM;
+        }
+        Motor_OpenLoop_Drive(g_force_drag_phase_rad,
+                             MOTOR_FORCE_DRAG_AMPLITUDE);
+        return;
     }
-    
+
     float target_pos = Motor_System_UpdatePotTarget();
     g_foc_state.target_d = 0.0f;
     Motor_Cogging_Task1ms(
@@ -1131,4 +1222,3 @@ float Motor_System_GetDebugPotTarget(void)
 {
     return g_pot_target_filtered;
 }
-

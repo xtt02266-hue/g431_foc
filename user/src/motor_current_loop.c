@@ -5,7 +5,6 @@
 #include "svpwm.h"
 #include "motor_encoder.h"
 #include "motor_music.h"
-#include "motor_sensorless.h"
 #include <math.h>
 
     // 一阶低通滤波：滤除 PWM 开关噪声和 ADC 采样毛刺
@@ -17,10 +16,10 @@
 MotorCurrentLoopState g_foc_state = {0};
 
 // 将 ADC 原始值转换为相电流（安培）。
-static float Motor_CurrentLoop_RawToCurrent(uint16_t raw)
+static float Motor_CurrentLoop_RawToCurrent(uint16_t raw, float bias_volts)
 {
     float v_in = ((float)raw * g_foc_state.params.vref_volts) / g_foc_state.params.adc_max;
-    float v_shunt = v_in - g_foc_state.params.bias_volts;
+    float v_shunt = v_in - bias_volts;
     return v_shunt / (g_foc_state.params.shunt_ohms * g_foc_state.params.gain);
 }
 
@@ -28,8 +27,10 @@ static float Motor_CurrentLoop_RawToCurrent(uint16_t raw)
 void Motor_CurrentLoop_Run(uint16_t iu_raw, uint16_t iw_raw)
 {
     // 1. 将 ADC 原始值转换为实际相电流（安培）
-    float iu_a = Motor_CurrentLoop_RawToCurrent(iu_raw);
-    float iw_a = Motor_CurrentLoop_RawToCurrent(iw_raw);
+    float iu_a = Motor_CurrentLoop_RawToCurrent(
+        iu_raw, g_foc_state.params.bias_u_volts);
+    float iw_a = Motor_CurrentLoop_RawToCurrent(
+        iw_raw, g_foc_state.params.bias_w_volts);
 
     // 记录采样值（用于调试或显示）
     g_foc_state.sample.iu_raw = iu_raw;
@@ -64,6 +65,7 @@ void Motor_CurrentLoop_Run(uint16_t iu_raw, uint16_t iw_raw)
     while (elec_angle < 0.0f) {
         elec_angle += 6.2831853f;
     }
+    g_foc_state.electrical_angle_rad = elec_angle;
     
     // 供后续 Park 坐标变换使用的正余弦值
     g_foc_state.sin_theta = sinf(elec_angle);
@@ -71,12 +73,6 @@ void Motor_CurrentLoop_Run(uint16_t iu_raw, uint16_t iw_raw)
 
     // 3. Clarke 变换：将三相相电流（实际上只需两相，假设三相和为0）转换至两相静止坐标系 (Alpha-Beta)
     g_foc_state.clarke = Motor_CurrentLoop_Clarke(g_foc_state.sample.iu_a, g_foc_state.sample.iw_a);
-
-    // Debug-only observer: use the previous applied voltage and measured alpha-beta current.
-    Motor_Sensorless_Update(g_svpwm.v_alpha,
-                            g_svpwm.v_beta,
-                            g_foc_state.clarke.alpha,
-                            g_foc_state.clarke.beta);
 
     // 4. Park 变换：将静止坐标系转化为同步旋转坐标系 (D-Q)
     g_foc_state.park = Motor_CurrentLoop_Park(g_foc_state.clarke, g_foc_state.sin_theta, g_foc_state.cos_theta);
@@ -118,7 +114,8 @@ void Motor_CurrentLoop_Run(uint16_t iu_raw, uint16_t iw_raw)
 void Motor_CurrentLoop_Init(void)
 {
     g_foc_state.params.vref_volts = MOTOR_CURRENT_VREF_VOLTS;
-    g_foc_state.params.bias_volts = MOTOR_CURRENT_BIAS_VOLTS;
+    g_foc_state.params.bias_u_volts = MOTOR_CURRENT_BIAS_VOLTS;
+    g_foc_state.params.bias_w_volts = MOTOR_CURRENT_BIAS_VOLTS;
     g_foc_state.params.shunt_ohms = MOTOR_CURRENT_SHUNT_OHMS;
     g_foc_state.params.gain = MOTOR_CURRENT_GAIN;
     g_foc_state.params.adc_max = MOTOR_CURRENT_ADC_MAX;
@@ -260,7 +257,14 @@ MotorCurrentParams Motor_CurrentLoop_GetParams(void)
 // 设置电流采样偏置电压。
 void Motor_CurrentLoop_SetBiasVolts(float bias_volts)
 {
-    g_foc_state.params.bias_volts = bias_volts;
+    Motor_CurrentLoop_SetPhaseBiasVolts(bias_volts, bias_volts);
+}
+
+void Motor_CurrentLoop_SetPhaseBiasVolts(float bias_u_volts,
+                                         float bias_w_volts)
+{
+    g_foc_state.params.bias_u_volts = bias_u_volts;
+    g_foc_state.params.bias_w_volts = bias_w_volts;
 }
 
 // 设置 ADC 参考电压。

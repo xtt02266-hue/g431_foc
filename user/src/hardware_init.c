@@ -14,9 +14,6 @@
 #include "board_profile.h"
 #include "motor_angle_reference.h"
 
-// OLED_Init 由显示驱动实现，这里做前置声明。
-void OLED_Init(void);
-
 // ---------------------------------------------------------
 // 电流偏置(Bias)校准：在不施加任何电压时获取真正的零点电压偏移
 // ---------------------------------------------------------
@@ -43,13 +40,12 @@ static void Hardware_CalibrateCurrentBias(void)
     // 计算平均原始值并求出基准电压
     float bias_raw_u = (float)bias_sum_u / calibrate_count;
     float bias_raw_w = (float)bias_sum_w / calibrate_count;
-    // 取两相偏置平均作为系统的基准偏置电压 （也可以单相独立处理，这里合并计算平均）
-    float actual_bias_raw = (bias_raw_u + bias_raw_w) / 2.0f;
-    
-    // 原始值 -> 电压
+    // 两路运放和ADC的零点并不完全相同，必须独立保存；取平均会把静止
+    // 坐标系的直流误差变成每电周期一次的 d/q 电流和转矩脉动。
     MotorCurrentParams params = Motor_CurrentLoop_GetParams();
-    float actual_bias_volts = (actual_bias_raw * params.vref_volts) / params.adc_max;
-    Motor_CurrentLoop_SetBiasVolts(actual_bias_volts);
+    float bias_u_volts = (bias_raw_u * params.vref_volts) / params.adc_max;
+    float bias_w_volts = (bias_raw_w * params.vref_volts) / params.adc_max;
+    Motor_CurrentLoop_SetPhaseBiasVolts(bias_u_volts, bias_w_volts);
     HAL_ADCEx_InjectedStop(&hadc1);
     
 }
@@ -101,9 +97,6 @@ void hardware_init(void)
     // 6. 启动串口接收 (与 VOFA+ 上位机通信)
     VOFA_Init(); 
 
-    OLED_Init();
-    HAL_Delay(50);
-    
     Motor_System_Init();
 
     // Load parameters from Flash, or schedule one identification if absent.
