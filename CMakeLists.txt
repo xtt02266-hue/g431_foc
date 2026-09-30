@@ -54,7 +54,9 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     user/src/hardware_init.c
     user/src/motor_current_loop.c
     user/src/motor_cogging.c
+    user/src/motor_calibration.c
     user/src/motor_feedforward.c
+    user/src/motor_friction_storage.c
     user/src/motor_identify.c
     user/src/motor_music.c
     user/src/motor_parameters.c

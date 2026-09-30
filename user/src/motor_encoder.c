@@ -13,25 +13,37 @@ void Motor_Encoder_Init(void)
     g_encoder_last_update_ms = 0U;
     g_encoder_has_sample = 0U;
     MT6826S_Init();
+    /* ADC中断启动前先请求一帧，供首次FOC计算使用。 */
     Motor_Encoder_UpdateFast();
 }
 
 void Motor_Encoder_UpdateFast(void)
 {
 #if BOARD_SENSORED_CONTROL_ENABLE
-    uint16_t angle = MT6826S_ReadRawAngle15();
-    if (MT6826S_IsOk() == 0U) {
-        return;
-    }
+    MT6826S_RequestReadDMA();
+#endif
+}
+
+void Motor_Encoder_OnSample(uint16_t angle)
+{
+#if BOARD_SENSORED_CONTROL_ENABLE
     g_encoder_angle = angle & MOTOR_ENCODER_COUNT_MASK_U16;
     g_encoder_last_update_ms = HAL_GetTick();
     g_encoder_has_sample = 1U;
+#else
+    (void)angle;
 #endif
 }
 
 uint16_t Motor_Encoder_GetRawAngle(void)
 {
     return g_encoder_angle;
+}
+
+uint16_t Motor_Encoder_GetSampleAgeMs(void)
+{
+    uint32_t age = HAL_GetTick() - g_encoder_last_update_ms;
+    return !g_encoder_has_sample || age > 65535U ? 65535U : (uint16_t)age;
 }
 
 uint8_t Motor_Encoder_IsDataFresh(uint32_t max_age_ms)

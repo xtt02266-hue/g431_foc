@@ -2,6 +2,7 @@
 #include "motor_config.h"
 #include "motor_encoder.h"
 #include "pid.h"
+#include <math.h>
 
 // 速度环PID控制器实例
 PID_Controller speed_pid;
@@ -19,6 +20,7 @@ static int32_t g_speed_unwrapped_counts = 0;
 static uint16_t g_speed_history_index = 0U;
 static uint16_t g_speed_history_valid_ticks = 0U;
 static uint16_t g_speed_window_ticks = SPEED_EST_WINDOW_TICKS;
+uint8_t Motor_SpeedEstimator_GetWindowTicks(void) { return (uint8_t)g_speed_window_ticks; }
 
 // 假设速度环控制周期为 1ms，与 motor_system 里的定时分频配平
 #define SPEED_LOOP_DT  0.001f
@@ -193,6 +195,21 @@ void Motor_SpeedLoop_Init(void) {
  */
 void Motor_SpeedLoop_SetTarget(float target_speed_rpm) {
     speed_pid.target = target_speed_rpm;
+}
+
+/* Caller excludes the 1 kHz control task while updating both coefficients. */
+uint8_t Motor_SpeedLoop_SetPI(float kp, float ki, uint8_t running) {
+    if (!isfinite(kp) || !isfinite(ki) || kp<0.0f || kp>0.1f || ki<0.0f || ki>1.0f) return 0U;
+    if (running) {
+        float error=speed_pid.target-speed_pid.measure;
+        /* integral stores its current contribution in amperes, not raw error.
+         * Offset the change in P to retain the instantaneous P+I command. */
+        speed_pid.integral+=(speed_pid.kp-kp)*error;
+        if (speed_pid.integral>speed_pid.out_max) speed_pid.integral=speed_pid.out_max;
+        if (speed_pid.integral<speed_pid.out_min) speed_pid.integral=speed_pid.out_min;
+    } else PID_Reset(&speed_pid);
+    speed_pid.kp=kp;speed_pid.ki=ki;
+    return 1U;
 }
 
 /**

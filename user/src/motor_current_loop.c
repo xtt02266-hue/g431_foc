@@ -5,6 +5,7 @@
 #include "svpwm.h"
 #include "motor_encoder.h"
 #include "motor_music.h"
+#include "motor_calibration.h"
 #include <math.h>
 
     // 一阶低通滤波：滤除 PWM 开关噪声和 ADC 采样毛刺
@@ -84,6 +85,8 @@ void Motor_CurrentLoop_Run(uint16_t iu_raw, uint16_t iw_raw)
     // 将外部期望的 D-Q 轴目标电流传给 PID (比如上层位置环/速度环计算出来的 target，通常 D轴目标为0)
     g_foc_state.pi_d.target = g_foc_state.target_d;
     g_foc_state.pi_q.target = Motor_Music_ProcessIqTarget(g_foc_state.target_q);
+    Motor_Calibration_Capture(raw_mech_angle, g_foc_state.pi_q.target,
+        g_foc_state.park.q, g_foc_state.park.d, g_foc_state.pi_q.output);
 
     if (g_foc_state.closed_loop_enable)
     {
@@ -342,9 +345,6 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
         return;
     }
 
-    /* SPI由这个快速中断单点拥有；系统、辨识和遥测模块只读取缓存快照。 */
-    Motor_Encoder_UpdateFast();
-
     // 读取注入通道 U/W 相电流原始值。
     uint16_t iu_raw = (uint16_t)HAL_ADCEx_InjectedGetValue(&hadc1, ADC_INJECTED_RANK_1);
     uint16_t iw_raw = (uint16_t)HAL_ADCEx_InjectedGetValue(&hadc1, ADC_INJECTED_RANK_2);
@@ -367,4 +367,7 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
     }
 
     Motor_CurrentLoop_Run((uint16_t)iu_filtered, (uint16_t)iw_filtered);
+
+    /* 使用上一帧完整的角度计算FOC，再异步采集下一帧。 */
+    Motor_Encoder_UpdateFast();
 }

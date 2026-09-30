@@ -10,7 +10,8 @@
 #define MT6826S_STATUS_UNDERVOLTAGE  (1U << 2)
 
 void MT6826S_Init(void);
-uint16_t MT6826S_ReadRawAngle15(void);
+/* Start one non-blocking SPI1 burst. A request is ignored while DMA is busy. */
+void MT6826S_RequestReadDMA(void);
 uint8_t MT6826S_IsOk(void);
 uint8_t MT6826S_GetStatus(void);
 uint32_t MT6826S_GetCrcErrorCount(void);

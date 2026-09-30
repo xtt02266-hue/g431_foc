@@ -15,9 +15,12 @@
 #include "motor_music.h"
 #include "motor_parameters.h"
 #include "motor_debug.h"
+#include "motor_calibration.h"
+#include "motor_friction_storage.h"
+#include "mt6826s.h"
 
 #define MOTOR_ENCODER_MAX_SAMPLE_AGE_MS  2U
-#define MOTOR_CURRENT_LOOP_CONTROL_BW_HZ 250.0f
+#define MOTOR_CURRENT_LOOP_CONTROL_BW_HZ 300.0f
 #define MOTOR_CURRENT_LOOP_MUSIC_BW_HZ  2000.0f
 
 // 电位器低通滤波系数 (一阶 EMA, 1kHz 更新率)
@@ -46,6 +49,7 @@ static float g_force_drag_phase_rad = 0.0f;
 static uint16_t g_force_drag_align_ticks = 0U;
 static volatile float g_host_iq_limit_a = MOTOR_HOST_DEFAULT_IQ_LIMIT_A;
 static float g_host_iq_applied_a = 0.0f;
+static float g_host_iq_slew_a_per_s = MOTOR_HOST_IQ_SLEW_A_PER_S;
 static float g_host_speed_target_rpm = 0.0f;
 static float g_host_speed_applied_rpm = 0.0f;
 static float g_host_speed_slew_rpm_per_s = MOTOR_HOST_SPEED_SLEW_RPM_PER_S;
@@ -69,6 +73,31 @@ static void Motor_System_ForceSafeStop(void);
 static void Motor_System_UpdateOperatingState(void);
 static void Motor_System_TuneCurrentLoopBandwidth(float bandwidth_hz);
 static void Motor_System_ResetControlHistory(void);
+static uint8_t g_cal_saved_valid;
+static MotorCoggingConfig g_cal_saved_cogging;
+static MotorFrictionConfig g_cal_saved_friction;
+static float g_cal_saved_limit;
+static float g_cal_saved_speed_slew;
+static MotorControlMode g_cal_saved_mode;
+static MotorInputSource g_cal_saved_source;
+static uint16_t g_cal_control_flags;
+static uint32_t g_cal_last_crc,g_cal_last_transfer;
+static float g_cal_saved_pos_max,g_cal_saved_pos_min;
+
+/* Caller holds the interrupt mask. Only restore after output has stopped. */
+static void Motor_System_RestoreCalibration(void)
+{
+    if (!g_cal_saved_valid) return;
+    Motor_Cogging_SetConfig(&g_cal_saved_cogging);
+    Motor_Feedforward_SetFrictionConfig(&g_cal_saved_friction);
+    g_host_iq_limit_a = g_cal_saved_limit;
+    g_host_speed_slew_rpm_per_s = g_cal_saved_speed_slew;
+    g_control_mode = g_cal_saved_mode;
+    g_input_source = g_cal_saved_source;
+    g_pi_pos.out_max=g_cal_saved_pos_max;g_pi_pos.out_min=g_cal_saved_pos_min;
+    g_cal_saved_valid = 0U;
+    ++g_config_revision;
+}
 
 // 电位器滤波量参与力矩/位置控制，同时供 VOFA+ 只读观测。
 static float g_pot_target_filtered = 0.0f;         // 反向映射并滤波后的 ADC 计数，供位置/力矩模式共用
@@ -95,6 +124,7 @@ void Motor_System_Init(void)
     g_control_owner = MOTOR_OWNER_LOCAL;
     g_host_iq_limit_a = MOTOR_HOST_DEFAULT_IQ_LIMIT_A;
     g_host_iq_applied_a = 0.0f;
+    g_host_iq_slew_a_per_s = MOTOR_HOST_IQ_SLEW_A_PER_S;
     g_host_speed_target_rpm = 0.0f;
     g_host_speed_applied_rpm = 0.0f;
     g_host_speed_slew_rpm_per_s = MOTOR_HOST_SPEED_SLEW_RPM_PER_S;
@@ -162,12 +192,66 @@ void Motor_System_StopControl(void)
     uint32_t primask = __get_PRIMASK();
 
     __disable_irq();
+    Motor_Calibration_Abort(CAL_CANCELLED);
     g_run_requested = 0U;
     Motor_System_ForceSafeStop();
     g_motor_system.state = MOTOR_STATE_STOPPED;
+    Motor_System_RestoreCalibration();
     if (primask == 0U) {
         __enable_irq();
     }
+}
+
+void Motor_System_AbortCalibration(void) { Motor_System_StopControl(); }
+
+MotorCommandResult Motor_System_HostStartCalibration(uint8_t mode)
+{
+    if (g_control_owner != MOTOR_OWNER_HOST) return MOTOR_CMD_NOT_OWNER;
+    if (g_motor_system.state != MOTOR_STATE_STOPPED) return MOTOR_CMD_MUST_STOP_FIRST;
+    if (mode > 5U) return MOTOR_CMD_INVALID_VALUE;
+    if (Motor_Calibration_IsActive() || Motor_Calibration_HasSamples() ||
+        Motor_Music_IsPlaying() || Motor_Parameters_IsBusy()) return MOTOR_CMD_BUSY;
+    int8_t direction = Motor_Identify_GetResult().uvw_dir;
+    if ((direction != 1 && direction != -1) || !Motor_Parameters_IsReady() ||
+        !Motor_Encoder_IsDataFresh(2U)) return MOTOR_CMD_NOT_READY;
+    MotorCoggingConfig verification;
+    Motor_Cogging_GetConfig(&verification);
+    if ((mode == 2U || mode == 3U) && (!verification.enabled || verification.gain <= 0.0f ||
+        verification.gain > 1.0f || verification.max_iq_a <= 0.0f ||
+        verification.max_iq_a > .010001f || !Motor_Cogging_GetTableRevision()))
+        return MOTOR_CMD_INVALID_VALUE;
+    uint32_t mask = __get_PRIMASK(); __disable_irq();
+    if (!Motor_Calibration_Begin(mode)) { if (!mask) __enable_irq(); return MOTOR_CMD_BUSY; }
+    Motor_Cogging_GetConfig(&g_cal_saved_cogging);
+    Motor_Feedforward_GetFrictionConfig(&g_cal_saved_friction);
+    g_cal_saved_limit = g_host_iq_limit_a;
+    g_cal_saved_speed_slew = g_host_speed_slew_rpm_per_s;
+    g_cal_saved_mode = g_control_mode; g_cal_saved_source = g_input_source;
+    g_cal_saved_pos_max=g_pi_pos.out_max;g_cal_saved_pos_min=g_pi_pos.out_min;
+    g_cal_saved_valid = 1U;
+    MotorCoggingConfig disabled = g_cal_saved_cogging;
+    if (mode != 3U) disabled.enabled = 0U;
+    Motor_Cogging_SetConfig(&disabled);
+    if (mode == 4U || mode == 5U) {
+        MotorFrictionConfig friction_disabled = g_cal_saved_friction;
+        friction_disabled.enabled = 0U;
+        Motor_Feedforward_SetFrictionConfig(&friction_disabled);
+    }
+    g_control_mode = mode==5U?MOTOR_CONTROL_POSITION:MOTOR_CONTROL_SPEED; g_input_source = MOTOR_INPUT_HOST;
+    g_host_iq_limit_a = fminf(g_host_iq_limit_a, .20f);
+    Motor_System_ResetOuterLoops();
+    if (mode==5U) { g_pi_pos.out_max=30.0f;g_pi_pos.out_min=-30.0f; }
+    g_cal_control_flags = 0U;
+    g_cal_last_crc=MT6826S_GetCrcErrorCount();
+    g_cal_last_transfer=MT6826S_GetTransferErrorCount();
+    g_host_speed_slew_rpm_per_s = 30.0f;
+    g_host_speed_target_rpm = g_host_speed_applied_rpm = 0.0f;
+    g_host_iq_applied_a = 0.0f;
+    g_host_last_heartbeat_ms = HAL_GetTick();
+    Motor_Cogging_RuntimeStart();
+    g_run_requested = 1U; ++g_config_revision;
+    if (!mask) __enable_irq();
+    return MOTOR_CMD_OK;
 }
 
 /* 为什么需要：集中切换控制权，防止旧的速度积分或力矩目标带入新模式。
@@ -228,6 +312,7 @@ MotorCommandResult Motor_System_ClaimHost(void)
     if (g_control_owner == MOTOR_OWNER_HOST) return MOTOR_CMD_BUSY;
     g_control_owner = MOTOR_OWNER_HOST;
     g_host_iq_limit_a = MOTOR_HOST_DEFAULT_IQ_LIMIT_A;
+    g_host_iq_slew_a_per_s = MOTOR_HOST_IQ_SLEW_A_PER_S;
     g_host_last_heartbeat_ms = HAL_GetTick();
     return MOTOR_CMD_OK;
 }
@@ -241,6 +326,7 @@ void Motor_System_ReleaseHost(void)
     g_host_iq_limit_a = MOTOR_HOST_DEFAULT_IQ_LIMIT_A;
     g_torque_current_a = 0.0f;
     g_host_iq_applied_a = 0.0f;
+    g_host_iq_slew_a_per_s = MOTOR_HOST_IQ_SLEW_A_PER_S;
     g_host_speed_target_rpm = 0.0f;
     g_host_speed_applied_rpm = 0.0f;
     ++g_config_revision;
@@ -275,7 +361,7 @@ MotorCommandResult Motor_System_HostStart(void)
     return MOTOR_CMD_OK;
 }
 
-MotorCommandResult Motor_System_HostStartForceDrag200(void)
+MotorCommandResult Motor_System_HostStartForceDrag250(void)
 {
     uint32_t primask;
 
@@ -288,12 +374,13 @@ MotorCommandResult Motor_System_HostStartForceDrag200(void)
         return MOTOR_CMD_NOT_READY;
     }
 
-    /* 使用固定相位先把转子吸到已知位置，再进入固定 200 rpm 旋转磁场。
-     * 这里故意不采用辨识出的零点、极对数和方向：BM3514H 已知为 7 极对，
+    /* 使用固定相位先把转子吸到已知位置，再缓升至 250 rpm 旋转磁场。
+     * 这里故意不采用辨识出的零点、极对数和方向：GB4310 已知为 14 极对，
      * 这样强拖结果不会被待排查的编码器换相角或辨识参数污染。
      */
     primask = __get_PRIMASK();
     __disable_irq();
+    Motor_System_ResetOuterLoops();
     g_force_drag_phase_rad = 0.0f;
     g_force_drag_align_ticks = MOTOR_FORCE_DRAG_ALIGN_MS;
     g_force_drag_active = 1U;
@@ -301,7 +388,6 @@ MotorCommandResult Motor_System_HostStartForceDrag200(void)
     g_host_speed_target_rpm = MOTOR_FORCE_DRAG_SPEED_RPM;
     g_host_speed_applied_rpm = 0.0f;
     g_torque_current_a = 0.0f;
-    Motor_System_ResetOuterLoops();
     if (primask == 0U) {
         __enable_irq();
     }
@@ -330,16 +416,23 @@ MotorCommandResult Motor_System_HostSetMode(MotorControlMode mode,
     return MOTOR_CMD_OK;
 }
 
-MotorCommandResult Motor_System_HostSetIq(float iq_a, float *accepted_iq_a)
+MotorCommandResult Motor_System_HostSetIq(float iq_a,
+                                         float slew_a_per_s,
+                                         float *accepted_iq_a)
 {
     if (g_control_owner != MOTOR_OWNER_HOST) return MOTOR_CMD_NOT_OWNER;
     if ((g_control_mode != MOTOR_CONTROL_TORQUE) ||
         (g_input_source != MOTOR_INPUT_HOST)) return MOTOR_CMD_INVALID_COMBINATION;
     if (g_motor_system.state != MOTOR_STATE_SENSORED_RUN) return MOTOR_CMD_NOT_RUNNING;
-    if (!isfinite(iq_a)) return MOTOR_CMD_INVALID_VALUE;
+    if (!isfinite(iq_a) || !isfinite(slew_a_per_s) ||
+        (slew_a_per_s < 0.0f) ||
+        (slew_a_per_s > MOTOR_HOST_IQ_SLEW_MAX_A_PER_S)) {
+        return MOTOR_CMD_INVALID_VALUE;
+    }
     if (iq_a > g_host_iq_limit_a) iq_a = g_host_iq_limit_a;
     if (iq_a < -g_host_iq_limit_a) iq_a = -g_host_iq_limit_a;
     g_torque_current_a = iq_a;
+    g_host_iq_slew_a_per_s = slew_a_per_s;
     if (accepted_iq_a != NULL) *accepted_iq_a = iq_a;
     return MOTOR_CMD_OK;
 }
@@ -393,6 +486,18 @@ MotorCommandResult Motor_System_HostSetFrictionConfig(const MotorFrictionConfig 
 void Motor_System_GetFrictionConfig(MotorFrictionConfig *p)
 {
     Motor_Feedforward_GetFrictionConfig(p);
+}
+
+MotorCommandResult Motor_System_HostSaveFrictionConfig(const MotorFrictionConfig *p)
+{
+    if (g_control_owner != MOTOR_OWNER_HOST) return MOTOR_CMD_NOT_OWNER;
+    if (g_motor_system.state != MOTOR_STATE_STOPPED) return MOTOR_CMD_MUST_STOP_FIRST;
+    if (Motor_Calibration_IsActive() || Motor_Calibration_HasSamples() ||
+        Motor_Parameters_IsBusy()) return MOTOR_CMD_BUSY;
+    if (!Motor_Feedforward_IsFrictionConfigValid(p)) return MOTOR_CMD_INVALID_VALUE;
+    if (!Motor_FrictionStorage_Save(p)) return MOTOR_CMD_NOT_READY;
+    Motor_Feedforward_SetFrictionConfig(p);++g_config_revision;
+    return MOTOR_CMD_OK;
 }
 
 MotorCommandResult Motor_System_HostSetCoggingConfig(const MotorCoggingConfig *p)
@@ -485,6 +590,21 @@ MotorCommandResult Motor_System_HostSetSpeed(float speed_rpm,
     g_host_speed_slew_rpm_per_s = slew_rpm_per_s;
     if (accepted_speed_rpm != NULL) *accepted_speed_rpm = speed_rpm;
     return MOTOR_CMD_OK;
+}
+
+MotorCommandResult Motor_System_HostSetSpeedPI(float kp, float ki)
+{
+    if (g_control_owner != MOTOR_OWNER_HOST) return MOTOR_CMD_NOT_OWNER;
+    if (Motor_Calibration_IsActive()) return MOTOR_CMD_BUSY;
+    uint8_t running=g_motor_system.state==MOTOR_STATE_SENSORED_RUN;
+    if (g_motor_system.state!=MOTOR_STATE_STOPPED && !running) return MOTOR_CMD_MUST_STOP_FIRST;
+    if (running && (g_control_mode!=MOTOR_CONTROL_SPEED || g_input_source!=MOTOR_INPUT_HOST))
+        return MOTOR_CMD_INVALID_COMBINATION;
+    uint32_t mask=__get_PRIMASK();__disable_irq();
+    uint8_t valid=Motor_SpeedLoop_SetPI(kp,ki,running);
+    if (valid) ++g_config_revision;
+    if (!mask) __enable_irq();
+    return valid ? MOTOR_CMD_OK : MOTOR_CMD_INVALID_VALUE;
 }
 
 void Motor_System_GetControlSnapshot(MotorControlSnapshot *s)
@@ -847,8 +967,10 @@ static void Motor_System_RunTorqueMode(void)
             Motor_System_PotTorqueNm(g_pot_target_filtered));
         g_host_iq_applied_a = g_torque_current_a;
     } else {
-        float max_step = MOTOR_IQ_SLEW_A_PER_S * MOTOR_SYSTEM_TASK_DT_SEC;
-        if (g_torque_current_a > g_host_iq_applied_a + max_step) {
+        float max_step = g_host_iq_slew_a_per_s * MOTOR_SYSTEM_TASK_DT_SEC;
+        if (g_host_iq_slew_a_per_s <= 0.0f) {
+            g_host_iq_applied_a = g_torque_current_a;
+        } else if (g_torque_current_a > g_host_iq_applied_a + max_step) {
             g_host_iq_applied_a += max_step;
         } else if (g_torque_current_a < g_host_iq_applied_a - max_step) {
             g_host_iq_applied_a -= max_step;
@@ -885,11 +1007,10 @@ static void Motor_System_RunPositionMode(float target_pos, float current_rpm)
     g_debug_position_actual_counts = actual_pos;
     g_debug_position_error_counts = position_error;
 
-    /* SPEED 模式会按会话限流收紧速度 PI 输出；回到位置模式时恢复位置环基线。 */
-    speed_pid.out_max = MOTOR_SPEED_PID_OUT_MAX;
-    speed_pid.out_min = MOTOR_SPEED_PID_OUT_MIN;
+    float iq_max=g_cal_saved_valid && Motor_Calibration_IsPointMode()?g_host_iq_limit_a:MOTOR_SPEED_PID_OUT_MAX;
+    float iq_min=g_cal_saved_valid && Motor_Calibration_IsPointMode()?-g_host_iq_limit_a:MOTOR_SPEED_PID_OUT_MIN;
 
-    // 恢复无负载时期的纯级联结构：位置误差直接生成目标机械转速。
+    // 位置误差生成目标机械速度，也作为摩擦模型的输入。
     float target_mech_rpm =
         Motor_PositionLoop_Run(target_pos, actual_pos);
     g_debug_position_target_speed_rpm = target_mech_rpm;
@@ -899,14 +1020,26 @@ static void Motor_System_RunPositionMode(float target_pos, float current_rpm)
     float uvw_dir = (float)Motor_Identify_GetResult().uvw_dir;
     float target_signed_rpm = target_mech_rpm * uvw_dir;
 
+    /* Point calibration uses saved friction only while approaching. Actual
+     * sampling begins after assist is off and a new stable window completes. */
+    float friction_iq;
+    if (g_cal_saved_valid && Motor_Calibration_IsPointMode()) {
+        friction_iq=Motor_Calibration_PointAssist()?
+            Motor_Feedforward_FrictionWithConfig(&g_cal_saved_friction,target_mech_rpm)*uvw_dir:0.0f;
+    } else friction_iq=Motor_Feedforward_FrictionCompensation(target_mech_rpm)*uvw_dir;
+    friction_iq=fmaxf(iq_min,fminf(iq_max,friction_iq));
+    g_debug_friction_iq_a=friction_iq;
+    speed_pid.out_max=iq_max-friction_iq;
+    speed_pid.out_min=iq_min-friction_iq;
+
     // 位置环输出的目标速度直接传给速度环。
     Motor_SpeedLoop_SetTarget(target_signed_rpm);
 
-    // 速度 PI 直接输出 Iq；无负载位置模式不叠加摩擦或惯性前馈。
+    // 前馈占用的余量反馈给速度PI抗饱和；总电流仍服从原位置模式限幅。
     g_debug_speed_loop_iq_a = Motor_SpeedLoop_Update(current_rpm);
-    g_debug_friction_iq_a = 0.0f;
     g_debug_cogging_iq_a = 0.0f;
-    g_foc_state.target_q = g_debug_speed_loop_iq_a;
+    g_foc_state.target_q = fmaxf(iq_min,fminf(iq_max,g_debug_speed_loop_iq_a+friction_iq));
+    g_foc_state.target_d = 0.0f;
 }
 
 static float Motor_System_ClampHostIq(float iq)
@@ -962,8 +1095,10 @@ static void Motor_System_RunSpeedMode(float mechanical_speed_rpm,
         mechanical_speed_rpm * (float)identified_direction);
     float iq = Motor_System_ClampHostIq(
         g_debug_speed_loop_iq_a + feedforward_iq);
+    g_cal_control_flags = (fabsf(iq) >= g_host_iq_limit_a - 1e-6f) ? CAL_LIMIT : 0U;
     g_foc_state.target_q = Motor_System_SlewHostIq(
         iq, MOTOR_SPEED_IQ_SLEW_A_PER_S);
+    if (fabsf(g_foc_state.target_q - iq) > 1e-6f) g_cal_control_flags |= CAL_SLEW;
     g_foc_state.target_d = 0.0f;
 }
 
@@ -1019,6 +1154,38 @@ void Motor_System_Task(void)
         Motor_System_ReleaseHost();
     }
 
+    if (g_cal_saved_valid) {
+        if (g_fault_latched && Motor_Parameters_GetStatus()!=MOTOR_PARAMETERS_ERROR)
+            Motor_Calibration_Abort(CAL_SENSOR);
+        if (g_motor_system.state != MOTOR_STATE_SENSORED_RUN ||
+            g_control_owner != MOTOR_OWNER_HOST || !g_run_requested)
+            Motor_Calibration_Abort(CAL_CONTROL_LOST);
+        if (Motor_Calibration_IsActive()) {
+            if (Motor_Calibration_IsPointMode()) {
+                uint32_t crc=MT6826S_GetCrcErrorCount(),transfer=MT6826S_GetTransferErrorCount();
+                uint16_t point_flags=g_cal_control_flags;
+                if (crc!=g_cal_last_crc || transfer!=g_cal_last_transfer) point_flags|=CAL_BAD_SENSOR;
+                g_cal_last_crc=crc;g_cal_last_transfer=transfer;
+                Motor_Calibration_StepPoint(angle_counts,g_motor_system.run_data.speed_rpm,
+                    point_flags,Motor_Encoder_IsDataFresh(2U));
+            } else {
+            float next_target = Motor_Calibration_Step(angle_counts,
+                g_motor_system.run_data.speed_rpm, g_host_speed_applied_rpm,
+                g_cal_control_flags, Motor_Encoder_IsDataFresh(2U));
+            if (next_target != g_host_speed_target_rpm) PID_Reset(&speed_pid);
+            g_host_speed_target_rpm = next_target;
+            }
+        }
+        if (!Motor_Calibration_IsActive()) {
+            uint32_t mask = __get_PRIMASK(); __disable_irq();
+            g_run_requested = 0U; Motor_System_ForceSafeStop();
+            if (g_motor_system.state != MOTOR_STATE_FAULT) g_motor_system.state = MOTOR_STATE_STOPPED;
+            Motor_System_RestoreCalibration();
+            if (!mask) __enable_irq();
+            return;
+        }
+    }
+
     if ((g_force_drag_active != 0U) &&
         (g_motor_system.state == MOTOR_STATE_SENSORED_RUN)) {
         g_foc_state.target_q = 0.0f;
@@ -1028,11 +1195,20 @@ void Motor_System_Task(void)
         g_debug_cogging_iq_a = 0.0f;
         g_motor_system.run_data.target_torque_nm = 0.0f;
 
+        float drive_amplitude = MOTOR_FORCE_DRAG_ALIGN_AMPLITUDE;
         if (g_force_drag_align_ticks != 0U) {
             --g_force_drag_align_ticks;
             g_host_speed_applied_rpm = 0.0f;
         } else {
-            const float phase_step = MOTOR_FORCE_DRAG_SPEED_RPM *
+            const float speed_step = MOTOR_FORCE_DRAG_RAMP_RPM_PER_S *
+                                     MOTOR_SYSTEM_TASK_DT_SEC;
+            if (g_host_speed_applied_rpm < MOTOR_FORCE_DRAG_SPEED_RPM) {
+                g_host_speed_applied_rpm += speed_step;
+                if (g_host_speed_applied_rpm > MOTOR_FORCE_DRAG_SPEED_RPM) {
+                    g_host_speed_applied_rpm = MOTOR_FORCE_DRAG_SPEED_RPM;
+                }
+            }
+            const float phase_step = g_host_speed_applied_rpm *
                                      (6.28318530718f / 60.0f) *
                                      (float)MOTOR_FORCE_DRAG_POLE_PAIRS *
                                      MOTOR_SYSTEM_TASK_DT_SEC;
@@ -1043,10 +1219,13 @@ void Motor_System_Task(void)
             while (g_force_drag_phase_rad < 0.0f) {
                 g_force_drag_phase_rad += 6.28318530718f;
             }
-            g_host_speed_applied_rpm = MOTOR_FORCE_DRAG_SPEED_RPM;
+            drive_amplitude = MOTOR_FORCE_DRAG_ALIGN_AMPLITUDE +
+                (MOTOR_FORCE_DRAG_RUN_AMPLITUDE -
+                 MOTOR_FORCE_DRAG_ALIGN_AMPLITUDE) *
+                (g_host_speed_applied_rpm / MOTOR_FORCE_DRAG_SPEED_RPM);
         }
         Motor_OpenLoop_Drive(g_force_drag_phase_rad,
-                             MOTOR_FORCE_DRAG_AMPLITUDE);
+                             drive_amplitude);
         return;
     }
 
@@ -1059,7 +1238,7 @@ void Motor_System_Task(void)
 
 #if MOTOR_MUSIC_AUTOPLAY_DEMO
     if ((g_motor_system.state == MOTOR_STATE_SENSORED_RUN) &&
-        (demo_autoplay_checked == 0U)) {
+        (demo_autoplay_checked == 0U) && !Motor_Calibration_IsActive()) {
         demo_autoplay_checked = 1U;
         Motor_Music_StartDemo();
         g_motor_system.state = MOTOR_STATE_MUSIC;
@@ -1103,9 +1282,38 @@ void Motor_System_Task(void)
             Motor_System_RunTorqueMode();
             return;
         }
-        if (g_control_mode == MOTOR_CONTROL_SPEED) {
+        if (g_control_mode == MOTOR_CONTROL_SPEED || (g_cal_saved_valid && Motor_Calibration_IsPointMode())) {
+            if (Motor_Calibration_IsPointMode() && g_cal_saved_valid) {
+                Motor_System_RunPositionMode(Motor_Calibration_PointTarget(),current_rpm);
+                speed_pid.out_max=g_host_iq_limit_a;speed_pid.out_min=-g_host_iq_limit_a;
+                float iq=g_foc_state.target_q;
+                g_cal_control_flags=fabsf(iq)>=g_host_iq_limit_a-1e-6f?CAL_LIMIT:0U;
+                g_foc_state.target_q=fmaxf(-g_host_iq_limit_a,fminf(g_host_iq_limit_a,iq));
+            } else {
             Motor_System_RunSpeedMode(g_motor_system.run_data.speed_rpm,
                                       identified_direction, angle_counts);
+            }
+            MotorCalStatus capture_status;Motor_Calibration_GetStatus(&capture_status);
+            if (Motor_Calibration_IsActive() && (!Motor_Calibration_IsPointMode() || capture_status.phase==CAL_CAPTURE)) {
+                MotorCalSample sample = {0};
+                sample.tick_ms = HAL_GetTick();
+                sample.flags = Motor_Calibration_SampleFlags() | g_cal_control_flags;
+                sample.target_rpm = Motor_Calibration_IsPointMode()?g_debug_position_target_speed_rpm:g_host_speed_applied_rpm;
+                sample.speed_rpm = g_motor_system.run_data.speed_rpm;
+                sample.window_rpm = speed_est.instant_speed_rpm;
+                sample.pi_iq = g_debug_speed_loop_iq_a;
+                sample.friction_iq = g_debug_friction_iq_a;
+                sample.cogging_iq = g_debug_cogging_iq_a;
+                sample.sensor_status = MT6826S_GetStatus();
+                sample.window_ticks = Motor_SpeedEstimator_GetWindowTicks();
+                sample.sensor_age_ms = Motor_Encoder_GetSampleAgeMs();
+                sample.crc_errors = MT6826S_GetCrcErrorCount();
+                sample.transfer_errors = MT6826S_GetTransferErrorCount();
+                if (!Motor_Encoder_IsDataFresh(2U)) sample.flags |= CAL_BAD_SENSOR;
+                uint32_t mask = __get_PRIMASK(); __disable_irq();
+                Motor_Calibration_PublishControl(&sample);
+                if (!mask) __enable_irq();
+            }
             return;
         }
         if ((g_control_mode >= MOTOR_CONTROL_FREE) &&
@@ -1115,7 +1323,7 @@ void Motor_System_Task(void)
             const float rel = g_continuous_angle_rad - g_haptic_center_rad;
             float i_mech = 0.0f;
             if (g_control_mode == MOTOR_CONTROL_FREE) {
-                i_mech = Motor_Feedforward_FrictionCompensation(
+                i_mech = Motor_Feedforward_FreeCompensation(
                     g_motor_system.run_data.speed_rpm);
             } else if (g_control_mode == MOTOR_CONTROL_DAMPING) {
                 i_mech = -g_haptic_params.damping_b_a_per_rad_s * omega;

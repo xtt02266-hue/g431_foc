@@ -1,5 +1,6 @@
 #include "motor_feedforward.h"
 #include "motor_config.h"
+#include "motor_friction_storage.h"
 #include <math.h>
 
 /*
@@ -45,6 +46,7 @@ void Motor_Feedforward_FrictionInit(void)
     g_friction_config.viscous_iq_a_per_rpm = 0.0f;
     g_friction_config.smooth_speed_rpm = 20.0f;
     g_friction_config.max_iq_a = 0.03f;
+    (void)Motor_FrictionStorage_Load(&g_friction_config);
 }
 
 void Motor_Feedforward_SetFrictionConfig(const MotorFrictionConfig *config)
@@ -61,13 +63,31 @@ void Motor_Feedforward_GetFrictionConfig(MotorFrictionConfig *config)
 
 float Motor_Feedforward_FrictionCompensation(float speed_rpm)
 {
+    return Motor_Feedforward_FrictionWithConfig(&g_friction_config,speed_rpm);
+}
+
+float Motor_Feedforward_FrictionWithConfig(const MotorFrictionConfig *config,float speed_rpm)
+{
+    if (!Motor_Feedforward_IsFrictionConfigValid(config) || !config->enabled || !isfinite(speed_rpm)) {
+        return 0.0f;
+    }
+    float iq = config->coulomb_iq_a * tanhf(speed_rpm / config->smooth_speed_rpm) +
+               config->viscous_iq_a_per_rpm * speed_rpm;
+    return Motor_Feedforward_ClampFloat(iq,
+                                        -config->max_iq_a,config->max_iq_a);
+}
+
+float Motor_Feedforward_FreeCompensation(float speed_rpm)
+{
     if ((g_friction_config.enabled == 0U) || !isfinite(speed_rpm)) {
         return 0.0f;
     }
-    float iq = g_friction_config.coulomb_iq_a *
-                   tanhf(speed_rpm / g_friction_config.smooth_speed_rpm) +
-               g_friction_config.viscous_iq_a_per_rpm * speed_rpm;
-    return Motor_Feedforward_ClampFloat(iq,
-                                        -g_friction_config.max_iq_a,
-                                        g_friction_config.max_iq_a);
+    float damping_iq = MOTOR_FREE_FRICTION_DAMPING_A_PER_RAD_S *
+        speed_rpm * (6.28318530718f / 60.0f);
+    damping_iq = Motor_Feedforward_ClampFloat(
+        damping_iq, -MOTOR_FREE_FRICTION_DAMPING_MAX_A,
+        MOTOR_FREE_FRICTION_DAMPING_MAX_A);
+    return Motor_Feedforward_ClampFloat(
+        Motor_Feedforward_FrictionCompensation(speed_rpm) - damping_iq,
+        -g_friction_config.max_iq_a, g_friction_config.max_iq_a);
 }

@@ -4,6 +4,7 @@
 #include "main.h"
 #include <stdint.h>
 #include "pid.h"
+#include "motor_config.h"
 
 /* 速度测算器结构体 */
 typedef struct {
@@ -23,14 +24,15 @@ extern MotorSpeedEstimator speed_est;
  * 输入误差单位为机械 RPM，输出单位为 q 轴电流 A。
  */
 #define MOTOR_SPEED_PID_KP          0.0008f
-#define MOTOR_SPEED_PID_KI          0.0005f
+#define MOTOR_SPEED_PID_KI          0.0015f
 #define MOTOR_SPEED_PID_KD          0.0f
-#define MOTOR_SPEED_PID_OUT_MAX     1.1f
-#define MOTOR_SPEED_PID_OUT_MIN     -1.1f
+#define MOTOR_SPEED_PID_OUT_MAX     MOTOR_RATED_CURRENT_A
+#define MOTOR_SPEED_PID_OUT_MIN     (-MOTOR_RATED_CURRENT_A)
 
 /* 函数声明 */
 // PID 相关
 void Motor_SpeedLoop_Init(void);
+uint8_t Motor_SpeedLoop_SetPI(float kp, float ki, uint8_t running);
 void Motor_SpeedLoop_SetTarget(float target_speed_rpm);
 float Motor_SpeedLoop_Update(float current_speed_rpm);
 
@@ -42,6 +44,7 @@ float Motor_SpeedEstimator_Update(uint16_t current_angle_raw, float dt_seconds);
  * 每1 ms读取角度并发布速度；根据转速选择20/10/5 ms滚动位置窗，切换带迟滞。
  */
 float Motor_SpeedEstimator_UpdateAdaptive(float published_speed_rpm);
+uint8_t Motor_SpeedEstimator_GetWindowTicks(void);
 
 // 弱磁控制 (Field Weakening)
 float Motor_SpeedLoop_FieldWeakening(float current_rpm);

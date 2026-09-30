@@ -12,11 +12,14 @@
 #define MOTOR_ENCODER_RAD_PER_COUNT      (6.28318530718f / MOTOR_ENCODER_COUNTS_PER_REV_F)
 
 void Motor_Encoder_Init(void);
-/* 只允许20kHz ADC/FOC中断调用，完成一次SPI传输并刷新共享快照。 */
+/* 由20kHz ADC/FOC中断发起下一帧SPI DMA读取，不等待结果。 */
 void Motor_Encoder_UpdateFast(void);
+/* SPI DMA完成后发布CRC有效的角度快照。 */
+void Motor_Encoder_OnSample(uint16_t angle);
 /* 其他模块只读缓存，不直接争用SPI。STM32上对齐的16位读写是原子的。 */
 uint16_t Motor_Encoder_GetRawAngle(void);
 uint8_t Motor_Encoder_IsDataFresh(uint32_t max_age_ms);
 uint8_t Motor_Encoder_IsOk(void);
 
+uint16_t Motor_Encoder_GetSampleAgeMs(void);
 #endif

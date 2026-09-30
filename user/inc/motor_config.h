@@ -9,43 +9,59 @@
 #define SYSTEM_BUS_VOLTAGE    15.0f
 // -----------------------------------------
 
-#define MOTOR_TORQUE_CURRENT_LIMIT_A   1.5f // 力矩给定最终换算出的 Iq 绝对值上限，单位 A
-#define MOTOR_HOST_DEFAULT_IQ_LIMIT_A  1.10f
+/* GB4310 电机规格。数据表给出的电阻/电感是相间值；
+ * 以星形绕组换算为 FOC 单相模型值时各除以 2。
+ * 额定 24 V 是电机规格，不代替上面的控制板实际 15 V 母线配置。
+ */
+#define MOTOR_MODEL_NAME                         "GB4310"
+#define MOTOR_RATED_VOLTAGE_V                    24.0f
+#define MOTOR_RATED_CURRENT_A                     0.9f
+#define MOTOR_PEAK_CURRENT_A                      1.9f
+#define MOTOR_RATED_TORQUE_NM                     0.2f
+#define MOTOR_PEAK_TORQUE_NM                      0.49f
+#define MOTOR_RATED_SPEED_RPM                   504.0f
+#define MOTOR_PEAK_SPEED_RPM                   1028.0f
+#define MOTOR_SPEED_CONSTANT_RPM_PER_V            43.0f
+#define MOTOR_SUPPLY_LIMITED_SPEED_RPM            (SYSTEM_BUS_VOLTAGE * MOTOR_SPEED_CONSTANT_RPM_PER_V)
+#define MOTOR_TORQUE_CONSTANT_NM_PER_A             0.23f
+#define MOTOR_INTERPHASE_RESISTANCE_OHM           10.32f
+#define MOTOR_INTERPHASE_INDUCTANCE_H              0.00476f
+#define MOTOR_NOMINAL_PHASE_RESISTANCE_OHM        (MOTOR_INTERPHASE_RESISTANCE_OHM * 0.5f)
+#define MOTOR_NOMINAL_PHASE_INDUCTANCE_H           (MOTOR_INTERPHASE_INDUCTANCE_H * 0.5f)
+#define MOTOR_POLE_PAIRS                           14U
+#define MOTOR_ROTOR_INERTIA_KG_M2                   0.0000161f
+
+#define MOTOR_TORQUE_CURRENT_LIMIT_A   MOTOR_PEAK_CURRENT_A
+#define MOTOR_HOST_DEFAULT_IQ_LIMIT_A  MOTOR_RATED_CURRENT_A
 #define MOTOR_HOST_HEARTBEAT_TIMEOUT_MS 500U
 #define MOTOR_IQ_SLEW_A_PER_S          1.0f
-#define MOTOR_HOST_SPEED_MAX_RPM       2000.0f
+#define MOTOR_HOST_IQ_SLEW_A_PER_S     0.0f
+#define MOTOR_HOST_IQ_SLEW_MAX_A_PER_S 1000.0f
+#define MOTOR_HOST_SPEED_MAX_RPM       MOTOR_SUPPLY_LIMITED_SPEED_RPM
 #define MOTOR_HOST_SPEED_SLEW_RPM_PER_S 0.0f
 #define MOTOR_HOST_SPEED_SLEW_MAX_RPM_PER_S 100000.0f
-/* 诊断用开环强拖：旋转磁场固定为机械 200 rpm，不经过位置/速度/电流闭环。
- * amplitude 是 Motor_OpenLoop_Drive 的 0..500 调制度，100 约为 20% 最大相电压。
+/* 诊断用开环强拖：旋转磁场升至机械 250 rpm，不经过位置/速度/电流闭环。
+ * amplitude 是 Motor_OpenLoop_Drive 的 0..500 调制度，不是电流给定。
  */
-#define MOTOR_FORCE_DRAG_SPEED_RPM       200.0f
-#define MOTOR_FORCE_DRAG_POLE_PAIRS      7U
-#define MOTOR_FORCE_DRAG_AMPLITUDE       100.0f
+#define MOTOR_FORCE_DRAG_SPEED_RPM       250.0f
+#define MOTOR_FORCE_DRAG_POLE_PAIRS      MOTOR_POLE_PAIRS
+#define MOTOR_FORCE_DRAG_ALIGN_AMPLITUDE 100.0f
+#define MOTOR_FORCE_DRAG_RUN_AMPLITUDE   280.0f
 #define MOTOR_FORCE_DRAG_ALIGN_MS        300U
+#define MOTOR_FORCE_DRAG_RAMP_RPM_PER_S  250.0f
 /* Speed闭环需要及时从驱动切换到制动；Free触觉仍使用上面的柔和斜率。 */
 #define MOTOR_SPEED_IQ_SLEW_A_PER_S    5.0f
+
+/* FREE 模式摩擦补偿的轻微反向速度阻尼，最多 20 mA。 */
+#define MOTOR_FREE_FRICTION_DAMPING_A_PER_RAD_S 0.0005f
+#define MOTOR_FREE_FRICTION_DAMPING_MAX_A       0.01f
 #define MOTOR_PARAMETERS_AUTO_IDENTIFY 0
-/* BM3514H 商品页：291 KV。按常用 FOC 近似 Kt=8.27/KV 估算。
- * 单位 N·m/A，Iq 峰值定义；非实测标定，现有 R/L 辨识不测 Kt。
- * 参考 https://docs.odriverobotics.com/v/latest/manual/control.html
- * 设为 0 表示未配置，电位器力矩输出为零。
- */
-#define MOTOR_TORQUE_CONSTANT_NM_PER_A  (8.27f / 291.0f)
 /* 保留旧宏供现有代码兼容；运行时由 MotorInputSource 决定 POT/HOST。 */
 #define MOTOR_TORQUE_USE_POT           1
 #define MOTOR_TORQUE_POT_CENTER        2047.5f // 12 位 ADC 的中点，对应零力矩
 #define MOTOR_TORQUE_POT_DEADBAND      80.0f   // 中点两侧各 80 个计数置零，减少噪声引起的出力
-/* 电位器两端先按 N·m 生成目标力矩，再由 Iq=T/Kt 换算进电流环。
- * 当前调试范围限制为 +/-0.2 A 对应的电磁力矩；修改电机 Kt 时会自动同步。
- Iq	估算扭矩
-0.05 A	0.00142 N·m
-0.10 A	0.00284 N·m
-0.20 A	0.00568 N·m
-0.50 A	0.01421 N·m
-1.00 A	0.02842 N·m
- */
-#define MOTOR_TORQUE_POT_MAX_CURRENT_A 0.2f//±5.68 mN·m
+/* 电位器两端限制为 +/-0.2 A，对应 GB4310 约 +/-0.046 N·m。 */
+#define MOTOR_TORQUE_POT_MAX_CURRENT_A 0.2f
 
 
 #define MOTOR_TORQUE_POT_MAX_NM        \

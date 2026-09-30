@@ -18,5 +18,7 @@ uint8_t Motor_Feedforward_IsFrictionConfigValid(
 void Motor_Feedforward_SetFrictionConfig(const MotorFrictionConfig *config);
 void Motor_Feedforward_GetFrictionConfig(MotorFrictionConfig *config);
 float Motor_Feedforward_FrictionCompensation(float speed_rpm);
+float Motor_Feedforward_FrictionWithConfig(const MotorFrictionConfig *config,float speed_rpm);
+float Motor_Feedforward_FreeCompensation(float speed_rpm);
 
 #endif

@@ -14,8 +14,6 @@ MotorIdentifiedParams g_identified_params = {0};
 // 状态机等待计时器
 static uint32_t g_identify_timer = 0;
 static float g_uvw_elec_angle = 0.0f;
-static float g_r_current_sum = 0.0f;
-static uint32_t g_r_current_count = 0U;
 static float g_align_sin_sum = 0.0f;
 static float g_align_cos_sum = 0.0f;
 static uint32_t g_align_sample_count = 0U;
@@ -30,15 +28,12 @@ static uint32_t g_align_sample_count = 0U;
  */
 #define MOTOR_OPEN_LOOP_VECTOR_SHIFT (-MOTOR_HALF_PI)
 
-#define MOTOR_IDENTIFY_R_SETTLE_MS       400U
-#define MOTOR_IDENTIFY_R_SAMPLE_MS       600U
 #define MOTOR_IDENTIFY_L_COOLDOWN_MS     100U
 #define MOTOR_IDENTIFY_UVW_LOCK_MS       1000U
 #define MOTOR_IDENTIFY_UVW_CYCLES        3.0f
 #define MOTOR_IDENTIFY_UVW_STEP_RAD      0.025f
 #define MOTOR_IDENTIFY_ALIGN_SETTLE_MS   2000U
 #define MOTOR_IDENTIFY_ALIGN_SAMPLE_MS   500U
-#define MOTOR_IDENTIFY_MAX_POLE_PAIRS    64U
 
 static float Motor_Identify_NormalizeAngle(float angle)
 {
@@ -98,8 +93,6 @@ void Motor_Identify_Start(void)
         g_identified_params = (MotorIdentifiedParams){0};
         g_identify_timer = 0U;
         g_uvw_elec_angle = 0.0f;
-        g_r_current_sum = 0.0f;
-        g_r_current_count = 0U;
         g_align_sin_sum = 0.0f;
         g_align_cos_sum = 0.0f;
         g_align_sample_count = 0U;
@@ -146,12 +139,13 @@ void Motor_Identify_UseResult(const MotorIdentifiedParams *params)
     }
 
     g_identified_params = *params;
-    /* 旧固件曾保存 0.6mH 占位值，不能让旧 Flash 覆盖已确认的相电感。
-     * 仅更新 RAM 中的标称电感，保留原来的电阻、极对数、方向和零点标定。
-     * 不在开机时擦写 Flash；下次主动辨识保存时才将新电感一并写入。
+    /* R/L/极对数来自已确认的 GB4310 规格；Flash 只复用安装相关的
+     * 相序和零位。参数记录版本会在更换电机时升级，防止读入旧电机标定。
      */
+    g_identified_params.resistance = MOTOR_NOMINAL_PHASE_RESISTANCE_OHM;
     g_identified_params.inductance = MOTOR_NOMINAL_PHASE_INDUCTANCE_H;
-    Motor_CurrentLoop_SetMotorIdentityParams(params->pole_pairs,
+    g_identified_params.pole_pairs = MOTOR_POLE_PAIRS;
+    Motor_CurrentLoop_SetMotorIdentityParams(g_identified_params.pole_pairs,
                                              params->zero_angle_offset,
                                              params->uvw_dir);
     g_identify_timer = 0U;
@@ -160,72 +154,24 @@ void Motor_Identify_UseResult(const MotorIdentifiedParams *params)
 
 // =========================================================
 // 状态机具体实现：云台电机参数辨识
-// 由于云台电机内阻大、电感小、极对数多，且容易发热，
-// 必须遵循：测电阻 -> 测电感 -> 测极对数和相序 -> 静止对齐零点 的安全顺序。
+// 由于云台电机内阻大、极对数多，且容易发热，
+// 流程先装载规格 R/L，再低速确认相序并对齐零点。
 // =========================================================
 
-// 1. 测量相电阻 (欧姆定律: R = U/I)
-// 目的：算出电机的真实电阻。因为只有知道了电阻，后续强拖时才知道给多大的电压是安全的，避免电机烧毁。
+// 1. 装载 GB4310 标称单相电阻。
 static void Identify_MeasureR(void)
 {
-    // 幅值 200 在当前固定 15V 母线下对应约 3V 相电压，电阻仍通过实测电流计算。
-    // 幅值 200 对应占空比 200/1000
-    const float test_amplitude = 200.0f; 
-    const float bus_voltage = SYSTEM_BUS_VOLTAGE; 
-
-    // 电压加载在 Alpha 轴 (也就是 U 相)，角度设为 MOTOR_HALF_PI (90度)
-    // 此时 U 相占空比最高，V/W 相占空比相等且较低。
-    Motor_OpenLoop_Drive(MOTOR_HALF_PI, test_amplitude);
-
-    g_identify_timer++;
-    
-    // Wait 400 ms, then average 600 current samples at 1 kHz.
-    if ((g_identify_timer > MOTOR_IDENTIFY_R_SETTLE_MS) &&
-        (g_identify_timer <= (MOTOR_IDENTIFY_R_SETTLE_MS +
-                              MOTOR_IDENTIFY_R_SAMPLE_MS)))
-    {
-        // 累加稳态下的 U 相电流大小 (绝对值)
-        g_r_current_sum += fabsf(g_foc_state.sample.iu_a);
-        g_r_current_count++;
-    }
-    else if (g_identify_timer > (MOTOR_IDENTIFY_R_SETTLE_MS +
-                                 MOTOR_IDENTIFY_R_SAMPLE_MS))
-    {
-        Motor_OpenLoop_Drive(0.0f, 0.0f); // 测试完毕，关闭输出
-        
-        if (g_r_current_count == 0U) {
-            Motor_Identify_Fail();
-            return;
-        }
-
-        float current_avg = g_r_current_sum / (float)g_r_current_count;
-        if (current_avg < 0.01f) {
-            Motor_Identify_Fail();
-            return;
-        }
-        
-        // 计算 U 相实际施加的相电压 (与中心点的压差)
-        float test_voltage = (test_amplitude / 1000.0f) * bus_voltage;
-        
-        // 根据欧姆定律 R = U / I 计算相电阻
-        g_identified_params.resistance = test_voltage / current_avg;
-
-        // 清零静态变量，准备进入下个状态
-        g_r_current_sum = 0.0f;
-        g_r_current_count = 0U;
-        g_identify_timer = 0U;
-        
-        // 测完电阻后，进入测电感状态
-        g_identify_state = IDENTIFY_STATE_MEASURE_L; 
-    }
+    Motor_OpenLoop_Drive(0.0f, 0.0f);
+    g_identified_params.resistance = MOTOR_NOMINAL_PHASE_RESISTANCE_OHM;
+    g_identify_timer = 0U;
+    g_identify_state = IDENTIFY_STATE_MEASURE_L;
 }
 
 // 2. 装载标称相电感（保留原状态名，并非实际测量电感）。
 // 目的：给电流环 PI 整定提供已确认的相电感，避免使用旧的 0.6mH 占位值。
 static void Identify_MeasureL(void)
 {
-    // 当前 1ms 辨识任务没有实现电流瞬态采样，采用 BM3514H 标称相电感 1.2mH。
-    // 用户已确认这是相电感，直接换算为 0.0012H，不做线间到相的除以 2 操作。
+    // GB4310 规格为 4.76mH 相间电感，星形绕组换算为 2.38mH 单相电感。
 
     g_identify_timer++;
 
@@ -377,14 +323,8 @@ static void Identify_UvwAndPoles(void)
             return;
         }
 
-        g_identified_params.pole_pairs =
-            (uint16_t)roundf(MOTOR_IDENTIFY_UVW_CYCLES / mech_turns);
-
-        if ((g_identified_params.pole_pairs == 0U) ||
-            (g_identified_params.pole_pairs > MOTOR_IDENTIFY_MAX_POLE_PAIRS)) {
-            Motor_Identify_Fail();
-            return;
-        }
+        /* 极对数使用 GB4310 规格的 14；开环运动仅用于确认相序方向。 */
+        g_identified_params.pole_pairs = MOTOR_POLE_PAIRS;
    
 
         // 停止输出，状态流转

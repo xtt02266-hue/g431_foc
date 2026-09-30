@@ -74,7 +74,7 @@ uint8_t Motor_Cogging_IsConfigValid(const MotorCoggingConfig *config)
         !isfinite(config->gain) || !isfinite(config->max_iq_a) ||
         !isfinite(config->fade_start_rpm) ||
         !isfinite(config->fade_end_rpm)) return 0U;
-    if ((config->gain < 0.0f) || (config->gain > 2.0f) ||
+    if ((config->gain < 0.0f) || (config->gain > 10.0f) ||
         (config->max_iq_a < 0.0f) ||
         (config->max_iq_a > MOTOR_TORQUE_CURRENT_LIMIT_A) ||
         (config->fade_start_rpm < 0.0f) ||

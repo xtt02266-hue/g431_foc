@@ -3,17 +3,12 @@
 
 #include <stdint.h>
 
-/* BM3514H 标称相电感：用户已确认 1.2mH 是相电感，不是线间电感，不再除以 2。
- * 当前没有实测电感算法；辨识流程和 Flash 参数加载统一使用此值整定电流环。
- */
-#define MOTOR_NOMINAL_PHASE_INDUCTANCE_H  0.0012f
-
 // 电机辨识状态机枚举。
 typedef enum
 {
     IDENTIFY_STATE_IDLE = 0,       // 空闲状态
-    IDENTIFY_STATE_MEASURE_R,      // 测量相电阻 (R)
-    IDENTIFY_STATE_MEASURE_L,      // 测量相电感 (L)
+    IDENTIFY_STATE_MEASURE_R,      // 装载标称相电阻 (R)
+    IDENTIFY_STATE_MEASURE_L,      // 装载标称相电感 (L)
     IDENTIFY_STATE_UVW_AND_POLES,  // 识别 UVW 相序方向和极对数
     IDENTIFY_STATE_ALIGN,          // 强行对齐转子（获取电角度零点偏移）
     IDENTIFY_STATE_DONE,           // 辨识完成
