@@ -16,5 +16,10 @@ uint8_t MT6826S_IsOk(void);
 uint8_t MT6826S_GetStatus(void);
 uint32_t MT6826S_GetCrcErrorCount(void);
 uint32_t MT6826S_GetTransferErrorCount(void);
+/* Main-loop only. 0=busy, 1=done, 2=SPI error. Never overlap angle DMA. */
+uint8_t MT6826S_ReadRegister(uint16_t address, uint8_t *value);
+uint8_t MT6826S_WriteRegister(uint16_t address, uint8_t value);
+/* After successful/uncertain self-calibration only a power cycle is valid. */
+void MT6826S_SuspendAngleReads(void);
 
 #endif

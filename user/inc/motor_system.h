@@ -138,6 +138,7 @@ void Motor_System_HostHeartbeat(void);
 MotorCommandResult Motor_System_HostStart(void);
 /* 诊断模式：先对齐转子，再将开环磁场渐升至 250 rpm。 */
 MotorCommandResult Motor_System_HostStartForceDrag250(void);
+MotorCommandResult Motor_System_HostStartEncoderCalibration(void);
 MotorCommandResult Motor_System_HostSetMode(MotorControlMode mode,
                                             MotorInputSource source);
 MotorCommandResult Motor_System_HostSetIq(float iq_a,
@@ -168,7 +169,7 @@ void Motor_System_GetHapticParams(MotorHapticParams *params);
 void Motor_System_GetFrictionConfig(MotorFrictionConfig *config);
 void Motor_System_GetCoggingConfig(MotorCoggingConfig *config);
 void Motor_System_GetControlSnapshot(MotorControlSnapshot *snapshot);
-MotorCommandResult Motor_System_HostStartCalibration(uint8_t mode);
+MotorCommandResult Motor_System_HostStartCalibration(uint8_t mode, uint16_t point_count, uint8_t repeats, uint8_t retry_until_good, uint8_t policy);
 void Motor_System_AbortCalibration(void);
 /* 手动给定仅在 MOTOR_TORQUE_USE_POT=0 时生效；电位器模式返回 0。
  * 直接给定电磁方向 Iq (A)，Id=0。

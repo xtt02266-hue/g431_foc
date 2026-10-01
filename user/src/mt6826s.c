@@ -26,6 +26,7 @@ static volatile uint32_t g_mt6826s_crc_error_count = 0U;
 static volatile uint32_t g_mt6826s_transfer_error_count = 0U;
 static uint32_t g_mt6826s_start_ms = 0U;
 static uint8_t g_mt6826s_timeout_reported = 0U;
+static volatile uint8_t g_register_lock, g_angle_reads_suspended;
 
 static uint8_t MT6826S_CalculateCrc8(const uint8_t *data, uint8_t length)
 {
@@ -77,10 +78,12 @@ void MT6826S_Init(void)
     g_mt6826s_transfer_error_count = 0U;
     g_mt6826s_busy = 0U;
     g_mt6826s_timeout_reported = 0U;
+    g_register_lock = g_angle_reads_suspended = 0U;
 }
 
 void MT6826S_RequestReadDMA(void)
 {
+    if (g_register_lock || g_angle_reads_suspended) return;
     if (g_mt6826s_busy != 0U) {
         /* A lost DMA completion must invalidate the angle instead of holding
          * the last valid reading indefinitely. Do not touch an active DMA. */
@@ -182,4 +185,45 @@ uint32_t MT6826S_GetCrcErrorCount(void)
 uint32_t MT6826S_GetTransferErrorCount(void)
 {
     return g_mt6826s_transfer_error_count;
+}
+
+static uint8_t MT6826S_RegisterTransfer(uint16_t address, uint8_t write,
+                                       uint8_t *value)
+{
+    if (address > 0xFFFU || value == 0 || g_angle_reads_suspended) return 2U;
+    uint32_t mask = __get_PRIMASK();
+    __disable_irq();
+    if (g_mt6826s_busy || g_register_lock) {
+        if (!mask) __enable_irq();
+        return 0U;
+    }
+    g_register_lock = 1U;
+    if (!mask) __enable_irq();
+    uint8_t tx[3] = {(uint8_t)((write ? 0x60U : 0x30U) | (address >> 8U)),
+                     (uint8_t)address, write ? *value : 0U};
+    uint8_t rx[3] = {0};
+    MT6826S_Select();
+    HAL_StatusTypeDef result = HAL_SPI_TransmitReceive(&hspi1, tx, rx, 3U, 1U);
+    MT6826S_Unselect();
+    if (result != HAL_OK) {
+        g_mt6826s_ok = 0U;
+        ++g_mt6826s_transfer_error_count;
+    } else if (!write) *value = rx[2];
+    g_register_lock = 0U;
+    return result == HAL_OK ? 1U : 2U;
+}
+
+uint8_t MT6826S_ReadRegister(uint16_t address, uint8_t *value)
+{
+    return MT6826S_RegisterTransfer(address, 0U, value);
+}
+
+uint8_t MT6826S_WriteRegister(uint16_t address, uint8_t value)
+{
+    return MT6826S_RegisterTransfer(address, 1U, &value);
+}
+
+void MT6826S_SuspendAngleReads(void)
+{
+    g_angle_reads_suspended = 1U;
 }

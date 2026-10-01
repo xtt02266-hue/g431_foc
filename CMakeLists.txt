@@ -67,6 +67,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     user/src/motor_trajectory.c
     user/src/mt6826s.c
     user/src/motor_encoder.c
+    user/src/motor_encoder_calibration.c
     user/src/pid.c
     user/src/pc_protocol.c
     user/src/svpwm.c

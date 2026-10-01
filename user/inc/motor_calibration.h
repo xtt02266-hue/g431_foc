@@ -4,16 +4,22 @@
 
 #define MOTOR_CAL_SCHEMA 1U
 #define MOTOR_CAL_RING_SIZE 256U /* retain recently sent records for optional replay */
-#define MOTOR_CAL_POINT_SETTLE_MS 600U
+#define MOTOR_CAL_POINT_COUNT 512U
+#define MOTOR_CAL_POINT_MAX_ERROR_COUNTS 3.0f
+#define MOTOR_CAL_POINT_SETTLE_MS 1000U
 #define MOTOR_CAL_POINT_CAPTURE_MS 500U
+#define MOTOR_CAL_POINT_AVERAGE_MS 1000U
+#define MOTOR_CAL_POINT_TIMEOUT_MS 30000U
 #define MOTOR_CAL_REQUIRED_TURNS 14U /* two boundary guard turns; analyzer requires 12 */
 enum { CAL_IDLE, CAL_SETTLE, CAL_CAPTURE, CAL_ZERO, CAL_DONE, CAL_FAILED, CAL_ABORTED };
 enum { CAL_OK, CAL_UNSTABLE, CAL_STALL, CAL_SENSOR, CAL_OVERFLOW,
        CAL_CANCELLED, CAL_TIMEOUT, CAL_INSUFFICIENT, CAL_CONTROL_LOST };
-enum { CAL_LIMIT = 1U, CAL_SLEW = 2U, CAL_BAD_SENSOR = 4U, CAL_CONTROL_GAP = 8U };
+enum { CAL_LIMIT = 1U, CAL_SLEW = 2U, CAL_BAD_SENSOR = 4U, CAL_CONTROL_GAP = 8U,
+       CAL_POINT_AVERAGE = 16U }; /* fresh 1s fallback window, not a fault */
 
 /* Wire schema 1, little-endian IEEE754, exactly 64 bytes. flags also encodes
- * phase bits 8..10, speed index bits 11..12 and reverse direction bit 13. */
+ * point average bit4 (policy1), phase bits 8..10, speed index bits 11..12
+ * and reverse direction bit13. Point schemas append a target float (68 bytes). */
 typedef struct {
     uint32_t sequence, tick_ms;
     uint16_t angle, flags;
@@ -32,6 +38,17 @@ typedef struct {
 } MotorCalStatus;
 
 uint8_t Motor_Calibration_Begin(uint8_t mode);
+uint8_t Motor_Calibration_BeginWithPoints(uint8_t mode, uint16_t count);
+uint8_t Motor_Calibration_BeginWithOptions(uint8_t mode, uint16_t count, uint8_t repeats, uint8_t retry_until_good);
+uint8_t Motor_Calibration_BeginWithPolicy(uint8_t mode, uint16_t count, uint8_t repeats, uint8_t retry_until_good, uint8_t policy);
+uint8_t Motor_Calibration_PointPolicy(void);
+uint8_t Motor_Calibration_DecodeStartPolicy(const uint8_t *body, uint16_t size, uint8_t *mode, uint16_t *count, uint8_t *repeats, uint8_t *retry_until_good, uint8_t *policy);
+uint16_t Motor_Calibration_PointCount(void);
+uint16_t Motor_Calibration_PointSchema(void);
+uint8_t Motor_Calibration_PointRepeats(void);
+uint8_t Motor_Calibration_PointRetryUntilGood(void);
+uint8_t Motor_Calibration_DecodeStartRequest(const uint8_t *body, uint16_t size, uint8_t *mode, uint16_t *count);
+uint8_t Motor_Calibration_DecodeStartOptions(const uint8_t *body, uint16_t size, uint8_t *mode, uint16_t *count, uint8_t *repeats, uint8_t *retry_until_good);
 void Motor_Calibration_Abort(uint8_t reason);
 uint8_t Motor_Calibration_IsActive(void);
 float Motor_Calibration_Step(uint16_t angle, float speed, float applied_target,

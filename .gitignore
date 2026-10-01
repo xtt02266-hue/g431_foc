@@ -2,6 +2,17 @@
 build/
 .worktrees/
 
+# Local analysis, generated reports, and temporary staging
+.codex_tmp/
+tmp/
+tmp_haptic_*/
+tmp_studio_opt/
+calibration_results/
+encoder_calibration_runs/
+__pycache__/
+*.pyc
+*.pdb
+
 # IDE files
 MDK-ARM/
 Debug/

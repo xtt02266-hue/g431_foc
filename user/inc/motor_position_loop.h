@@ -8,11 +8,11 @@
  * 无外加负载的位置环基线参数，恢复自惯性补偿引入前的 b7cc543。
  * 输入误差单位为MT6826S 15位count，输出单位为机械RPM。
  */
-#define MOTOR_POSITION_PID_KP       1.42f
-#define MOTOR_POSITION_PID_KI       0.1f
-#define MOTOR_POSITION_PID_KD       0.0025f
-#define MOTOR_POSITION_PID_OUT_MAX  250.0f
-#define MOTOR_POSITION_PID_OUT_MIN  -250.0f
+#define MOTOR_POSITION_PID_KP       1.4f
+#define MOTOR_POSITION_PID_KI       0.6f
+#define MOTOR_POSITION_PID_KD       0.02f
+#define MOTOR_POSITION_PID_OUT_MAX  350.0f
+#define MOTOR_POSITION_PID_OUT_MIN  -350.0f
 
 // 对外暴露的控制变量
 extern PID_Controller g_pi_pos;

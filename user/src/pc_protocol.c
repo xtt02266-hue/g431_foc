@@ -9,6 +9,7 @@
 #include "mt6826s.h"
 #include "motor_calibration.h"
 #include "motor_identify.h"
+#include "motor_encoder_calibration.h"
 #include "usart.h"
 #include <math.h>
 #include <string.h>
@@ -30,6 +31,15 @@
 #define PC_FEATURE_POINT_CAL (1UL << 13U)
 #define PC_FEATURE_POSITION_FRICTION (1UL << 14U)
 #define PC_FEATURE_CAL_REPLAY (1UL << 15U)
+#define PC_FEATURE_POINT_CAL_256 (1UL << 16U)
+#define PC_FEATURE_POINT_QUALITY_RETRY (1UL << 17U)
+#define PC_FEATURE_POINT_8COUNT_30S (1UL << 18U)
+#define PC_FEATURE_POINT_SINGLE_PAIR_WAIT (1UL << 19U)
+#define PC_FEATURE_POINT_512_4COUNT (1UL << 20U)
+#define PC_FEATURE_POINT_SETTLE_1500 (1UL << 21U) /* historical; not advertised from 1.12.12 */
+#define PC_FEATURE_POINT_3COUNT (1UL << 22U)
+#define PC_FEATURE_POINT_AVERAGE (1UL << 23U)
+#define PC_FEATURE_ENCODER_AUTOCAL (1UL << 24U)
 
 enum { CMD_HELLO=0x01, CMD_GET_STATUS=0x02, CMD_CLAIM=0x03,
        CMD_RELEASE=0x04, CMD_HEARTBEAT=0x05, CMD_START=0x10,
@@ -44,7 +54,8 @@ enum { CMD_HELLO=0x01, CMD_GET_STATUS=0x02, CMD_CLAIM=0x03,
        CMD_GET_COGGING_TABLE_CHUNK=0x2D, CMD_SAVE_COGGING=0x2E,
        CMD_FORCE_DRAG_250=0x30, CMD_CAL_INFO=0x31, CMD_CAL_START=0x32,
        CMD_CAL_ABORT=0x33, CMD_CAL_STATUS=0x34, CMD_SAVE_FRICTION=0x35,
-       CMD_SET_SPEED_PI=0x36, CMD_GET_SPEED_PI=0x37, CMD_CAL_REPLAY=0x38 };
+       CMD_SET_SPEED_PI=0x36, CMD_GET_SPEED_PI=0x37, CMD_CAL_REPLAY=0x38,
+       CMD_ENCODER_CAL_START=0x39, CMD_ENCODER_CAL_STATUS=0x3A };
 
 static volatile uint8_t s_ring[RX_RING_SIZE];
 static volatile uint16_t s_head, s_tail;
@@ -140,7 +151,7 @@ static uint8_t queue_frame(uint8_t type, uint16_t seq,
     } else if ((priority != 0U) && (s_tx_pending_len == 0U)) {
         memcpy(s_tx_pending,frame,n); s_tx_pending_len=n; accepted=1U;
     } else if ((priority == 0U) && (s_tx_stream_len == 0U) &&
-        (type == TYPE_CALIBRATION ||
+        (type == TYPE_STATUS || type == TYPE_CALIBRATION ||
          (type == TYPE_TELEMETRY && (Motor_Calibration_IsActive() || Motor_Calibration_HasSamples())))) {
         memcpy(s_tx_stream,frame,n); s_tx_stream_len=n; accepted=1U;
     }
@@ -202,6 +213,20 @@ static uint16_t build_cal_status(uint8_t *p)
     return 32U;
 }
 
+static uint16_t build_encoder_cal_status(uint8_t *p)
+{
+    MotorEncoderCalStatus s;
+    uint32_t mask=__get_PRIMASK(); __disable_irq();
+    Motor_EncoderCal_GetStatus(&s);
+    if (!mask) __enable_irq();
+    memset(p,0,24U);
+    p[0]=1U; p[1]=s.phase; p[2]=s.reason; p[3]=s.flags;
+    p[4]=s.chip_status; p[5]=4U;
+    put_u32(p+8,s.elapsed_ms); put_u32(p+12,s.calibrated_counts);
+    put_f32(p+16,s.measured_rpm); put_f32(p+20,250.0f);
+    return 24U;
+}
+
 static uint16_t build_cal_info(uint8_t *p)
 {
     MotorControlSnapshot s; MotorFrictionConfig f; MotorCoggingConfig c;
@@ -228,8 +253,15 @@ static uint16_t build_cal_info(uint8_t *p)
     put_u32(p+168,Motor_Cogging_GetTableRevision());
     put_u32(p+172,Motor_Cogging_GetActiveTableCrc());
     if (Motor_Calibration_IsPointMode()) {
-        put_u16(p,2U);put_u16(p+2,68U);
+        put_u16(p,Motor_Calibration_PointSchema());put_u16(p+2,68U);
         put_f32(p+176,g_pi_pos.kp);put_f32(p+180,g_pi_pos.ki);put_f32(p+184,g_pi_pos.kd);
+        if (Motor_Calibration_PointRepeats()!=3U || Motor_Calibration_PointRetryUntilGood() || Motor_Calibration_PointPolicy()) {
+            p[188]=Motor_Calibration_PointRepeats();p[189]=Motor_Calibration_PointRetryUntilGood();put_u16(p+190,0U);
+            if (Motor_Calibration_PointPolicy()) {
+                p[192]=Motor_Calibration_PointPolicy();p[193]=0U;put_u16(p+194,0U);return 196U;
+            }
+            return 192U;
+        }
         return 188U;
     }
     return 176U;
@@ -265,14 +297,16 @@ static void handle_command(uint16_t seq, const uint8_t *p, uint16_t n)
     if (cmd == CMD_HELLO) {
         if (bn != 0U) r=MOTOR_CMD_INVALID_LENGTH;
         else {
-            out[0]=1U; out[1]=12U; out[2]=3U; put_u16(&out[3],7U);
+            out[0]=1U; out[1]=13U; out[2]=0U; put_u16(&out[3],7U);
             put_u32(&out[5],HAL_GetUIDw0()); put_u32(&out[9],HAL_GetUIDw1()); put_u32(&out[13],HAL_GetUIDw2());
-            put_u32(&out[17],0xFFU); put_u32(&out[21],0xFFU | PC_FEATURE_COGGING_GAIN_10X | PC_FEATURE_CALIBRATION | PC_FEATURE_FRICTION_CALIBRATION | PC_FEATURE_FRICTION_FLASH | PC_FEATURE_SPEED_PI | PC_FEATURE_POINT_CAL | PC_FEATURE_POSITION_FRICTION | PC_FEATURE_CAL_REPLAY);
+            put_u32(&out[17],0xFFU); put_u32(&out[21],0xFFU | PC_FEATURE_COGGING_GAIN_10X | PC_FEATURE_CALIBRATION | PC_FEATURE_FRICTION_CALIBRATION | PC_FEATURE_FRICTION_FLASH | PC_FEATURE_SPEED_PI | PC_FEATURE_POINT_CAL | PC_FEATURE_POSITION_FRICTION | PC_FEATURE_CAL_REPLAY | PC_FEATURE_POINT_CAL_256 | PC_FEATURE_POINT_QUALITY_RETRY | PC_FEATURE_POINT_8COUNT_30S | PC_FEATURE_POINT_SINGLE_PAIR_WAIT | PC_FEATURE_POINT_512_4COUNT | PC_FEATURE_POINT_3COUNT | PC_FEATURE_POINT_AVERAGE | PC_FEATURE_ENCODER_AUTOCAL);
             put_f32(&out[25],MOTOR_TORQUE_CURRENT_LIMIT_A); put_f32(&out[29],MOTOR_HOST_DEFAULT_IQ_LIMIT_A);
             put_u16(&out[33],PC_PROTOCOL_MAX_PAYLOAD); put_u16(&out[35],MOTOR_HOST_HEARTBEAT_TIMEOUT_MS); out_n=37U;
         }
     } else if (cmd == CMD_GET_STATUS) {
         if (bn != 0U) r=MOTOR_CMD_INVALID_LENGTH; else out_n=build_status(out);
+    } else if (cmd == CMD_ENCODER_CAL_STATUS) {
+        if (bn!=0U) r=MOTOR_CMD_INVALID_LENGTH; else out_n=build_encoder_cal_status(out);
     } else if (cmd == CMD_CLAIM) {
         if (bn != 0U) r=MOTOR_CMD_INVALID_LENGTH;
         else { r=Motor_System_ClaimHost(); if (r==MOTOR_CMD_OK) { ++s_token_counter; if (s_token_counter==0U) ++s_token_counter; s_token=s_token_counter; Motor_System_HostHeartbeat(); put_u32(out,s_token); out_n=4U; } }
@@ -282,13 +316,21 @@ static void handle_command(uint16_t seq, const uint8_t *p, uint16_t n)
         r=Motor_System_ClearFault() ? MOTOR_CMD_OK : MOTOR_CMD_NOT_READY;
     } else if (!token_ok(token)) {
         r=MOTOR_CMD_NOT_OWNER;
+    } else if ((Motor_EncoderCal_IsActive() || Motor_EncoderCal_RequiresPowerCycle()) &&
+               !cal_command_allowed(cmd)) {
+        r=Motor_EncoderCal_RequiresPowerCycle()?MOTOR_CMD_NOT_READY:MOTOR_CMD_BUSY;
     } else if (Motor_Calibration_IsActive() && !cal_command_allowed(cmd)) {
         r=MOTOR_CMD_BUSY;
     } else if (cmd==CMD_CAL_INFO) {
         if (bn!=0U) r=MOTOR_CMD_INVALID_LENGTH; else out_n=build_cal_info(out);
+    } else if (cmd==CMD_ENCODER_CAL_START) {
+        if (bn!=0U) r=MOTOR_CMD_INVALID_LENGTH;
+        else { r=Motor_System_HostStartEncoderCalibration(); out_n=build_encoder_cal_status(out); }
     } else if (cmd==CMD_CAL_START) {
-        if (bn!=1U) r=MOTOR_CMD_INVALID_LENGTH;
-        else { r=Motor_System_HostStartCalibration(b[0]); out_n=build_cal_status(out); }
+        uint8_t mode,repeats,retry_until_good,policy; uint16_t points;
+        if (bn!=1U && bn!=3U && bn!=5U && bn!=6U) r=MOTOR_CMD_INVALID_LENGTH;
+        else if (!Motor_Calibration_DecodeStartPolicy(b,bn,&mode,&points,&repeats,&retry_until_good,&policy)) r=MOTOR_CMD_INVALID_VALUE;
+        else { r=Motor_System_HostStartCalibration(mode,points,repeats,retry_until_good,policy); out_n=build_cal_status(out); }
     } else if (cmd==CMD_CAL_ABORT) {
         if (bn!=0U) r=MOTOR_CMD_INVALID_LENGTH;
         else { Motor_System_AbortCalibration(); out_n=build_cal_status(out); }
@@ -305,7 +347,7 @@ static void handle_command(uint16_t seq, const uint8_t *p, uint16_t n)
             if (!count) r=MOTOR_CMD_NOT_READY;
             else {
                 uint8_t point=status.mode==5U;uint16_t size=point?68U:64U;
-                put_u16(out,point?2U:MOTOR_CAL_SCHEMA);put_u32(out+2,status.session);
+                put_u16(out,point?Motor_Calibration_PointSchema():MOTOR_CAL_SCHEMA);put_u32(out+2,status.session);
                 out[6]=count;out[7]=0U;put_u32(out+8,status.dropped);
                 for (uint8_t i=0;i<count;i++) {
                     memcpy(out+12+i*size,&records[i],64U);
@@ -518,11 +560,13 @@ void PC_Protocol_Task(void)
     if ((uint32_t)(now-s_last_status_ms)>=100U) {
         uint8_t p[40];
         uint16_t next_status_seq=(uint16_t)(s_status_seq+1U);
-        if (queue_frame(TYPE_STATUS,next_status_seq,p,build_status(p),1U)!=0U) {
+        /* Periodic status is best effort; never occupy the reserved command ACK slot.
+         * A busy DMA may skip this update. HEARTBEAT/CAL_STATUS still reply at priority. */
+        s_last_status_ms=now;
+        if (queue_frame(TYPE_STATUS,next_status_seq,p,build_status(p),0U)!=0U) {
             s_status_seq=next_status_seq;
-            s_last_status_ms=now;
+            return;
         }
-        return;
     }
     uint8_t streaming = Motor_Calibration_IsActive() || Motor_Calibration_HasSamples();
     if ((!s_tx_busy || streaming) && !s_tx_stream_len && (uint32_t)(now-s_last_telemetry_ms)>=
@@ -536,7 +580,7 @@ void PC_Protocol_Task(void)
         uint8_t count=Motor_Calibration_Peek(samples,3U);
         Motor_Calibration_GetStatus(&status);
         uint8_t point=status.mode==5U;uint16_t size=point?68U:64U;
-        put_u16(payload,point?2U:MOTOR_CAL_SCHEMA); put_u32(payload+2,status.session);
+        put_u16(payload,point?Motor_Calibration_PointSchema():MOTOR_CAL_SCHEMA); put_u32(payload+2,status.session);
         payload[6]=count; payload[7]=0U; put_u32(payload+8,status.dropped);
         float targets[3];Motor_Calibration_PeekTargets(targets,count);
         for (uint8_t i=0;i<count;i++) {

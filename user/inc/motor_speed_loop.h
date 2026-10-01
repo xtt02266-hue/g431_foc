@@ -24,7 +24,7 @@ extern MotorSpeedEstimator speed_est;
  * 输入误差单位为机械 RPM，输出单位为 q 轴电流 A。
  */
 #define MOTOR_SPEED_PID_KP          0.0008f
-#define MOTOR_SPEED_PID_KI          0.0015f
+#define MOTOR_SPEED_PID_KI          0.0032f
 #define MOTOR_SPEED_PID_KD          0.0f
 #define MOTOR_SPEED_PID_OUT_MAX     MOTOR_RATED_CURRENT_A
 #define MOTOR_SPEED_PID_OUT_MIN     (-MOTOR_RATED_CURRENT_A)

@@ -18,9 +18,10 @@
 #include "motor_calibration.h"
 #include "motor_friction_storage.h"
 #include "mt6826s.h"
+#include "motor_encoder_calibration.h"
 
 #define MOTOR_ENCODER_MAX_SAMPLE_AGE_MS  2U
-#define MOTOR_CURRENT_LOOP_CONTROL_BW_HZ 300.0f
+#define MOTOR_CURRENT_LOOP_CONTROL_BW_HZ 75.0f
 #define MOTOR_CURRENT_LOOP_MUSIC_BW_HZ  2000.0f
 
 // 电位器低通滤波系数 (一阶 EMA, 1kHz 更新率)
@@ -174,6 +175,7 @@ MotorState Motor_System_GetState(void)
 
 uint8_t Motor_System_StartControl(void)
 {
+    if (Motor_EncoderCal_IsActive() || Motor_EncoderCal_RequiresPowerCycle()) return 0U;
 #if !BOARD_SENSORED_CONTROL_ENABLE
     return 0U;
 #endif
@@ -204,8 +206,10 @@ void Motor_System_StopControl(void)
 
 void Motor_System_AbortCalibration(void) { Motor_System_StopControl(); }
 
-MotorCommandResult Motor_System_HostStartCalibration(uint8_t mode)
+MotorCommandResult Motor_System_HostStartCalibration(uint8_t mode, uint16_t point_count, uint8_t repeats, uint8_t retry_until_good, uint8_t policy)
 {
+    if (Motor_EncoderCal_IsActive()) return MOTOR_CMD_BUSY;
+    if (Motor_EncoderCal_RequiresPowerCycle()) return MOTOR_CMD_NOT_READY;
     if (g_control_owner != MOTOR_OWNER_HOST) return MOTOR_CMD_NOT_OWNER;
     if (g_motor_system.state != MOTOR_STATE_STOPPED) return MOTOR_CMD_MUST_STOP_FIRST;
     if (mode > 5U) return MOTOR_CMD_INVALID_VALUE;
@@ -221,7 +225,7 @@ MotorCommandResult Motor_System_HostStartCalibration(uint8_t mode)
         verification.max_iq_a > .010001f || !Motor_Cogging_GetTableRevision()))
         return MOTOR_CMD_INVALID_VALUE;
     uint32_t mask = __get_PRIMASK(); __disable_irq();
-    if (!Motor_Calibration_Begin(mode)) { if (!mask) __enable_irq(); return MOTOR_CMD_BUSY; }
+    if (!Motor_Calibration_BeginWithPolicy(mode, point_count, repeats, retry_until_good, policy)) { if (!mask) __enable_irq(); return MOTOR_CMD_BUSY; }
     Motor_Cogging_GetConfig(&g_cal_saved_cogging);
     Motor_Feedforward_GetFrictionConfig(&g_cal_saved_friction);
     g_cal_saved_limit = g_host_iq_limit_a;
@@ -363,6 +367,8 @@ MotorCommandResult Motor_System_HostStart(void)
 
 MotorCommandResult Motor_System_HostStartForceDrag250(void)
 {
+    if (Motor_EncoderCal_IsActive()) return MOTOR_CMD_BUSY;
+    if (Motor_EncoderCal_RequiresPowerCycle()) return MOTOR_CMD_NOT_READY;
     uint32_t primask;
 
     if (g_control_owner != MOTOR_OWNER_HOST) return MOTOR_CMD_NOT_OWNER;
@@ -393,6 +399,30 @@ MotorCommandResult Motor_System_HostStartForceDrag250(void)
     }
     g_host_last_heartbeat_ms = HAL_GetTick();
     return MOTOR_CMD_OK;
+}
+
+MotorCommandResult Motor_System_HostStartEncoderCalibration(void)
+{
+    if (g_control_owner!=MOTOR_OWNER_HOST) return MOTOR_CMD_NOT_OWNER;
+    if (Motor_EncoderCal_IsActive() || Motor_Calibration_IsActive() ||
+        Motor_Calibration_HasSamples() || Motor_Parameters_IsBusy()) return MOTOR_CMD_BUSY;
+    if (Motor_EncoderCal_RequiresPowerCycle()) return MOTOR_CMD_NOT_READY;
+    if (g_motor_system.state!=MOTOR_STATE_STOPPED) return MOTOR_CMD_MUST_STOP_FIRST;
+    if (!Motor_Parameters_IsReady() || !Motor_Encoder_IsDataFresh(2U) ||
+        MT6826S_GetStatus()!=0U) return MOTOR_CMD_NOT_READY;
+    /* Preserve the table and its CRC, but persist disabled before changing the
+     * sensor mapping: an old enabled flash table must not return after reboot. */
+    MotorCoggingConfig cogging; Motor_Cogging_GetConfig(&cogging);
+    cogging.enabled=0U;
+    uint32_t mask=__get_PRIMASK(); __disable_irq();
+    Motor_Cogging_SetConfig(&cogging);
+    ++g_config_revision;
+    uint8_t saved=Motor_Cogging_SaveToFlash();
+    if (!mask) __enable_irq();
+    if (!saved) return MOTOR_CMD_NOT_READY;
+    MotorCommandResult r=Motor_System_HostStartForceDrag250();
+    if (r==MOTOR_CMD_OK) Motor_EncoderCal_Begin();
+    return r;
 }
 
 MotorCommandResult Motor_System_HostSetMode(MotorControlMode mode,
@@ -752,6 +782,7 @@ uint8_t Motor_System_ClearFault(void)
 
 uint8_t Motor_System_IdentifyAndSave(void)
 {
+    if (Motor_EncoderCal_IsActive() || Motor_EncoderCal_RequiresPowerCycle()) return 0U;
     if ((Motor_Parameters_IsBusy() != 0U) ||
         (Motor_Encoder_IsDataFresh(MOTOR_ENCODER_MAX_SAMPLE_AGE_MS) == 0U)) {
         return 0U;
@@ -766,6 +797,7 @@ uint8_t Motor_System_PlaySong(const MotorMusicNote *song,
                               uint16_t note_count,
                               uint16_t play_count)
 {
+    if (Motor_EncoderCal_IsActive() || Motor_EncoderCal_RequiresPowerCycle()) return 0U;
     if ((song == NULL) || (note_count == 0U) || (play_count == 0U) ||
         (Motor_Parameters_IsReady() == 0U) ||
         (g_fault_latched != 0U) ||
@@ -780,6 +812,7 @@ uint8_t Motor_System_PlaySong(const MotorMusicNote *song,
 uint8_t Motor_System_PlaySongLoop(const MotorMusicNote *song,
                                   uint16_t note_count)
 {
+    if (Motor_EncoderCal_IsActive() || Motor_EncoderCal_RequiresPowerCycle()) return 0U;
     if ((song == NULL) || (note_count == 0U) ||
         (Motor_Parameters_IsReady() == 0U) ||
         (g_fault_latched != 0U) ||
@@ -839,6 +872,7 @@ static void Motor_System_TuneCurrentLoopBandwidth(float bandwidth_hz)
 
 static void Motor_System_ForceSafeStop(void)
 {
+    Motor_EncoderCal_NotifyStop();
     /* 所有功能统一从这里撤销转矩输出。 */
     g_force_drag_active = 0U;
     g_force_drag_align_ticks = 0U;
@@ -859,6 +893,12 @@ static void Motor_System_ForceSafeStop(void)
 
 static void Motor_System_UpdateOperatingState(void)
 {
+    if (Motor_EncoderCal_RequiresPowerCycle()) {
+        g_run_requested=0U;
+        Motor_System_ForceSafeStop();
+        g_motor_system.state=MOTOR_STATE_STOPPED;
+        return;
+    }
 #if !BOARD_SENSORED_CONTROL_ENABLE
     /* Development foundation only: no sensorless startup/handover yet. */
     Motor_System_ForceSafeStop();

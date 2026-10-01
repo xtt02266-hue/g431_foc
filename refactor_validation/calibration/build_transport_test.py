@@ -14,10 +14,14 @@ shim=r'''
 #include <string.h>
 #include <stdio.h>
 #include <assert.h>
+#ifdef NDEBUG
+#error "Transport simulation requires assertions; compile with -UNDEBUG"
+#endif
 #include "motor_calibration.h"
 #define SOF0 0xA5
 #define SOF1 0x5A
 #define TYPE_CALIBRATION 5
+#define TYPE_STATUS 3
 #define TYPE_TELEMETRY 4
 #define PC_PROTOCOL_VERSION 2
 #define MAX_FRAME_SIZE 266
@@ -69,6 +73,8 @@ int main(void) {
     assert(Motor_Calibration_Begin(1));
     assert(queue_frame(3,1,bytes,40,0));
     assert(queue_frame(4,2,bytes,126,0)); /* prepared while DMA is active */
+    assert(!queue_frame(3,2,bytes,40,0)); /* full stream slot: status cannot spill into ACK slot */
+    assert(!s_tx_pending_len);
     assert(!queue_frame(4,3,bytes,126,0)); /* a busy stream slot cannot overwrite */
     assert(queue_frame(2,4,bytes,32,1)); /* ACK has its own priority slot */
     now_us=done_us;complete();assert(last_types[1]==2);
@@ -93,8 +99,8 @@ int main(void) {
         if (now_us>=main_ready_us) {
             if (now_us>=next_ack && !s_tx_pending_len) {
                 assert(queue_frame(2,1,bytes,40,1));next_ack+=100000;main_ready_us=(unsigned)now_us+800;
-            } else if (now_us>=next_status && !s_tx_pending_len) {
-                assert(queue_frame(3,1,bytes,40,1));next_status+=100000;main_ready_us=(unsigned)now_us+800;
+            } else if (now_us>=next_status) {
+                (void)queue_frame(3,1,bytes,40,0);next_status+=100000;main_ready_us=(unsigned)now_us+800;
             } else if (!s_tx_stream_len) {
                 if (now_us>=next_telem) {
                     assert(queue_frame(4,1,bytes,126,0));next_telem+=50000;main_ready_us=(unsigned)now_us+800;

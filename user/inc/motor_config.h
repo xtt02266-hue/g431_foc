@@ -53,7 +53,7 @@
 #define MOTOR_SPEED_IQ_SLEW_A_PER_S    5.0f
 
 /* FREE 模式摩擦补偿的轻微反向速度阻尼，最多 20 mA。 */
-#define MOTOR_FREE_FRICTION_DAMPING_A_PER_RAD_S 0.0005f
+#define MOTOR_FREE_FRICTION_DAMPING_A_PER_RAD_S 0.0001f
 #define MOTOR_FREE_FRICTION_DAMPING_MAX_A       0.01f
 #define MOTOR_PARAMETERS_AUTO_IDENTIFY 0
 /* 保留旧宏供现有代码兼容；运行时由 MotorInputSource 决定 POT/HOST。 */
