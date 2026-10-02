@@ -196,15 +196,15 @@ CLEAR_FAULT 在 LOCAL 下允许恢复但不能自动取得 HOST 权限，避免�
 
 触觉参数 Body 固定 22 字节：`spring_k:f32 + damping_b:f32 + detent_k:f32 + limit_k:f32 + limit_half_range_deg:f32 + detent_count:u16`。一次验证完整参数集，通过后整体替换，不能逐字段生效。
 
-HELLO 返回体固定字段顺序：`fw_major:u8, fw_minor:u8, fw_patch:u8, schema_id:u16(=1), device_uid:12 bytes, mode_mask:u32, feature_mask:u32, hard_iq_limit_a:f32, host_iq_limit_a:f32, max_payload:u16(=256), heartbeat_timeout_ms:u16(=500)`。mode_mask 对应模式编号；feature_mask bit0=Host控制、bit1=触觉参数、bit2=连续角度，其他位保留为0。未完成模式对应能力位必须为0。
+HELLO 返回体固定字段顺序：`fw_major:u8, fw_minor:u8, fw_patch:u8, schema_id:u16(=1), device_uid:12 bytes, mode_mask:u32, feature_mask:u32, hard_iq_limit_a:f32, host_iq_limit_a:f32, max_payload:u16(=256), heartbeat_timeout_ms:u16(=2000)`。mode_mask 对应模式编号；feature_mask bit0=Host控制、bit1=触觉参数、bit2=连续角度，其他位保留为0。未完成模式对应能力位必须为0。
 
 GET_PARAMS 返回体：`mode:u8, source:u8, iq_limit_a:f32, iq_slew_a_per_s:f32, 22字节触觉参数`。模式/限流/触觉写入应答分别返回其命令体同结构的生效值。STATUS 类型的主动包与 RESPONSE 内嵌 STATUS 使用同一内容编码。
 
 ### 5.5 超时、重复与 STOP 优先级
 
 - PC 普通命令一次仅保留一个待确认请求，ACK 超时 200 ms，最多重试 2 次，使用相同 token/Seq/内容；不自动换序号重做 START。
-- HEARTBEAT 每 100 ms 一次，独立于普通请求发送；固件 500 ms 无有效心跳停机、清零、释放 HOST 并记录 HOST_TIMEOUT。普通遥测和其他命令不能替代心跳。
-- CLAIM 成功时启动 500 ms 计时。已见过的重复 HEARTBEAT 可回相同应答，但不再次延长租期。
+- HEARTBEAT 每 100 ms 一次，独立于普通请求发送；固件 2000 ms 无有效心跳停机、清零、释放 HOST 并记录 HOST_TIMEOUT。普通遥测和其他命令不能替代心跳。
+- CLAIM 成功时启动 2000 ms 计时。已见过的重复 HEARTBEAT 可回相同应答，但不再次延长租期。
 - 固件缓存最近 32 个命令的 token、Seq、完整命令内容和应答；相同请求重传仅重放结果；相同 token/Seq、不同内容返回 SEQ_CONFLICT。心跳需使用递增序号；保留其最近已接受序号以拒绝旧心跳续期。
 - PC 在 16 位 Seq 用完前停止并重新建立会话，不在同一会话回绕复用。PC 普通命令和心跳共用序号分配器。
 - STOP 不等普通队列，收到完整且校验通过的 STOP 后设置专用停止标志，下一控制周期优先执行。清除未提交运动命令，待处理请求返回 NOT_RUNNING 或 BUSY；释放 HOST 并使旧 token 失效。
@@ -345,7 +345,7 @@ AS5600 counts 转换成机械角度 θ。连续角度使用相邻有效样本的
 
 改变模式控件不发送命令；点击“应用模式”才写入。输入框保留用户草稿，但不得在重连、接管、启动或模式切换后自动重放草稿 Iq。运行期间模式/限流/触觉参数应用按钮禁用，并显示需先停止。
 
-手动断开和关闭窗口，在持有 HOST 时先发送 STOP，异步等待至多 200 ms 后关闭；即使应答未返回也不能阻塞 GUI。最终兜底依靠固件 500 ms 心跳超时。串口断开的瞬间不显示“已安全停机”，只能显示连接丢失/状态未知。
+手动断开和关闭窗口，在持有 HOST 时先发送 STOP，异步等待至多 200 ms 后关闭；即使应答未返回也不能阻塞 GUI。最终兜底依靠固件 2000 ms 心跳超时。串口断开的瞬间不显示“已安全停机”，只能显示连接丢失/状态未知。
 
 ### 8.3 波形、单位和记录
 
@@ -437,6 +437,6 @@ P1/P2 新协议支持必须上下位机成对提交和验证；不能先发布�
 
 ## 12. 实施前约定
 
-本方案默认采用：Studio启动停机、显式控制权、停止后切模式、1.10 A会话默认限流、100 ms心跳/500 ms超时、200 Hz遥测、参数仅RAM生效。它们是拟议工程默认值，实施者应按本文实现并在台架验证后记录调整，不能把它们当作已确认的硬件安全规格。
+本方案当前采用：Studio启动停机、显式控制权、停止后切模式、1.10 A会话默认限流、100 ms心跳/2000 ms超时、200 Hz遥测、参数仅RAM生效。心跳超时为固件1.13.3针对长时间标定期间偶发USB/串口调度停顿的调整；断线后最迟约2秒停机。
 
 本文不要求重新实现已工作的FOC变换、电流PI、编码器DMA或参数辨识算法。改动重点是给现有系统增加一致的控制入口、协议、状态反馈和上位机工作流程。

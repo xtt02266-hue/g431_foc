@@ -24,11 +24,11 @@ static uint8_t friction_window_bad;
 static MotorCalSample control;
 static volatile uint32_t control_sequence, captured_sequence;
 static uint32_t point_samples, point_first_crc, point_first_transfer;
-static float point_iq_mean, point_iq_m2, point_actual_mean;
+static float point_iq_mean, point_iq_m2, point_actual_mean, point_abs_error_mean;
 static uint8_t point_sample_bad;
 
 static void reset_point_capture(void) {
-    point_samples=0U;point_iq_mean=point_iq_m2=point_actual_mean=0.0f;point_sample_bad=0U;
+    point_samples=0U;point_iq_mean=point_iq_m2=point_actual_mean=point_abs_error_mean=0.0f;point_sample_bad=0U;
 }
 static uint8_t point_averaging(void) { return point_policy && point_failed_attempts>=2U; }
 static uint32_t point_capture_ms(void) { return point_averaging()?MOTOR_CAL_POINT_AVERAGE_MS:MOTOR_CAL_POINT_CAPTURE_MS; }
@@ -40,6 +40,7 @@ static uint8_t point_capture_valid(void) {
     float tolerance=fmaxf(.003f,fabsf(point_iq_mean)*.25f);
     float variation=point_policy?fmaxf(.006f,fabsf(point_iq_mean)*.50f):tolerance;
     return point_samples>=point_capture_ms() && !point_sample_bad &&
+        (!point_averaging() || point_abs_error_mean<=MOTOR_CAL_POINT_MAX_ERROR_COUNTS) &&
         (point_averaging() || point_iq_m2/(float)point_samples<=variation*variation) &&
         fabsf(point_actual_mean-point_iq_mean)<=tolerance;
 }
@@ -59,13 +60,14 @@ void Motor_Calibration_Capture(uint16_t angle, float reference, float iq, float 
         float error=control_point_target-(float)angle;
         if (error>16384.0f) error-=32768.0f;
         if (error<-16384.0f) error+=32768.0f;
-        if (fabsf(error)>MOTOR_CAL_POINT_MAX_ERROR_COUNTS || !isfinite(sample.speed_rpm) ||
+        if ((!point_averaging() && fabsf(error)>MOTOR_CAL_POINT_MAX_ERROR_COUNTS) || !isfinite(sample.speed_rpm) ||
             fabsf(sample.speed_rpm)>1.0f || !isfinite(reference) || !isfinite(iq) || (sample.flags&15U) ||
             sample.sensor_status || sample.sensor_age_ms>2U ||
             fabsf(sample.friction_iq)>1e-6f || fabsf(sample.cogging_iq)>1e-6f) point_sample_bad=1U;
         if (!point_samples) { point_first_crc=sample.crc_errors;point_first_transfer=sample.transfer_errors; }
         else if (sample.crc_errors!=point_first_crc || sample.transfer_errors!=point_first_transfer) point_sample_bad=1U;
         ++point_samples;
+        point_abs_error_mean+=(fabsf(error)-point_abs_error_mean)/(float)point_samples;
         if (isfinite(reference) && isfinite(iq)) {
             float delta=reference-point_iq_mean;
             point_iq_mean+=delta/(float)point_samples;
@@ -304,7 +306,9 @@ void Motor_Calibration_StepPoint(uint16_t angle,float speed,uint16_t flags,uint8
         return; /* stability timer starts only after assist has been removed */
     }
     if (state.phase==CAL_CAPTURE) {
-        if (!stable) { reject_point_capture(); }
+        uint8_t capture_stable=fabsf(speed)<=1.0f && !flags &&
+            (point_averaging() || fabsf(error)<=MOTOR_CAL_POINT_MAX_ERROR_COUNTS);
+        if (!capture_stable) { reject_point_capture(); }
         else if (++stable_ticks>=point_capture_ms()) {
             if (!point_capture_valid()) {
                 reject_point_capture();
