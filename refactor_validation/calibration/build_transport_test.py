@@ -1,7 +1,7 @@
 """Extract the production queue/CRC functions for a native HAL simulation."""
 from pathlib import Path
 root=Path(__file__).resolve().parents[2]
-source=(root/'user/src/pc_protocol.c').read_text(encoding='utf-8')
+source=(root/'firmware/communication/pc_protocol.c').read_text(encoding='utf-8')
 def function(signature):
     start=source.index(signature);brace=source.index('{',start);depth=1;end=brace+1
     while depth:

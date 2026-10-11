@@ -25,8 +25,8 @@ static void __disable_irq(void) {}
 static void __enable_irq(void) {}
 void pid_reset(pid_controller_t *p) { p->integral=0;p->output=0;p->prev_error=0;p->prev_measure=p->measure; }
 '''
-source+=extract('user/src/motor_speed_loop.c','uint8_t motor_speed_loop_set_pi')+'\n'
-source+=extract('user/src/motor_system.c','motor_command_result_t motor_system_host_set_speed_pi')+'\n'
+source+=extract('firmware/control/motor_speed_loop.c','uint8_t motor_speed_loop_set_pi')+'\n'
+source+=extract('firmware/app/motor_host.c','uint8_t motor_system_host_set_speed_pi')+'\n'
 source+='''int main(void) {
  speed_pid=(pid_controller_t){.kp=.0003f,.ki=.006f,.target=60,.measure=55,.integral=.01f,.out_min=-.2f,.out_max=.2f};
  float old=speed_pid.kp*5+speed_pid.integral;

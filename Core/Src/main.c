@@ -33,7 +33,6 @@
 #include "motor_system.h"
 #include "motor_encoder_calibration.h"
 #include "motor_parameters.h"
-#include "motor_angle_reference.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -118,7 +117,6 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
     motor_parameters_background_task();
-    motor_angle_reference_background_task();
     pc_protocol_task();
     motor_encoder_cal_background_task();
   }

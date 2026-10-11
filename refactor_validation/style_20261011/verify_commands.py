@@ -167,7 +167,12 @@ def main():
     parser.add_argument('--baseline', type=Path, required=True)
     parser.add_argument('--current', type=Path, required=True)
     parser.add_argument('--report', type=Path, required=True)
+    parser.add_argument('--protocol-source', type=Path,
+                        default=ROOT/'firmware/communication/pc_protocol.c')
+    parser.add_argument('--sensored-only', action='store_true')
     args = parser.parse_args()
+    if args.sensored_only:
+        WATCHED.remove('g_sensorless')
     renames = json.loads((Path(__file__).parent / 'public_renames.json').read_text())
     baseline = Firmware(args.baseline, False, renames)
     current = Firmware(args.current, True, renames)
@@ -267,6 +272,8 @@ def main():
         ('motor_sensorless_configure',[.00005,1.,.0006,1,.05,.4,250.,12000.,8000.,.30,100,250,4]),
         ('motor_identify_use_result',[2.,.001,14,.3,-1]),
     ]:
+        if args.sensored_only and name=='motor_sensorless_configure':
+            continue
         fields=manifest[name]['fields']
         cases=[defaults_values]
         for index,(kind,_) in enumerate(fields):
@@ -321,7 +328,7 @@ def main():
               [('uint8_t',1),('uint16_t',plays)],setup=setup)
 
     # Execute the actual protocol dispatcher and response serializer; replace only DMA queue handoff.
-    protocol = (ROOT/'user/src/pc_protocol.c').read_text(encoding='utf-8')
+    protocol = args.protocol_source.read_text(encoding='utf-8')
     commands = {name:int(value,0) for name,value in re.findall(r'\b(CMD_\w+)\s*=\s*(0x[0-9A-Fa-f]+|\d+)',protocol)}
     bodies = {
         'CMD_SET_MODE': bytes([1,1]),

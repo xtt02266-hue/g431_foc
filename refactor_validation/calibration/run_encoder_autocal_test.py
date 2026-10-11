@@ -31,5 +31,5 @@ args=parser.parse_args()
 if not args.zig: parser.error('Zig is required: add zig to PATH or pass --zig /path/to/zig')
 zig=args.zig
 exe=root/'.codex_tmp/encoder_autocal_test.exe'
-subprocess.run([zig,'cc','-std=c11','-O1','-UNDEBUG','-I'+str(shim),'-I'+str(root/'user/inc'),str(root/'user/src/motor_encoder_calibration.c'),str(driver),'-o',str(exe)],check=True)
+subprocess.run([zig,'cc','-std=c11','-O1','-UNDEBUG','-I'+str(shim),*['-I'+str(folder) for folder in (root/'firmware').iterdir() if folder.is_dir()],str(root/'firmware/calibration/motor_encoder_calibration.c'),str(driver),'-o',str(exe)],check=True)
 subprocess.run([str(exe)],check=True)

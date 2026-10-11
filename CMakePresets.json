@@ -6,9 +6,8 @@
             "hidden": true,
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build/${presetName}",
-		    "toolchainFile": "${sourceDir}/cmake/gcc-arm-none-eabi.cmake",
-            "cacheVariables": {
-            }
+            "toolchainFile": "${sourceDir}/cmake/gcc-arm-none-eabi.cmake",
+            "cacheVariables": {}
         },
         {
             "name": "Debug",
@@ -20,12 +19,7 @@
         {
             "name": "sensored-debug",
             "inherits": "Debug",
-            "cacheVariables": { "FOC_PROFILE": "sensored" }
-        },
-        {
-            "name": "sensorless-debug",
-            "inherits": "Debug",
-            "cacheVariables": { "FOC_PROFILE": "sensorless" }
+            "cacheVariables": {}
         },
         {
             "name": "Release",
@@ -39,10 +33,6 @@
         {
             "name": "sensored-debug",
             "configurePreset": "sensored-debug"
-        },
-        {
-            "name": "sensorless-debug",
-            "configurePreset": "sensorless-debug"
         },
         {
             "name": "Debug",

@@ -8,7 +8,7 @@ parser=argparse.ArgumentParser(description='Verify production encoder SPI access
 parser.add_argument('--zig', default=shutil.which('zig'))
 args=parser.parse_args()
 if not args.zig: parser.error('Zig is required: add zig to PATH or pass --zig /path/to/zig')
-source=(root/'user/src/mt6826s.c').read_text(encoding='utf-8')
+source=(root/'firmware/drivers/mt6826s.c').read_text(encoding='utf-8')
 def function(signature):
     a=source.index(signature);b=source.index('{',a)+1;depth=1
     while depth:

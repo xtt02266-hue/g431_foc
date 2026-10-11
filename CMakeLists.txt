@@ -23,13 +23,6 @@ set(CMAKE_PROJECT_NAME g431_foc)
 
 # Enable compile command to ease indexing with e.g. clangd
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
-include(cmake/development-profile.cmake)
-set(FOC_PROFILE "${FOC_DEFAULT_PROFILE}" CACHE STRING "sensored or sensorless")
-set_property(CACHE FOC_PROFILE PROPERTY STRINGS sensored sensorless)
-if(NOT FOC_PROFILE MATCHES "^(sensored|sensorless)$")
-    message(FATAL_ERROR "FOC_PROFILE must be sensored or sensorless")
-endif()
-
 # Core project settings
 project(${CMAKE_PROJECT_NAME})
 message("Build type: " ${CMAKE_BUILD_TYPE})
@@ -50,41 +43,51 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-    user/src/motor_angle_reference.c
-    user/src/hardware_init.c
-    user/src/motor_current_loop.c
-    user/src/motor_cogging.c
-    user/src/motor_calibration.c
-    user/src/motor_feedforward.c
-    user/src/motor_friction_storage.c
-    user/src/motor_identify.c
-    user/src/motor_music.c
-    user/src/motor_parameters.c
-    user/src/motor_position_loop.c
-    user/src/motor_speed_loop.c
-    user/src/motor_system.c
-    user/src/motor_songs.c
-    user/src/motor_trajectory.c
-    user/src/mt6826s.c
-    user/src/motor_encoder.c
-    user/src/motor_encoder_calibration.c
-    user/src/pid.c
-    user/src/pc_protocol.c
-    user/src/svpwm.c
-    user/src/user_io.c
-    user/src/vofa_usart.c
+    firmware/platform/hardware_init.c
+    firmware/control/motor_current_loop.c
+    firmware/compensation/motor_cogging.c
+    firmware/calibration/motor_calibration.c
+    firmware/compensation/motor_friction.c
+    firmware/compensation/motor_friction_storage.c
+    firmware/calibration/motor_identify.c
+    firmware/music/motor_music.c
+    firmware/calibration/motor_parameters.c
+    firmware/control/motor_position_loop.c
+    firmware/control/motor_speed_loop.c
+    firmware/app/motor_system.c
+    firmware/app/motor_calibration_session.c
+    firmware/app/motor_control.c
+    firmware/app/motor_host.c
+    firmware/app/motor_haptic.c
+    firmware/app/motor_modes.c
+    firmware/app/motor_runtime.c
+    firmware/app/private/motor_context.c
+    firmware/music/motor_songs.c
+    firmware/control/motor_trajectory.c
+    firmware/drivers/mt6826s.c
+    firmware/drivers/motor_encoder.c
+    firmware/calibration/motor_encoder_calibration.c
+    firmware/algorithm/pid.c
+    firmware/communication/pc_protocol.c
+    firmware/control/svpwm.c
+    firmware/drivers/user_io.c
+    firmware/communication/vofa_usart.c
 )
 
 # Add include paths
-if(FOC_PROFILE STREQUAL "sensorless")
-    target_sources(${CMAKE_PROJECT_NAME} PRIVATE user/src/as5600.c)
-    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE FOC_PROFILE_SENSORLESS=1)
-else()
-    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE FOC_PROFILE_SENSORLESS=0)
-endif()
-message(STATUS "FOC development profile: ${FOC_PROFILE}")
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
-    user/inc
+    firmware/app
+    firmware/app/private
+    firmware/platform
+    firmware/control
+    firmware/compensation
+    firmware/calibration
+    firmware/drivers
+    firmware/communication
+    firmware/music
+    firmware/algorithm
+    firmware/config
+    firmware/diagnostics
 )
 
 # Add project symbols (macros)

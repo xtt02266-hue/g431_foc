@@ -9,6 +9,7 @@ tmp_haptic_*/
 tmp_studio_opt/
 calibration_results/
 encoder_calibration_runs/
+refactor_validation/architecture_20261011/*_equivalence.json
 __pycache__/
 *.pyc
 *.pdb

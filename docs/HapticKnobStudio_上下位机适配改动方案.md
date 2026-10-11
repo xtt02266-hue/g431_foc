@@ -27,7 +27,7 @@
 
 ### 2.1 遥测现状
 
-USART2 配置为 921600、8N1。`user/inc/vofa_usart.h` 定义 `VOFA_TX_MAX_FLOAT_COUNT=7U`；`user/src/motor_debug.c` 实际发送以下 7 路：
+USART2 配置为 921600、8N1。`firmware/communication/vofa_usart.h` 定义 `VOFA_TX_MAX_FLOAT_COUNT=7U`；`firmware/diagnostics/motor_debug.c` 实际发送以下 7 路：
 
 | CH | 字段 | 单位 | 固件来源 |
 |---|---|---|---|

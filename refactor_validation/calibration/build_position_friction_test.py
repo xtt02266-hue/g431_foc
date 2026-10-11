@@ -9,7 +9,7 @@ s='''#include <assert.h>
 #include <stdio.h>
 #include <stdint.h>
 #include "pid.h"
-#include "motor_feedforward.h"
+#include "motor_friction.h"
 #define MOTOR_ENCODER_HALF_REV_F 16384.0f
 #define MOTOR_ENCODER_COUNTS_PER_REV_F 32768.0f
 #define MOTOR_SPEED_PID_OUT_MAX .1f
@@ -34,11 +34,11 @@ static unsigned motor_calibration_point_assist(void) { return assist; }
 static void motor_speed_loop_set_target(float target) { speed_pid.target=target; }
 static float motor_speed_loop_update(float current) { (void)current;return fmaxf(speed_pid.out_min,fminf(speed_pid.out_max,pi_output)); }
 '''
-s+=function('user/src/motor_feedforward.c','static float motor_feedforward_clamp_float')+'\n'
-s+=function('user/src/motor_feedforward.c','uint8_t motor_feedforward_is_friction_config_valid')+'\n'
-s+=function('user/src/motor_feedforward.c','float motor_feedforward_friction_with_config')+'\n'
-s+=function('user/src/motor_feedforward.c','float motor_feedforward_friction_compensation')+'\n'
-s+=function('user/src/motor_system.c','static void motor_system_run_position_mode')+'\n'
+s+=function('firmware/compensation/motor_friction.c','static float motor_feedforward_clamp_float')+'\n'
+s+=function('firmware/compensation/motor_friction.c','uint8_t motor_feedforward_is_friction_config_valid')+'\n'
+s+=function('firmware/compensation/motor_friction.c','float motor_feedforward_friction_with_config')+'\n'
+s+=function('firmware/compensation/motor_friction.c','float motor_feedforward_friction_compensation')+'\n'
+s+=function('firmware/app/motor_modes.c','void motor_system_run_position_mode')+'\n'
 s+='''int main(void) {
  desired_speed=60;pi_output=0;motor_system_run_position_mode(100,0);
  assert(speed_pid.target==-60 && g_debug_friction_iq_a<-.03f);

@@ -340,7 +340,7 @@
               <MiscControls></MiscControls>
               <Define>USE_HAL_DRIVER,STM32G431xx</Define>
               <Undefine></Undefine>
-              <IncludePath>../Core/Inc;../Drivers/STM32G4xx_HAL_Driver/Inc;../Drivers/STM32G4xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32G4xx/Include;../Drivers/CMSIS/Include;../user/inc</IncludePath>
+              <IncludePath>../Core/Inc;../Drivers/STM32G4xx_HAL_Driver/Inc;../Drivers/STM32G4xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32G4xx/Include;../Drivers/CMSIS/Include;../firmware/app;../firmware/app/private;../firmware/platform;../firmware/control;../firmware/compensation;../firmware/calibration;../firmware/drivers;../firmware/communication;../firmware/music;../firmware/algorithm;../firmware/config;../firmware/diagnostics</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -1280,162 +1280,400 @@
             </File>
           </Files>
         </Group>
+
         <Group>
-          <GroupName>user</GroupName>
+          <GroupName>::CMSIS</GroupName>
+        </Group>
+
+
+
+
+
+
+
+
+
+
+
+
+
+              <Group>
+          <GroupName>Firmware/algorithm</GroupName>
           <Files>
             <File>
-              <FileName>motor_encoder.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\user\inc\motor_encoder.h</FilePath>
-            </File>
-            <File>
-              <FileName>hardware_init.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\user\inc\hardware_init.h</FilePath>
-            </File>
-            <File>
-              <FileName>motor_current_loop.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\user\inc\motor_current_loop.h</FilePath>
-            </File>
-            <File>
-              <FileName>motor_identify.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\user\inc\motor_identify.h</FilePath>
-            </File>
-            <File>
-              <FileName>motor_system.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\user\inc\motor_system.h</FilePath>
-            </File>
-            <File>
-              <FileName>oled.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\user\inc\oled.h</FilePath>
-            </File>
-            <File>
-              <FileName>oled_font.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\user\inc\oled_font.h</FilePath>
+              <FileName>pid.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\firmware\algorithm\pid.c</FilePath>
             </File>
             <File>
               <FileName>pid.h</FileName>
               <FileType>5</FileType>
-              <FilePath>..\user\inc\pid.h</FilePath>
+              <FilePath>..\firmware\algorithm\pid.h</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Firmware/app</GroupName>
+          <Files>
+            <File>
+              <FileName>motor_calibration_session.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\firmware\app\motor_calibration_session.c</FilePath>
             </File>
             <File>
-              <FileName>motor_debug.h</FileName>
+              <FileName>motor_control.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\firmware\app\motor_control.c</FilePath>
+            </File>
+            <File>
+              <FileName>motor_control.h</FileName>
               <FileType>5</FileType>
-              <FilePath>..\user\inc\motor_debug.h</FilePath>
+              <FilePath>..\firmware\app\motor_control.h</FilePath>
             </File>
             <File>
-              <FileName>pc_protocol.h</FileName>
+              <FileName>motor_haptic.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\firmware\app\motor_haptic.c</FilePath>
+            </File>
+            <File>
+              <FileName>motor_host.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\firmware\app\motor_host.c</FilePath>
+            </File>
+            <File>
+              <FileName>motor_host.h</FileName>
               <FileType>5</FileType>
-              <FilePath>..\user\inc\pc_protocol.h</FilePath>
+              <FilePath>..\firmware\app\motor_host.h</FilePath>
             </File>
             <File>
-              <FileName>user_io.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\user\inc\user_io.h</FilePath>
-            </File>
-            <File>
-              <FileName>motor_encoder.c</FileName>
+              <FileName>motor_modes.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\user\src\motor_encoder.c</FilePath>
+              <FilePath>..\firmware\app\motor_modes.c</FilePath>
             </File>
             <File>
-              <FileName>hardware_init.c</FileName>
+              <FileName>motor_runtime.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\user\src\hardware_init.c</FilePath>
-            </File>
-            <File>
-              <FileName>motor_current_loop.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\user\src\motor_current_loop.c</FilePath>
-            </File>
-            <File>
-              <FileName>motor_debug.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\user\src\motor_debug.c</FilePath>
-            </File>
-            <File>
-              <FileName>pc_protocol.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\user\src\pc_protocol.c</FilePath>
-            </File>
-            <File>
-              <FileName>motor_identify.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\user\src\motor_identify.c</FilePath>
+              <FilePath>..\firmware\app\motor_runtime.c</FilePath>
             </File>
             <File>
               <FileName>motor_system.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\user\src\motor_system.c</FilePath>
+              <FilePath>..\firmware\app\motor_system.c</FilePath>
             </File>
             <File>
-              <FileName>oled.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\user\src\oled.c</FilePath>
+              <FileName>motor_system.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\firmware\app\motor_system.h</FilePath>
             </File>
             <File>
-              <FileName>pid.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\user\src\pid.c</FilePath>
+              <FileName>motor_types.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\firmware\app\motor_types.h</FilePath>
             </File>
             <File>
-              <FileName>user_io.c</FileName>
+              <FileName>motor_context.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\user\src\user_io.c</FilePath>
+              <FilePath>..\firmware\app\private\motor_context.c</FilePath>
+            </File>
+            <File>
+              <FileName>motor_context.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\firmware\app\private\motor_context.h</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Firmware/calibration</GroupName>
+          <Files>
+            <File>
+              <FileName>motor_calibration.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\firmware\calibration\motor_calibration.c</FilePath>
+            </File>
+            <File>
+              <FileName>motor_calibration.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\firmware\calibration\motor_calibration.h</FilePath>
+            </File>
+            <File>
+              <FileName>motor_encoder_calibration.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\firmware\calibration\motor_encoder_calibration.c</FilePath>
+            </File>
+            <File>
+              <FileName>motor_encoder_calibration.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\firmware\calibration\motor_encoder_calibration.h</FilePath>
+            </File>
+            <File>
+              <FileName>motor_identify.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\firmware\calibration\motor_identify.c</FilePath>
+            </File>
+            <File>
+              <FileName>motor_identify.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\firmware\calibration\motor_identify.h</FilePath>
+            </File>
+            <File>
+              <FileName>motor_parameters.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\firmware\calibration\motor_parameters.c</FilePath>
+            </File>
+            <File>
+              <FileName>motor_parameters.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\firmware\calibration\motor_parameters.h</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Firmware/communication</GroupName>
+          <Files>
+            <File>
+              <FileName>pc_protocol.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\firmware\communication\pc_protocol.c</FilePath>
+            </File>
+            <File>
+              <FileName>pc_protocol.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\firmware\communication\pc_protocol.h</FilePath>
             </File>
             <File>
               <FileName>vofa_usart.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\user\src\vofa_usart.c</FilePath>
+              <FilePath>..\firmware\communication\vofa_usart.c</FilePath>
             </File>
             <File>
-              <FileName>svpwm.h</FileName>
+              <FileName>vofa_usart.h</FileName>
               <FileType>5</FileType>
-              <FilePath>..\user\inc\svpwm.h</FilePath>
+              <FilePath>..\firmware\communication\vofa_usart.h</FilePath>
             </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Firmware/compensation</GroupName>
+          <Files>
             <File>
-              <FileName>svpwm.c</FileName>
+              <FileName>motor_cogging.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\user\src\svpwm.c</FilePath>
+              <FilePath>..\firmware\compensation\motor_cogging.c</FilePath>
             </File>
             <File>
-              <FileName>motor_speed_loop.h</FileName>
+              <FileName>motor_cogging.h</FileName>
               <FileType>5</FileType>
-              <FilePath>..\user\inc\motor_speed_loop.h</FilePath>
+              <FilePath>..\firmware\compensation\motor_cogging.h</FilePath>
             </File>
             <File>
-              <FileName>motor_speed_loop.c</FileName>
+              <FileName>motor_friction.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\user\src\motor_speed_loop.c</FilePath>
+              <FilePath>..\firmware\compensation\motor_friction.c</FilePath>
             </File>
             <File>
-              <FileName>motor_position_loop.h</FileName>
+              <FileName>motor_friction.h</FileName>
               <FileType>5</FileType>
-              <FilePath>..\user\inc\motor_position_loop.h</FilePath>
+              <FilePath>..\firmware\compensation\motor_friction.h</FilePath>
+            </File>
+            <File>
+              <FileName>motor_friction_storage.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\firmware\compensation\motor_friction_storage.c</FilePath>
+            </File>
+            <File>
+              <FileName>motor_friction_storage.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\firmware\compensation\motor_friction_storage.h</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Firmware/config</GroupName>
+          <Files>
+            <File>
+              <FileName>motor_config.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\firmware\config\motor_config.h</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Firmware/control</GroupName>
+          <Files>
+            <File>
+              <FileName>motor_current_loop.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\firmware\control\motor_current_loop.c</FilePath>
+            </File>
+            <File>
+              <FileName>motor_current_loop.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\firmware\control\motor_current_loop.h</FilePath>
             </File>
             <File>
               <FileName>motor_position_loop.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\user\src\motor_position_loop.c</FilePath>
+              <FilePath>..\firmware\control\motor_position_loop.c</FilePath>
             </File>
-            <File><FileName>mt6826s.h</FileName><FileType>5</FileType><FilePath>..\user\inc\mt6826s.h</FilePath></File>
-            <File><FileName>mt6826s.c</FileName><FileType>1</FileType><FilePath>..\user\src\mt6826s.c</FilePath></File>
-            <File><FileName>motor_cogging.c</FileName><FileType>1</FileType><FilePath>..\user\src\motor_cogging.c</FilePath></File>
-            <File><FileName>motor_feedforward.c</FileName><FileType>1</FileType><FilePath>..\user\src\motor_feedforward.c</FilePath></File>
-            <File><FileName>motor_music.c</FileName><FileType>1</FileType><FilePath>..\user\src\motor_music.c</FilePath></File>
-            <File><FileName>motor_parameters.c</FileName><FileType>1</FileType><FilePath>..\user\src\motor_parameters.c</FilePath></File>
-            <File><FileName>motor_sensorless.c</FileName><FileType>1</FileType><FilePath>..\user\src\motor_sensorless.c</FilePath></File>
-            <File><FileName>motor_songs.c</FileName><FileType>1</FileType><FilePath>..\user\src\motor_songs.c</FilePath></File>
-            <File><FileName>motor_trajectory.c</FileName><FileType>1</FileType><FilePath>..\user\src\motor_trajectory.c</FilePath></File>
+            <File>
+              <FileName>motor_position_loop.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\firmware\control\motor_position_loop.h</FilePath>
+            </File>
+            <File>
+              <FileName>motor_speed_loop.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\firmware\control\motor_speed_loop.c</FilePath>
+            </File>
+            <File>
+              <FileName>motor_speed_loop.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\firmware\control\motor_speed_loop.h</FilePath>
+            </File>
+            <File>
+              <FileName>motor_trajectory.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\firmware\control\motor_trajectory.c</FilePath>
+            </File>
+            <File>
+              <FileName>motor_trajectory.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\firmware\control\motor_trajectory.h</FilePath>
+            </File>
+            <File>
+              <FileName>svpwm.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\firmware\control\svpwm.c</FilePath>
+            </File>
+            <File>
+              <FileName>svpwm.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\firmware\control\svpwm.h</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
-          <GroupName>::CMSIS</GroupName>
+          <GroupName>Firmware/diagnostics</GroupName>
+          <Files>
+            <File>
+              <FileName>motor_debug.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\firmware\diagnostics\motor_debug.c</FilePath>
+              <FileOption>
+                <CommonProperty>
+                  <IncludeInBuild>0</IncludeInBuild>
+                </CommonProperty>
+              </FileOption>
+            </File>
+            <File>
+              <FileName>motor_debug.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\firmware\diagnostics\motor_debug.h</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Firmware/drivers</GroupName>
+          <Files>
+            <File>
+              <FileName>motor_encoder.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\firmware\drivers\motor_encoder.c</FilePath>
+            </File>
+            <File>
+              <FileName>motor_encoder.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\firmware\drivers\motor_encoder.h</FilePath>
+            </File>
+            <File>
+              <FileName>mt6826s.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\firmware\drivers\mt6826s.c</FilePath>
+            </File>
+            <File>
+              <FileName>mt6826s.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\firmware\drivers\mt6826s.h</FilePath>
+            </File>
+            <File>
+              <FileName>oled.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\firmware\drivers\oled.c</FilePath>
+              <FileOption>
+                <CommonProperty>
+                  <IncludeInBuild>0</IncludeInBuild>
+                </CommonProperty>
+              </FileOption>
+            </File>
+            <File>
+              <FileName>oled.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\firmware\drivers\oled.h</FilePath>
+            </File>
+            <File>
+              <FileName>oled_font.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\firmware\drivers\oled_font.h</FilePath>
+            </File>
+            <File>
+              <FileName>user_io.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\firmware\drivers\user_io.c</FilePath>
+            </File>
+            <File>
+              <FileName>user_io.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\firmware\drivers\user_io.h</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Firmware/music</GroupName>
+          <Files>
+            <File>
+              <FileName>motor_music.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\firmware\music\motor_music.c</FilePath>
+            </File>
+            <File>
+              <FileName>motor_music.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\firmware\music\motor_music.h</FilePath>
+            </File>
+            <File>
+              <FileName>motor_songs.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\firmware\music\motor_songs.c</FilePath>
+            </File>
+            <File>
+              <FileName>motor_songs.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\firmware\music\motor_songs.h</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Firmware/platform</GroupName>
+          <Files>
+            <File>
+              <FileName>hardware_init.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\firmware\platform\hardware_init.c</FilePath>
+            </File>
+            <File>
+              <FileName>hardware_init.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\firmware\platform\hardware_init.h</FilePath>
+            </File>
+          </Files>
+        </Group>
+              <Group>
+          <GroupName>Generated build dependencies</GroupName>
+          <Files>
+            <File><FileName>spi.c</FileName><FileType>1</FileType><FilePath>..\Core\Src\spi.c</FilePath></File>
+            <File><FileName>stm32g4xx_hal_spi.c</FileName><FileType>1</FileType><FilePath>..\Drivers\STM32G4xx_HAL_Driver\Src\stm32g4xx_hal_spi.c</FilePath></File>
+            <File><FileName>stm32g4xx_hal_spi_ex.c</FileName><FileType>1</FileType><FilePath>..\Drivers\STM32G4xx_HAL_Driver\Src\stm32g4xx_hal_spi_ex.c</FilePath></File>
+          </Files>
         </Group>
       </Groups>
     </Target>

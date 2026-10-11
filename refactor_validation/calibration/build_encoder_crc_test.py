@@ -20,12 +20,12 @@ static uint8_t g_encoder_has_sample;
 static uint32_t HAL_GetTick(void) { return now; }
 static void mt6826s_unselect(void) {}
 '''
-for path,signature in [('user/src/mt6826s.c','static uint8_t mt6826s_calculate_crc8'),
-                       ('user/src/mt6826s.c','uint8_t mt6826s_is_ok'),
-                       ('user/src/motor_encoder.c','void motor_encoder_on_sample'),
-                       ('user/src/motor_encoder.c','uint8_t motor_encoder_is_data_fresh'),
-                       ('user/src/mt6826s.c','void HAL_SPI_TxRxCpltCallback'),
-                       ('user/src/mt6826s.c','void HAL_SPI_ErrorCallback')]:s+=function(path,signature)+'\n'
+for path,signature in [('firmware/drivers/mt6826s.c','static uint8_t mt6826s_calculate_crc8'),
+                       ('firmware/drivers/mt6826s.c','uint8_t mt6826s_is_ok'),
+                       ('firmware/drivers/motor_encoder.c','void motor_encoder_on_sample'),
+                       ('firmware/drivers/motor_encoder.c','uint8_t motor_encoder_is_data_fresh'),
+                       ('firmware/drivers/mt6826s.c','void HAL_SPI_TxRxCpltCallback'),
+                       ('firmware/drivers/mt6826s.c','void HAL_SPI_ErrorCallback')]:s+=function(path,signature)+'\n'
 s+='''int main(void) {
  now=100;g_mt6826s_rx[2]=128;g_mt6826s_rx[3]=2;
  g_mt6826s_rx[5]=mt6826s_calculate_crc8(g_mt6826s_rx+2,3)^1;
