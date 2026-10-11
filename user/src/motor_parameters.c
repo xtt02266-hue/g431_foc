@@ -11,15 +11,14 @@
 #include <stdint.h>
 #include <string.h>
 
-#define MOTOR_PARAMETERS_FLASH_MAGIC       0x4D504152UL
-#define MOTOR_PARAMETERS_FLASH_VERSION     3U
-#define MOTOR_PARAMETERS_MAX_RESISTANCE    100.0f
-#define MOTOR_PARAMETERS_MAX_INDUCTANCE    1.0f
-#define MOTOR_PARAMETERS_TWO_PI            6.2831854f
-#define MOTOR_PARAMETERS_MAX_POLE_PAIRS    64U
+#define MOTOR_PARAMETERS_FLASH_MAGIC    0x4D504152UL // 电机参数 Flash 记录标识 MPAR
+#define MOTOR_PARAMETERS_FLASH_VERSION  3U           // 现有电机参数记录版本；不迁移存储格式
+#define MOTOR_PARAMETERS_MAX_RESISTANCE 100.0f       // 保存参数的电阻检查上限，单位 Ω
+#define MOTOR_PARAMETERS_MAX_INDUCTANCE 1.0f         // 保存参数的电感检查上限，单位 H
+#define MOTOR_PARAMETERS_TWO_PI         6.2831854f   // 参数零角检查用的一圈 rad，保留原浮点精度
+#define MOTOR_PARAMETERS_MAX_POLE_PAIRS 64U          // 可保存极对数上限
 
-typedef struct
-{
+typedef struct {
     uint32_t magic;
     uint16_t version;
     uint16_t record_size;
@@ -29,18 +28,21 @@ typedef struct
     uint32_t pole_pairs;
     int32_t uvw_dir;
     uint32_t crc32;
-} MotorParametersFlashRecord;
+} motor_parameters_flash_record_t;
 
-_Static_assert((sizeof(MotorParametersFlashRecord) % 8U) == 0U,
-               "Flash record must be double-word aligned");
+_Static_assert((sizeof(motor_parameters_flash_record_t) % 8U) == 0U, "Flash record must be double-word aligned");
 
 extern uint8_t __motor_params_flash_start__;
 
-static volatile MotorParametersStatus g_parameters_status = MOTOR_PARAMETERS_NO_DATA;
+/* 1 ms 参数路径推进辨识状态，前台完成 Flash 保存。
+ * 状态/已保存标志供系统门控读取，沿用原发布方式；参数记录版本及字段顺序保持不变。
+ */
+static volatile motor_parameters_status_t g_parameters_status = MOTOR_PARAMETERS_NO_DATA;
 static volatile uint8_t g_has_stored_data = 0U;
 static uint8_t g_auto_identify_pending = 0U;
 
-static uint32_t Motor_Parameters_Crc32(const void *data, size_t length)
+// 对参数记录的明确字节范围计算反射 CRC-32；不包含记录尾部 CRC 字段。
+static uint32_t motor_parameters_crc32(const void *data, size_t length)
 {
     const uint8_t *bytes = (const uint8_t *)data;
     uint32_t crc = 0xFFFFFFFFUL;
@@ -56,55 +58,49 @@ static uint32_t Motor_Parameters_Crc32(const void *data, size_t length)
     return ~crc;
 }
 
-static uint8_t Motor_Parameters_AreValuesValid(const MotorIdentifiedParams *params)
+// 检查 R（Ω）、L（H）、极对数、零角 rad 和 UVW 方向；无效返回 0。
+static uint8_t motor_parameters_are_values_valid(const motor_identified_params_t *params)
 {
     if (params == NULL) {
         return 0U;
     }
 
-    if (!((params->resistance > 0.0f) &&
-          (params->resistance <= MOTOR_PARAMETERS_MAX_RESISTANCE))) {
+    if (!((params->resistance > 0.0f) && (params->resistance <= MOTOR_PARAMETERS_MAX_RESISTANCE))) {
         return 0U;
     }
 
-    if (!((params->inductance > 0.0f) &&
-          (params->inductance <= MOTOR_PARAMETERS_MAX_INDUCTANCE))) {
+    if (!((params->inductance > 0.0f) && (params->inductance <= MOTOR_PARAMETERS_MAX_INDUCTANCE))) {
         return 0U;
     }
 
-    if ((params->pole_pairs == 0U) ||
-        (params->pole_pairs > MOTOR_PARAMETERS_MAX_POLE_PAIRS)) {
+    if ((params->pole_pairs == 0U) || (params->pole_pairs > MOTOR_PARAMETERS_MAX_POLE_PAIRS)) {
         return 0U;
     }
 
-    if (!((params->zero_angle_offset >= 0.0f) &&
-          (params->zero_angle_offset < MOTOR_PARAMETERS_TWO_PI))) {
+    if (!((params->zero_angle_offset >= 0.0f) && (params->zero_angle_offset < MOTOR_PARAMETERS_TWO_PI))) {
         return 0U;
     }
 
     return ((params->uvw_dir == 1) || (params->uvw_dir == -1)) ? 1U : 0U;
 }
 
-static uint8_t Motor_Parameters_DecodeRecord(
-    const MotorParametersFlashRecord *record,
-    MotorIdentifiedParams *params)
+// 按版本、记录大小和 CRC 验证 Flash 记录，再恢复电机参数。
+static uint8_t motor_parameters_decode_record(const motor_parameters_flash_record_t *record,
+                                              motor_identified_params_t *params)
 {
     uint32_t expected_crc;
 
-    if ((record->magic != MOTOR_PARAMETERS_FLASH_MAGIC) ||
-        (record->version != MOTOR_PARAMETERS_FLASH_VERSION) ||
-        (record->record_size != sizeof(MotorParametersFlashRecord))) {
+    if ((record->magic != MOTOR_PARAMETERS_FLASH_MAGIC) || (record->version != MOTOR_PARAMETERS_FLASH_VERSION) ||
+        (record->record_size != sizeof(motor_parameters_flash_record_t))) {
         return 0U;
     }
 
-    expected_crc = Motor_Parameters_Crc32(
-        record, offsetof(MotorParametersFlashRecord, crc32));
+    expected_crc = motor_parameters_crc32(record, offsetof(motor_parameters_flash_record_t, crc32));
     if (record->crc32 != expected_crc) {
         return 0U;
     }
 
-    if ((record->pole_pairs == 0U) ||
-        (record->pole_pairs > MOTOR_PARAMETERS_MAX_POLE_PAIRS) ||
+    if ((record->pole_pairs == 0U) || (record->pole_pairs > MOTOR_PARAMETERS_MAX_POLE_PAIRS) ||
         ((record->uvw_dir != 1) && (record->uvw_dir != -1))) {
         return 0U;
     }
@@ -115,40 +111,41 @@ static uint8_t Motor_Parameters_DecodeRecord(
     params->pole_pairs = (uint16_t)record->pole_pairs;
     params->uvw_dir = (int8_t)record->uvw_dir;
 
-    return Motor_Parameters_AreValuesValid(params);
+    return motor_parameters_are_values_valid(params);
 }
 
-static uint8_t Motor_Parameters_Load(MotorIdentifiedParams *params)
+// 从电机参数专属 Flash 区加载记录；失败不会伪造有效辨识结果。
+static uint8_t motor_parameters_load(motor_identified_params_t *params)
 {
-    MotorParametersFlashRecord record;
+    motor_parameters_flash_record_t record;
     const void *flash_address = (const void *)(uintptr_t)&__motor_params_flash_start__;
 
     memcpy(&record, flash_address, sizeof(record));
-    return Motor_Parameters_DecodeRecord(&record, params);
+    return motor_parameters_decode_record(&record, params);
 }
 
-static uint8_t Motor_Parameters_Save(const MotorIdentifiedParams *params)
+// 擦写并回读校验电机参数记录；仅在原有前台保存路径执行。
+static uint8_t motor_parameters_save(const motor_identified_params_t *params)
 {
-    MotorParametersFlashRecord record = {0};
+    motor_parameters_flash_record_t record = {0};
     FLASH_EraseInitTypeDef erase = {0};
     uint32_t page_error = 0U;
     uint32_t flash_address = (uint32_t)(uintptr_t)&__motor_params_flash_start__;
     HAL_StatusTypeDef result;
 
-    if (Motor_Parameters_AreValuesValid(params) == 0U) {
+    if (motor_parameters_are_values_valid(params) == 0U) {
         return 0U;
     }
 
     record.magic = MOTOR_PARAMETERS_FLASH_MAGIC;
     record.version = MOTOR_PARAMETERS_FLASH_VERSION;
-    record.record_size = sizeof(MotorParametersFlashRecord);
+    record.record_size = sizeof(motor_parameters_flash_record_t);
     record.resistance = params->resistance;
     record.inductance = params->inductance;
     record.zero_angle_offset = params->zero_angle_offset;
     record.pole_pairs = params->pole_pairs;
     record.uvw_dir = params->uvw_dir;
-    record.crc32 = Motor_Parameters_Crc32(
-        &record, offsetof(MotorParametersFlashRecord, crc32));
+    record.crc32 = motor_parameters_crc32(&record, offsetof(motor_parameters_flash_record_t, crc32));
 
     if (HAL_FLASH_Unlock() != HAL_OK) {
         return 0U;
@@ -161,15 +158,11 @@ static uint8_t Motor_Parameters_Save(const MotorIdentifiedParams *params)
     result = HAL_FLASHEx_Erase(&erase, &page_error);
 
     if (result == HAL_OK) {
-        for (uint32_t offset = 0U;
-             offset < sizeof(MotorParametersFlashRecord);
-             offset += 8U) {
+        for (uint32_t offset = 0U; offset < sizeof(motor_parameters_flash_record_t); offset += 8U) {
             uint64_t double_word;
 
             memcpy(&double_word, ((const uint8_t *)&record) + offset, sizeof(double_word));
-            result = HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD,
-                                       flash_address + offset,
-                                       double_word);
+            result = HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, flash_address + offset, double_word);
             if (result != HAL_OK) {
                 break;
             }
@@ -182,97 +175,95 @@ static uint8_t Motor_Parameters_Save(const MotorIdentifiedParams *params)
         return 0U;
     }
 
-    return (memcmp((const void *)(uintptr_t)flash_address,
-                   &record,
-                   sizeof(record)) == 0) ? 1U : 0U;
+    return (memcmp((const void *)(uintptr_t)flash_address, &record, sizeof(record)) == 0) ? 1U : 0U;
 }
 
-void Motor_Parameters_Init(void)
+// 初始化参数状态并尝试加载 Flash；沿用既有自动辨识配置。
+void motor_parameters_init(void)
 {
-    MotorIdentifiedParams params;
+    motor_identified_params_t params;
 
-    if (Motor_Parameters_Load(&params) != 0U) {
-        Motor_Identify_UseResult(&params);
+    if (motor_parameters_load(&params) != 0U) {
+        motor_identify_use_result(params.resistance, params.inductance, params.pole_pairs, params.zero_angle_offset,
+                                  params.uvw_dir);
         g_has_stored_data = 1U;
         g_auto_identify_pending = 0U;
         g_parameters_status = MOTOR_PARAMETERS_READY;
     } else {
         g_has_stored_data = 0U;
-        g_auto_identify_pending = (BOARD_SENSORED_CONTROL_ENABLE &&
-                                   (MOTOR_PARAMETERS_AUTO_IDENTIFY != 0)) ? 1U : 0U;
+        g_auto_identify_pending = (BOARD_SENSORED_CONTROL_ENABLE && (MOTOR_PARAMETERS_AUTO_IDENTIFY != 0)) ? 1U : 0U;
         g_parameters_status = MOTOR_PARAMETERS_NO_DATA;
     }
 }
 
-uint8_t Motor_Parameters_IdentifyAndSave(void)
+// 请求辨识并安排结果保存；忙碌或条件不满足时按原状态拒绝。
+uint8_t motor_parameters_identify_and_save(void)
 {
 #if !BOARD_SENSORED_CONTROL_ENABLE
     return 0U;
 #endif
     uint32_t primask;
-    MotorIdentifyState identify_state = Motor_Identify_GetState();
-    MotorParametersStatus status = g_parameters_status;
+    motor_identify_state_t identify_state = motor_identify_get_state();
+    motor_parameters_status_t status = g_parameters_status;
 
-    if ((status == MOTOR_PARAMETERS_IDENTIFYING) ||
-        (status == MOTOR_PARAMETERS_SAVE_PENDING) ||
-        !((identify_state == IDENTIFY_STATE_IDLE) ||
-          (identify_state == IDENTIFY_STATE_DONE) ||
+    if ((status == MOTOR_PARAMETERS_IDENTIFYING) || (status == MOTOR_PARAMETERS_SAVE_PENDING) ||
+        !((identify_state == IDENTIFY_STATE_IDLE) || (identify_state == IDENTIFY_STATE_DONE) ||
           (identify_state == IDENTIFY_STATE_ERROR))) {
         return 0U;
     }
 
     primask = __get_PRIMASK();
     __disable_irq();
-    Motor_Music_Stop();
+    motor_music_stop();
     g_foc_state.target_d = 0.0f;
     g_foc_state.target_q = 0.0f;
-    Motor_CurrentLoop_Enable(0U);
-    SVPWM_Disable();
-    Motor_OpenLoop_Drive(0.0f, 0.0f);
+    motor_current_loop_enable(0U);
+    svpwm_disable();
+    motor_open_loop_drive(0.0f, 0.0f);
 
     g_parameters_status = MOTOR_PARAMETERS_IDENTIFYING;
-    Motor_Identify_Start();
+    motor_identify_start();
     if (primask == 0U) {
         __enable_irq();
     }
     return 1U;
 }
 
-void Motor_Parameters_ControlTask1ms(void)
+// 1 ms 推进参数辨识状态；Flash 保存由原有前台路径完成。
+void motor_parameters_control_task1ms(void)
 {
-    MotorIdentifyState identify_state;
+    motor_identify_state_t identify_state;
 
     if (g_parameters_status != MOTOR_PARAMETERS_IDENTIFYING) {
         return;
     }
 
-    Motor_Identify_Task();
-    identify_state = Motor_Identify_GetState();
+    motor_identify_task();
+    identify_state = motor_identify_get_state();
 
     if (identify_state == IDENTIFY_STATE_DONE) {
         g_parameters_status = MOTOR_PARAMETERS_SAVE_PENDING;
     } else if (identify_state == IDENTIFY_STATE_ERROR) {
-        SVPWM_Disable();
+        svpwm_disable();
         g_parameters_status = MOTOR_PARAMETERS_ERROR;
     }
 }
 
-void Motor_Parameters_BackgroundTask(void)
+// 前台处理辨识完成后的参数保存与状态发布。
+void motor_parameters_background_task(void)
 {
-    MotorIdentifiedParams params;
+    motor_identified_params_t params;
 
-    /*
-     * A blank or invalid parameter page triggers one identification attempt
-     * per boot. Wait for a valid encoder sample before energizing the motor.
+    /* 自动辨识配置已启用且存在待处理请求时，每次上电最多尝试一次。
+     * 输出前等待有效编码器样本；当前配置是否自动触发由初始化路径决定。
      */
-    if ((g_parameters_status == MOTOR_PARAMETERS_NO_DATA) &&
-        (g_auto_identify_pending != 0U)) {
-        if (Motor_Encoder_IsDataFresh(2U) == 0U) {
+    if ((g_parameters_status == MOTOR_PARAMETERS_NO_DATA) && (g_auto_identify_pending != 0U)) {
+        if (motor_encoder_is_data_fresh(2U) == 0U) {
             return;
         }
 
         g_auto_identify_pending = 0U;
-        (void)Motor_Parameters_IdentifyAndSave();
+        (void)motor_parameters_identify_and_save();
         return;
     }
 
@@ -280,8 +271,8 @@ void Motor_Parameters_BackgroundTask(void)
         return;
     }
 
-    params = Motor_Identify_GetResult();
-    if (Motor_Parameters_Save(&params) != 0U) {
+    params = motor_identify_get_result();
+    if (motor_parameters_save(&params) != 0U) {
         g_has_stored_data = 1U;
         g_parameters_status = MOTOR_PARAMETERS_READY;
     } else {
@@ -290,24 +281,27 @@ void Motor_Parameters_BackgroundTask(void)
     }
 }
 
-uint8_t Motor_Parameters_IsReady(void)
+// 查询控制所需电机参数是否已有效装入。
+uint8_t motor_parameters_is_ready(void)
 {
     return (g_parameters_status == MOTOR_PARAMETERS_READY) ? 1U : 0U;
 }
 
-uint8_t Motor_Parameters_IsBusy(void)
+// 查询辨识或保存流程是否占用参数模块，供控制命令门控。
+uint8_t motor_parameters_is_busy(void)
 {
-    MotorParametersStatus status = g_parameters_status;
-    return ((status == MOTOR_PARAMETERS_IDENTIFYING) ||
-            (status == MOTOR_PARAMETERS_SAVE_PENDING)) ? 1U : 0U;
+    motor_parameters_status_t status = g_parameters_status;
+    return ((status == MOTOR_PARAMETERS_IDENTIFYING) || (status == MOTOR_PARAMETERS_SAVE_PENDING)) ? 1U : 0U;
 }
 
-uint8_t Motor_Parameters_HasStoredData(void)
+// 读取是否存在校验通过的已保存参数记录。
+uint8_t motor_parameters_has_stored_data(void)
 {
     return g_has_stored_data;
 }
 
-MotorParametersStatus Motor_Parameters_GetStatus(void)
+// 读取参数加载、辨识或保存状态码；保持现有枚举数值。
+uint8_t motor_parameters_get_status(void)
 {
     return g_parameters_status;
 }

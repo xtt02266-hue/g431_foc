@@ -1,0 +1,530 @@
+{
+  "passed": true,
+  "units": [
+    {
+      "source": "as5600.c",
+      "profile_sensorless": 0,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "as5600.c",
+      "profile_sensorless": 1,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "hardware_init.c",
+      "profile_sensorless": 0,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "hardware_init.c",
+      "profile_sensorless": 1,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_angle_reference.c",
+      "profile_sensorless": 0,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_angle_reference.c",
+      "profile_sensorless": 1,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_calibration.c",
+      "profile_sensorless": 0,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_calibration.c",
+      "profile_sensorless": 1,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_cogging.c",
+      "profile_sensorless": 0,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_cogging.c",
+      "profile_sensorless": 1,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_current_loop.c",
+      "profile_sensorless": 0,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_current_loop.c",
+      "profile_sensorless": 1,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_debug.c",
+      "profile_sensorless": 0,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_debug.c",
+      "profile_sensorless": 1,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_encoder.c",
+      "profile_sensorless": 0,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_encoder.c",
+      "profile_sensorless": 1,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_encoder_calibration.c",
+      "profile_sensorless": 0,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_encoder_calibration.c",
+      "profile_sensorless": 1,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_feedforward.c",
+      "profile_sensorless": 0,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_feedforward.c",
+      "profile_sensorless": 1,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_friction_storage.c",
+      "profile_sensorless": 0,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_friction_storage.c",
+      "profile_sensorless": 1,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_identify.c",
+      "profile_sensorless": 0,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_identify.c",
+      "profile_sensorless": 1,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_music.c",
+      "profile_sensorless": 0,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_music.c",
+      "profile_sensorless": 1,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_parameters.c",
+      "profile_sensorless": 0,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_parameters.c",
+      "profile_sensorless": 1,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_position_loop.c",
+      "profile_sensorless": 0,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_position_loop.c",
+      "profile_sensorless": 1,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_sensorless.c",
+      "profile_sensorless": 0,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_sensorless.c",
+      "profile_sensorless": 1,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_songs.c",
+      "profile_sensorless": 0,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_songs.c",
+      "profile_sensorless": 1,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_speed_loop.c",
+      "profile_sensorless": 0,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_speed_loop.c",
+      "profile_sensorless": 1,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_system.c",
+      "profile_sensorless": 0,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_system.c",
+      "profile_sensorless": 1,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_trajectory.c",
+      "profile_sensorless": 0,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "motor_trajectory.c",
+      "profile_sensorless": 1,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "mt6826s.c",
+      "profile_sensorless": 0,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "mt6826s.c",
+      "profile_sensorless": 1,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "oled.c",
+      "profile_sensorless": 0,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "oled.c",
+      "profile_sensorless": 1,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "pc_protocol.c",
+      "profile_sensorless": 0,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "pc_protocol.c",
+      "profile_sensorless": 1,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "pid.c",
+      "profile_sensorless": 0,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "pid.c",
+      "profile_sensorless": 1,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "svpwm.c",
+      "profile_sensorless": 0,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "svpwm.c",
+      "profile_sensorless": 1,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "user_io.c",
+      "profile_sensorless": 0,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "user_io.c",
+      "profile_sensorless": 1,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "vofa_usart.c",
+      "profile_sensorless": 0,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    },
+    {
+      "source": "vofa_usart.c",
+      "profile_sensorless": 1,
+      "equivalent": true,
+      "changed": [],
+      "warnings": []
+    }
+  ],
+  "headers": [
+    {
+      "header": "as5600.h",
+      "passed": true,
+      "diagnostic": ""
+    },
+    {
+      "header": "board_profile.h",
+      "passed": true,
+      "diagnostic": ""
+    },
+    {
+      "header": "hardware_init.h",
+      "passed": true,
+      "diagnostic": ""
+    },
+    {
+      "header": "motor_angle_reference.h",
+      "passed": true,
+      "diagnostic": ""
+    },
+    {
+      "header": "motor_calibration.h",
+      "passed": true,
+      "diagnostic": ""
+    },
+    {
+      "header": "motor_cogging.h",
+      "passed": true,
+      "diagnostic": ""
+    },
+    {
+      "header": "motor_config.h",
+      "passed": true,
+      "diagnostic": ""
+    },
+    {
+      "header": "motor_current_loop.h",
+      "passed": true,
+      "diagnostic": ""
+    },
+    {
+      "header": "motor_debug.h",
+      "passed": true,
+      "diagnostic": ""
+    },
+    {
+      "header": "motor_encoder.h",
+      "passed": true,
+      "diagnostic": ""
+    },
+    {
+      "header": "motor_encoder_calibration.h",
+      "passed": true,
+      "diagnostic": ""
+    },
+    {
+      "header": "motor_feedforward.h",
+      "passed": true,
+      "diagnostic": ""
+    },
+    {
+      "header": "motor_friction_storage.h",
+      "passed": true,
+      "diagnostic": ""
+    },
+    {
+      "header": "motor_identify.h",
+      "passed": true,
+      "diagnostic": ""
+    },
+    {
+      "header": "motor_music.h",
+      "passed": true,
+      "diagnostic": ""
+    },
+    {
+      "header": "motor_parameters.h",
+      "passed": true,
+      "diagnostic": ""
+    },
+    {
+      "header": "motor_position_loop.h",
+      "passed": true,
+      "diagnostic": ""
+    },
+    {
+      "header": "motor_sensorless.h",
+      "passed": true,
+      "diagnostic": ""
+    },
+    {
+      "header": "motor_songs.h",
+      "passed": true,
+      "diagnostic": ""
+    },
+    {
+      "header": "motor_speed_loop.h",
+      "passed": true,
+      "diagnostic": ""
+    },
+    {
+      "header": "motor_system.h",
+      "passed": true,
+      "diagnostic": ""
+    },
+    {
+      "header": "motor_trajectory.h",
+      "passed": true,
+      "diagnostic": ""
+    },
+    {
+      "header": "mt6826s.h",
+      "passed": true,
+      "diagnostic": ""
+    },
+    {
+      "header": "oled.h",
+      "passed": true,
+      "diagnostic": ""
+    },
+    {
+      "header": "pc_protocol.h",
+      "passed": true,
+      "diagnostic": ""
+    },
+    {
+      "header": "pid.h",
+      "passed": true,
+      "diagnostic": ""
+    },
+    {
+      "header": "svpwm.h",
+      "passed": true,
+      "diagnostic": ""
+    },
+    {
+      "header": "user_io.h",
+      "passed": true,
+      "diagnostic": ""
+    },
+    {
+      "header": "vofa_usart.h",
+      "passed": true,
+      "diagnostic": ""
+    }
+  ]
+}

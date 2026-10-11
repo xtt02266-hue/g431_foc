@@ -8,17 +8,19 @@
 extern volatile uint16_t g_user_pot_raw;
 
 // 启动电位器 ADC 的 DMA 采样。
-HAL_StatusTypeDef UserIO_StartDma(void);
+HAL_StatusTypeDef user_io_start_dma(void);
 
 // 读取电位器原始 ADC 值。
-uint16_t Pot_ReadRaw(void);
+uint16_t pot_read_raw(void);
 
 // 读取按键 1/2 原始电平。
-uint8_t Button1_ReadLevel(void);
-uint8_t Button2_ReadLevel(void);
+uint8_t button1_read_level(void);
+// 读取按键 2 原始引脚电平，不包含软件去抖。
+uint8_t button2_read_level(void);
 
 // 控制 LED 灯。
-void Led_Set(uint8_t on);
-void Led_Toggle(void);
+void led_set(uint8_t on);
+// 翻转板载 LED 当前电平，供既有运行状态指示使用。
+void led_toggle(void);
 
 #endif

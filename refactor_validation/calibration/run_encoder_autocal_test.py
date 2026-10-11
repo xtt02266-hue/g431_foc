@@ -8,15 +8,15 @@ shim.mkdir(parents=True,exist_ok=True)
 (shim/'motor_system.h').write_text('''#include <stdint.h>
 enum {MOTOR_OWNER_LOCAL, MOTOR_OWNER_HOST};
 enum {MOTOR_STATE_STOPPED, MOTOR_STATE_WAIT_PARAMETERS, MOTOR_STATE_IDENTIFYING, MOTOR_STATE_SENSORED_RUN, MOTOR_STATE_MUSIC, MOTOR_STATE_FAULT};
-typedef struct {uint8_t state,owner,run_requested;float target_speed_rpm;} MotorControlSnapshot;
-typedef struct {struct {float speed_rpm;} run_data;uint8_t state;} MotorSystem;
-extern MotorSystem g_motor_system;
-void Motor_System_GetControlSnapshot(MotorControlSnapshot*);
-void Motor_System_StopControl(void);
+typedef struct {uint8_t state,owner,run_requested;float target_speed_rpm;} motor_control_snapshot_t;
+typedef struct {struct {float speed_rpm;} run_data;uint8_t state;} motor_system_t;
+extern motor_system_t g_motor_system;
+void motor_system_get_control_snapshot(motor_control_snapshot_t*);
+void motor_system_stop_control(void);
 ''',encoding='utf-8')
 (shim/'motor_encoder.h').write_text('''#include <stdint.h>
-uint8_t Motor_Encoder_IsDataFresh(uint32_t);
-uint16_t Motor_Encoder_GetRawAngle(void);
+uint8_t motor_encoder_is_data_fresh(uint32_t);
+uint16_t motor_encoder_get_raw_angle(void);
 ''',encoding='utf-8')
 (shim/'stm32g4xx_hal.h').write_text('''#include <stdint.h>
 uint32_t HAL_GetTick(void);

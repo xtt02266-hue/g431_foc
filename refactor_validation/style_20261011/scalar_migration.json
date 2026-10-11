@@ -1,0 +1,305 @@
+{
+  "motor_system_host_set_haptic_params": {
+    "type": "motor_haptic_params_t",
+    "variable": "p",
+    "by_value": false,
+    "fields": [
+      [
+        "float",
+        "spring_k_a_per_rad"
+      ],
+      [
+        "float",
+        "damping_b_a_per_rad_s"
+      ],
+      [
+        "float",
+        "detent_k_a_per_rad"
+      ],
+      [
+        "float",
+        "limit_k_a_per_rad"
+      ],
+      [
+        "float",
+        "limit_half_range_deg"
+      ],
+      [
+        "uint16_t",
+        "detent_count"
+      ]
+    ]
+  },
+  "motor_system_host_set_friction_config": {
+    "type": "motor_friction_config_t",
+    "variable": "p",
+    "by_value": false,
+    "fields": [
+      [
+        "uint8_t",
+        "enabled"
+      ],
+      [
+        "float",
+        "coulomb_iq_a"
+      ],
+      [
+        "float",
+        "viscous_iq_a_per_rpm"
+      ],
+      [
+        "float",
+        "smooth_speed_rpm"
+      ],
+      [
+        "float",
+        "max_iq_a"
+      ]
+    ]
+  },
+  "motor_system_host_save_friction_config": {
+    "type": "motor_friction_config_t",
+    "variable": "p",
+    "by_value": false,
+    "fields": [
+      [
+        "uint8_t",
+        "enabled"
+      ],
+      [
+        "float",
+        "coulomb_iq_a"
+      ],
+      [
+        "float",
+        "viscous_iq_a_per_rpm"
+      ],
+      [
+        "float",
+        "smooth_speed_rpm"
+      ],
+      [
+        "float",
+        "max_iq_a"
+      ]
+    ]
+  },
+  "motor_system_host_set_cogging_config": {
+    "type": "motor_cogging_config_t",
+    "variable": "p",
+    "by_value": false,
+    "fields": [
+      [
+        "uint8_t",
+        "enabled"
+      ],
+      [
+        "float",
+        "gain"
+      ],
+      [
+        "float",
+        "max_iq_a"
+      ],
+      [
+        "float",
+        "fade_start_rpm"
+      ],
+      [
+        "float",
+        "fade_end_rpm"
+      ],
+      [
+        "uint16_t",
+        "phase_offset_counts"
+      ]
+    ]
+  },
+  "motor_feedforward_set_friction_config": {
+    "type": "motor_friction_config_t",
+    "variable": "config",
+    "by_value": false,
+    "fields": [
+      [
+        "uint8_t",
+        "enabled"
+      ],
+      [
+        "float",
+        "coulomb_iq_a"
+      ],
+      [
+        "float",
+        "viscous_iq_a_per_rpm"
+      ],
+      [
+        "float",
+        "smooth_speed_rpm"
+      ],
+      [
+        "float",
+        "max_iq_a"
+      ]
+    ]
+  },
+  "motor_cogging_set_config": {
+    "type": "motor_cogging_config_t",
+    "variable": "config",
+    "by_value": false,
+    "fields": [
+      [
+        "uint8_t",
+        "enabled"
+      ],
+      [
+        "float",
+        "gain"
+      ],
+      [
+        "float",
+        "max_iq_a"
+      ],
+      [
+        "float",
+        "fade_start_rpm"
+      ],
+      [
+        "float",
+        "fade_end_rpm"
+      ],
+      [
+        "uint16_t",
+        "phase_offset_counts"
+      ]
+    ]
+  },
+  "motor_current_loop_set_params": {
+    "type": "motor_current_params_t",
+    "variable": "params",
+    "by_value": true,
+    "fields": [
+      [
+        "float",
+        "vref_volts"
+      ],
+      [
+        "float",
+        "bias_u_volts"
+      ],
+      [
+        "float",
+        "bias_w_volts"
+      ],
+      [
+        "float",
+        "shunt_ohms"
+      ],
+      [
+        "float",
+        "gain"
+      ],
+      [
+        "float",
+        "adc_max"
+      ],
+      [
+        "uint16_t",
+        "pole_pairs"
+      ],
+      [
+        "float",
+        "zero_angle_offset"
+      ],
+      [
+        "int8_t",
+        "uvw_dir"
+      ]
+    ]
+  },
+  "motor_identify_use_result": {
+    "type": "motor_identified_params_t",
+    "variable": "params",
+    "by_value": false,
+    "fields": [
+      [
+        "float",
+        "resistance"
+      ],
+      [
+        "float",
+        "inductance"
+      ],
+      [
+        "uint16_t",
+        "pole_pairs"
+      ],
+      [
+        "float",
+        "zero_angle_offset"
+      ],
+      [
+        "int8_t",
+        "uvw_dir"
+      ]
+    ]
+  },
+  "motor_sensorless_configure": {
+    "type": "motor_sensorless_config_t",
+    "variable": "config",
+    "by_value": false,
+    "fields": [
+      [
+        "float",
+        "sample_time_sec"
+      ],
+      [
+        "float",
+        "resistance_ohm"
+      ],
+      [
+        "float",
+        "inductance_h"
+      ],
+      [
+        "uint16_t",
+        "pole_pairs"
+      ],
+      [
+        "float",
+        "bemf_filter_alpha"
+      ],
+      [
+        "float",
+        "minimum_bemf_volts"
+      ],
+      [
+        "float",
+        "pll_kp"
+      ],
+      [
+        "float",
+        "pll_ki"
+      ],
+      [
+        "float",
+        "maximum_electrical_speed_rad_s"
+      ],
+      [
+        "float",
+        "lock_phase_error"
+      ],
+      [
+        "uint16_t",
+        "lock_updates"
+      ],
+      [
+        "uint16_t",
+        "loss_updates"
+      ],
+      [
+        "uint8_t",
+        "pll_divider"
+      ]
+    ]
+  }
+}

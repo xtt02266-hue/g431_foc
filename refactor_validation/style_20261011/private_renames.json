@@ -1,0 +1,114 @@
+{
+  "as5600.c": {},
+  "hardware_init.c": {
+    "Hardware_CalibrateCurrentBias": "hardware_calibrate_current_bias"
+  },
+  "motor_angle_reference.c": {},
+  "motor_calibration.c": {},
+  "motor_cogging.c": {
+    "Motor_Cogging_SetDefaults": "motor_cogging_set_defaults",
+    "Motor_Cogging_LoadFromFlash": "motor_cogging_load_from_flash",
+    "MotorCoggingFlashRecord": "motor_cogging_flash_record_t"
+  },
+  "motor_current_loop.c": {
+    "Motor_CurrentLoop_RawToCurrent": "motor_current_loop_raw_to_current"
+  },
+  "motor_debug.c": {},
+  "motor_encoder.c": {},
+  "motor_encoder_calibration.c": {},
+  "motor_feedforward.c": {
+    "Motor_Feedforward_ClampFloat": "motor_feedforward_clamp_float"
+  },
+  "motor_friction_storage.c": {
+    "FrictionRecord": "friction_record_t"
+  },
+  "motor_identify.c": {
+    "Motor_Identify_NormalizeAngle": "motor_identify_normalize_angle",
+    "Motor_Identify_Fail": "motor_identify_fail",
+    "Identify_MeasureR": "identify_measure_r",
+    "Identify_MeasureL": "identify_measure_l",
+    "Identify_Align": "identify_align",
+    "Identify_UvwAndPoles": "identify_uvw_and_poles"
+  },
+  "motor_music.c": {
+    "Motor_Music_EnterCritical": "motor_music_enter_critical",
+    "Motor_Music_ExitCritical": "motor_music_exit_critical",
+    "Motor_Music_FrequencyToPhaseStep": "motor_music_frequency_to_phase_step",
+    "Motor_Music_SetFrequency": "motor_music_set_frequency",
+    "Motor_Music_LoadNote": "motor_music_load_note",
+    "Motor_Music_StartInternal": "motor_music_start_internal"
+  },
+  "motor_parameters.c": {
+    "Motor_Parameters_Crc32": "motor_parameters_crc32",
+    "Motor_Parameters_AreValuesValid": "motor_parameters_are_values_valid",
+    "Motor_Parameters_DecodeRecord": "motor_parameters_decode_record",
+    "Motor_Parameters_Load": "motor_parameters_load",
+    "Motor_Parameters_Save": "motor_parameters_save",
+    "MotorParametersFlashRecord": "motor_parameters_flash_record_t"
+  },
+  "motor_position_loop.c": {
+    "Motor_PositionLoop_ShortestError": "motor_position_loop_shortest_error"
+  },
+  "motor_sensorless.c": {
+    "Motor_Sensorless_Abs": "motor_sensorless_abs",
+    "Motor_Sensorless_Clamp": "motor_sensorless_clamp",
+    "Motor_Sensorless_WrapAngle": "motor_sensorless_wrap_angle",
+    "Motor_Sensorless_ResetState": "motor_sensorless_reset_state",
+    "MotorSensorlessInternal": "motor_sensorless_internal_t"
+  },
+  "motor_songs.c": {},
+  "motor_speed_loop.c": {},
+  "motor_system.c": {
+    "Motor_System_RestoreCalibration": "motor_system_restore_calibration",
+    "Motor_AbsFloat": "motor_abs_float",
+    "Motor_System_IsModeSourceValid": "motor_system_is_mode_source_valid",
+    "Motor_System_TorqueToIq": "motor_system_torque_to_iq",
+    "Motor_System_PotTorqueNm": "motor_system_pot_torque_nm",
+    "Motor_System_ResetControlHistory": "motor_system_reset_control_history",
+    "Motor_System_ResetOuterLoops": "motor_system_reset_outer_loops",
+    "Motor_System_TuneCurrentLoopBandwidth": "motor_system_tune_current_loop_bandwidth",
+    "Motor_System_ForceSafeStop": "motor_system_force_safe_stop",
+    "Motor_System_UpdateOperatingState": "motor_system_update_operating_state",
+    "Motor_System_UpdatePotTarget": "motor_system_update_pot_target",
+    "Motor_System_RunTorqueMode": "motor_system_run_torque_mode",
+    "Motor_System_RunPositionMode": "motor_system_run_position_mode",
+    "Motor_System_ClampHostIq": "motor_system_clamp_host_iq",
+    "Motor_System_SlewHostIq": "motor_system_slew_host_iq",
+    "Motor_System_RunSpeedMode": "motor_system_run_speed_mode",
+    "Motor_StatusLed_Task": "motor_status_led_task"
+  },
+  "motor_trajectory.c": {
+    "Motor_Trajectory_AbsFloat": "motor_trajectory_abs_float",
+    "Motor_Trajectory_ClampFloat": "motor_trajectory_clamp_float",
+    "Motor_Trajectory_WrapPosition": "motor_trajectory_wrap_position",
+    "Motor_Trajectory_ShortestPositionError": "motor_trajectory_shortest_position_error",
+    "Motor_Trajectory_SignFloat": "motor_trajectory_sign_float",
+    "Motor_Trajectory_MoveTowardFloat": "motor_trajectory_move_toward_float"
+  },
+  "mt6826s.c": {
+    "MT6826S_CalculateCrc8": "mt6826s_calculate_crc8",
+    "MT6826S_Select": "mt6826s_select",
+    "MT6826S_Unselect": "mt6826s_unselect",
+    "MT6826S_RegisterTransfer": "mt6826s_register_transfer"
+  },
+  "oled.c": {
+    "I2C_Delay": "oled_delay_us",
+    "OLED_W_SCL": "oled_w_scl",
+    "OLED_W_SDA": "oled_w_sda",
+    "OLED_I2C_Init": "oled_i2c_init",
+    "OLED_I2C_Start": "oled_i2c_start",
+    "OLED_I2C_Stop": "oled_i2c_stop",
+    "OLED_I2C_SendByte": "oled_i2c_send_byte",
+    "OLED_WriteCommand": "oled_write_command",
+    "OLED_WriteData": "oled_write_data",
+    "OLED_SetCursor": "oled_set_cursor",
+    "OLED_Pow": "oled_pow"
+  },
+  "pc_protocol.c": {},
+  "pid.c": {},
+  "svpwm.c": {},
+  "user_io.c": {},
+  "vofa_usart.c": {
+    "VOFA_StartReceive": "vofa_start_receive"
+  }
+}

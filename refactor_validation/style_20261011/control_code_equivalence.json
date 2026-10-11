@@ -1,0 +1,813 @@
+{
+  "passed": true,
+  "units": [
+    {
+      "source": "as5600.c",
+      "profile_sensorless": 0,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": []
+      }
+    },
+    {
+      "source": "as5600.c",
+      "profile_sensorless": 1,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": []
+      }
+    },
+    {
+      "source": "hardware_init.c",
+      "profile_sensorless": 0,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": []
+      }
+    },
+    {
+      "source": "hardware_init.c",
+      "profile_sensorless": 1,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": []
+      }
+    },
+    {
+      "source": "motor_angle_reference.c",
+      "profile_sensorless": 0,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": []
+      }
+    },
+    {
+      "source": "motor_angle_reference.c",
+      "profile_sensorless": 1,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": []
+      }
+    },
+    {
+      "source": "motor_calibration.c",
+      "profile_sensorless": 0,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": []
+      }
+    },
+    {
+      "source": "motor_calibration.c",
+      "profile_sensorless": 1,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": []
+      }
+    },
+    {
+      "source": "motor_cogging.c",
+      "profile_sensorless": 0,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [
+          ".text.Motor_Cogging_SetConfig",
+          ".text.Motor_Cogging_TableBegin",
+          ".text.motor_cogging_get_transaction_id"
+        ],
+        "relocations": [
+          ".text.Motor_Cogging_SetConfig",
+          ".text.Motor_Cogging_TableBegin",
+          ".text.motor_cogging_get_transaction_id"
+        ],
+        "public_symbols": [
+          "Motor_Cogging_SetConfig",
+          "Motor_Cogging_TableBegin",
+          "motor_cogging_get_transaction_id"
+        ]
+      }
+    },
+    {
+      "source": "motor_cogging.c",
+      "profile_sensorless": 1,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [
+          ".text.Motor_Cogging_SetConfig",
+          ".text.Motor_Cogging_TableBegin",
+          ".text.motor_cogging_get_transaction_id"
+        ],
+        "relocations": [
+          ".text.Motor_Cogging_SetConfig",
+          ".text.Motor_Cogging_TableBegin",
+          ".text.motor_cogging_get_transaction_id"
+        ],
+        "public_symbols": [
+          "Motor_Cogging_SetConfig",
+          "Motor_Cogging_TableBegin",
+          "motor_cogging_get_transaction_id"
+        ]
+      }
+    },
+    {
+      "source": "motor_current_loop.c",
+      "profile_sensorless": 0,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [
+          ".text.Motor_CurrentLoop_SetParams"
+        ],
+        "relocations": [
+          ".text.Motor_CurrentLoop_SetParams"
+        ],
+        "public_symbols": [
+          "Motor_CurrentLoop_SetParams"
+        ]
+      }
+    },
+    {
+      "source": "motor_current_loop.c",
+      "profile_sensorless": 1,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [
+          ".text.Motor_CurrentLoop_SetParams"
+        ],
+        "relocations": [
+          ".text.Motor_CurrentLoop_SetParams"
+        ],
+        "public_symbols": [
+          "Motor_CurrentLoop_SetParams"
+        ]
+      }
+    },
+    {
+      "source": "motor_debug.c",
+      "profile_sensorless": 0,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": []
+      }
+    },
+    {
+      "source": "motor_debug.c",
+      "profile_sensorless": 1,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": []
+      }
+    },
+    {
+      "source": "motor_encoder.c",
+      "profile_sensorless": 0,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": []
+      }
+    },
+    {
+      "source": "motor_encoder.c",
+      "profile_sensorless": 1,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": []
+      }
+    },
+    {
+      "source": "motor_encoder_calibration.c",
+      "profile_sensorless": 0,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": []
+      }
+    },
+    {
+      "source": "motor_encoder_calibration.c",
+      "profile_sensorless": 1,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": []
+      }
+    },
+    {
+      "source": "motor_feedforward.c",
+      "profile_sensorless": 0,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [
+          ".text.Motor_Feedforward_SetFrictionConfig"
+        ],
+        "relocations": [
+          ".text.Motor_Feedforward_SetFrictionConfig"
+        ],
+        "public_symbols": [
+          "Motor_Feedforward_SetFrictionConfig"
+        ]
+      }
+    },
+    {
+      "source": "motor_feedforward.c",
+      "profile_sensorless": 1,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [
+          ".text.Motor_Feedforward_SetFrictionConfig"
+        ],
+        "relocations": [
+          ".text.Motor_Feedforward_SetFrictionConfig"
+        ],
+        "public_symbols": [
+          "Motor_Feedforward_SetFrictionConfig"
+        ]
+      }
+    },
+    {
+      "source": "motor_friction_storage.c",
+      "profile_sensorless": 0,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": []
+      }
+    },
+    {
+      "source": "motor_friction_storage.c",
+      "profile_sensorless": 1,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": []
+      }
+    },
+    {
+      "source": "motor_identify.c",
+      "profile_sensorless": 0,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [
+          ".text.Motor_Identify_UseResult"
+        ],
+        "relocations": [
+          ".text.Motor_Identify_UseResult"
+        ],
+        "public_symbols": [
+          "Motor_Identify_UseResult"
+        ]
+      }
+    },
+    {
+      "source": "motor_identify.c",
+      "profile_sensorless": 1,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [
+          ".text.Motor_Identify_UseResult"
+        ],
+        "relocations": [
+          ".text.Motor_Identify_UseResult"
+        ],
+        "public_symbols": [
+          "Motor_Identify_UseResult"
+        ]
+      }
+    },
+    {
+      "source": "motor_music.c",
+      "profile_sensorless": 0,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [
+          ".text.Motor_Music_Start",
+          ".text.Motor_Music_StartDemo",
+          ".text.Motor_Music_StartDemoTimes",
+          ".text.Motor_Music_StartTimes"
+        ],
+        "relocations": [
+          ".text.Motor_Music_Start",
+          ".text.Motor_Music_StartDemo",
+          ".text.Motor_Music_StartDemoTimes",
+          ".text.Motor_Music_StartTimes"
+        ],
+        "public_symbols": [
+          "Motor_Music_Start",
+          "Motor_Music_StartDemo",
+          "Motor_Music_StartDemoTimes",
+          "Motor_Music_StartTimes"
+        ]
+      }
+    },
+    {
+      "source": "motor_music.c",
+      "profile_sensorless": 1,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [
+          ".text.Motor_Music_Start",
+          ".text.Motor_Music_StartDemo",
+          ".text.Motor_Music_StartDemoTimes",
+          ".text.Motor_Music_StartTimes"
+        ],
+        "relocations": [
+          ".text.Motor_Music_Start",
+          ".text.Motor_Music_StartDemo",
+          ".text.Motor_Music_StartDemoTimes",
+          ".text.Motor_Music_StartTimes"
+        ],
+        "public_symbols": [
+          "Motor_Music_Start",
+          "Motor_Music_StartDemo",
+          "Motor_Music_StartDemoTimes",
+          "Motor_Music_StartTimes"
+        ]
+      }
+    },
+    {
+      "source": "motor_parameters.c",
+      "profile_sensorless": 0,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [
+          ".text.Motor_Parameters_Init"
+        ],
+        "relocations": [
+          ".text.Motor_Parameters_Init"
+        ],
+        "public_symbols": [
+          "Motor_Parameters_Init"
+        ]
+      }
+    },
+    {
+      "source": "motor_parameters.c",
+      "profile_sensorless": 1,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [
+          ".text.Motor_Parameters_Init"
+        ],
+        "relocations": [
+          ".text.Motor_Parameters_Init"
+        ],
+        "public_symbols": [
+          "Motor_Parameters_Init"
+        ]
+      }
+    },
+    {
+      "source": "motor_position_loop.c",
+      "profile_sensorless": 0,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": []
+      }
+    },
+    {
+      "source": "motor_position_loop.c",
+      "profile_sensorless": 1,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": []
+      }
+    },
+    {
+      "source": "motor_sensorless.c",
+      "profile_sensorless": 0,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [
+          ".text.Motor_Sensorless_Configure",
+          ".text.Motor_Sensorless_ConfigureMotor"
+        ],
+        "relocations": [
+          ".text.Motor_Sensorless_Configure",
+          ".text.Motor_Sensorless_ConfigureMotor"
+        ],
+        "public_symbols": [
+          "Motor_Sensorless_Configure",
+          "Motor_Sensorless_ConfigureMotor"
+        ]
+      }
+    },
+    {
+      "source": "motor_sensorless.c",
+      "profile_sensorless": 1,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [
+          ".text.Motor_Sensorless_Configure",
+          ".text.Motor_Sensorless_ConfigureMotor"
+        ],
+        "relocations": [
+          ".text.Motor_Sensorless_Configure",
+          ".text.Motor_Sensorless_ConfigureMotor"
+        ],
+        "public_symbols": [
+          "Motor_Sensorless_Configure",
+          "Motor_Sensorless_ConfigureMotor"
+        ]
+      }
+    },
+    {
+      "source": "motor_songs.c",
+      "profile_sensorless": 0,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [
+          ".bss.s_custom_note_count",
+          ".bss.s_custom_score",
+          ".text.motor_songs_get_score",
+          ".text.motor_songs_register_score"
+        ],
+        "relocations": [
+          ".text.motor_songs_get_score",
+          ".text.motor_songs_register_score"
+        ],
+        "public_symbols": [
+          "motor_songs_get_score",
+          "motor_songs_register_score"
+        ]
+      }
+    },
+    {
+      "source": "motor_songs.c",
+      "profile_sensorless": 1,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [
+          ".bss.s_custom_note_count",
+          ".bss.s_custom_score",
+          ".text.motor_songs_get_score",
+          ".text.motor_songs_register_score"
+        ],
+        "relocations": [
+          ".text.motor_songs_get_score",
+          ".text.motor_songs_register_score"
+        ],
+        "public_symbols": [
+          "motor_songs_get_score",
+          "motor_songs_register_score"
+        ]
+      }
+    },
+    {
+      "source": "motor_speed_loop.c",
+      "profile_sensorless": 0,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": []
+      }
+    },
+    {
+      "source": "motor_speed_loop.c",
+      "profile_sensorless": 1,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": []
+      }
+    },
+    {
+      "source": "motor_system.c",
+      "profile_sensorless": 0,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [
+          ".bss.s_last_accepted_iq_a",
+          ".bss.s_last_accepted_speed_rpm",
+          ".text.Motor_System_HostBeginCoggingTable",
+          ".text.Motor_System_HostSaveFrictionConfig",
+          ".text.Motor_System_HostSetCoggingConfig",
+          ".text.Motor_System_HostSetFrictionConfig",
+          ".text.Motor_System_HostSetHapticParams",
+          ".text.Motor_System_HostSetIq",
+          ".text.Motor_System_HostSetSpeed",
+          ".text.Motor_System_HostStartCalibration",
+          ".text.Motor_System_HostStartEncoderCalibration",
+          ".text.Motor_System_PlaySong",
+          ".text.Motor_System_PlaySongLoop",
+          ".text.Motor_System_RestoreCalibration",
+          ".text.motor_system_get_last_accepted_iq",
+          ".text.motor_system_get_last_accepted_speed"
+        ],
+        "relocations": [
+          ".text.Motor_System_HostBeginCoggingTable",
+          ".text.Motor_System_HostSaveFrictionConfig",
+          ".text.Motor_System_HostSetCoggingConfig",
+          ".text.Motor_System_HostSetFrictionConfig",
+          ".text.Motor_System_HostSetHapticParams",
+          ".text.Motor_System_HostSetIq",
+          ".text.Motor_System_HostSetSpeed",
+          ".text.Motor_System_HostStartCalibration",
+          ".text.Motor_System_HostStartEncoderCalibration",
+          ".text.Motor_System_PlaySong",
+          ".text.Motor_System_PlaySongLoop",
+          ".text.Motor_System_RestoreCalibration",
+          ".text.motor_system_get_last_accepted_iq",
+          ".text.motor_system_get_last_accepted_speed"
+        ],
+        "public_symbols": [
+          "Motor_System_HostBeginCoggingTable",
+          "Motor_System_HostSaveFrictionConfig",
+          "Motor_System_HostSetCoggingConfig",
+          "Motor_System_HostSetFrictionConfig",
+          "Motor_System_HostSetHapticParams",
+          "Motor_System_HostSetIq",
+          "Motor_System_HostSetSpeed",
+          "Motor_System_HostStartCalibration",
+          "Motor_System_HostStartEncoderCalibration",
+          "Motor_System_PlaySong",
+          "Motor_System_PlaySongLoop",
+          "motor_system_get_last_accepted_iq",
+          "motor_system_get_last_accepted_speed"
+        ]
+      }
+    },
+    {
+      "source": "motor_system.c",
+      "profile_sensorless": 1,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [
+          ".bss.s_last_accepted_iq_a",
+          ".bss.s_last_accepted_speed_rpm",
+          ".text.Motor_System_HostBeginCoggingTable",
+          ".text.Motor_System_HostSaveFrictionConfig",
+          ".text.Motor_System_HostSetCoggingConfig",
+          ".text.Motor_System_HostSetFrictionConfig",
+          ".text.Motor_System_HostSetHapticParams",
+          ".text.Motor_System_HostSetIq",
+          ".text.Motor_System_HostSetSpeed",
+          ".text.Motor_System_HostStartCalibration",
+          ".text.Motor_System_HostStartEncoderCalibration",
+          ".text.Motor_System_PlaySong",
+          ".text.Motor_System_PlaySongLoop",
+          ".text.Motor_System_RestoreCalibration",
+          ".text.motor_system_get_last_accepted_iq",
+          ".text.motor_system_get_last_accepted_speed"
+        ],
+        "relocations": [
+          ".text.Motor_System_HostBeginCoggingTable",
+          ".text.Motor_System_HostSaveFrictionConfig",
+          ".text.Motor_System_HostSetCoggingConfig",
+          ".text.Motor_System_HostSetFrictionConfig",
+          ".text.Motor_System_HostSetHapticParams",
+          ".text.Motor_System_HostSetIq",
+          ".text.Motor_System_HostSetSpeed",
+          ".text.Motor_System_HostStartCalibration",
+          ".text.Motor_System_HostStartEncoderCalibration",
+          ".text.Motor_System_PlaySong",
+          ".text.Motor_System_PlaySongLoop",
+          ".text.Motor_System_RestoreCalibration",
+          ".text.motor_system_get_last_accepted_iq",
+          ".text.motor_system_get_last_accepted_speed"
+        ],
+        "public_symbols": [
+          "Motor_System_HostBeginCoggingTable",
+          "Motor_System_HostSaveFrictionConfig",
+          "Motor_System_HostSetCoggingConfig",
+          "Motor_System_HostSetFrictionConfig",
+          "Motor_System_HostSetHapticParams",
+          "Motor_System_HostSetIq",
+          "Motor_System_HostSetSpeed",
+          "Motor_System_HostStartCalibration",
+          "Motor_System_HostStartEncoderCalibration",
+          "Motor_System_PlaySong",
+          "Motor_System_PlaySongLoop",
+          "motor_system_get_last_accepted_iq",
+          "motor_system_get_last_accepted_speed"
+        ]
+      }
+    },
+    {
+      "source": "motor_trajectory.c",
+      "profile_sensorless": 0,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": []
+      }
+    },
+    {
+      "source": "motor_trajectory.c",
+      "profile_sensorless": 1,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": []
+      }
+    },
+    {
+      "source": "mt6826s.c",
+      "profile_sensorless": 0,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": []
+      }
+    },
+    {
+      "source": "mt6826s.c",
+      "profile_sensorless": 1,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": []
+      }
+    },
+    {
+      "source": "oled.c",
+      "profile_sensorless": 0,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": [
+          "I2C_Delay",
+          "OLED_I2C_Init",
+          "OLED_I2C_SendByte",
+          "OLED_I2C_Start",
+          "OLED_I2C_Stop",
+          "OLED_Pow",
+          "OLED_SetCursor",
+          "OLED_W_SCL",
+          "OLED_W_SDA",
+          "OLED_WriteCommand",
+          "OLED_WriteData"
+        ]
+      }
+    },
+    {
+      "source": "oled.c",
+      "profile_sensorless": 1,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": [
+          "I2C_Delay",
+          "OLED_I2C_Init",
+          "OLED_I2C_SendByte",
+          "OLED_I2C_Start",
+          "OLED_I2C_Stop",
+          "OLED_Pow",
+          "OLED_SetCursor",
+          "OLED_W_SCL",
+          "OLED_W_SDA",
+          "OLED_WriteCommand",
+          "OLED_WriteData"
+        ]
+      }
+    },
+    {
+      "source": "pc_protocol.c",
+      "profile_sensorless": 0,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [
+          ".text.handle_command"
+        ],
+        "relocations": [
+          ".text.handle_command"
+        ],
+        "public_symbols": []
+      }
+    },
+    {
+      "source": "pc_protocol.c",
+      "profile_sensorless": 1,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [
+          ".text.handle_command"
+        ],
+        "relocations": [
+          ".text.handle_command"
+        ],
+        "public_symbols": []
+      }
+    },
+    {
+      "source": "pid.c",
+      "profile_sensorless": 0,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": []
+      }
+    },
+    {
+      "source": "pid.c",
+      "profile_sensorless": 1,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": []
+      }
+    },
+    {
+      "source": "svpwm.c",
+      "profile_sensorless": 0,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": []
+      }
+    },
+    {
+      "source": "svpwm.c",
+      "profile_sensorless": 1,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": []
+      }
+    },
+    {
+      "source": "user_io.c",
+      "profile_sensorless": 0,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": []
+      }
+    },
+    {
+      "source": "user_io.c",
+      "profile_sensorless": 1,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": []
+      }
+    },
+    {
+      "source": "vofa_usart.c",
+      "profile_sensorless": 0,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": []
+      }
+    },
+    {
+      "source": "vofa_usart.c",
+      "profile_sensorless": 1,
+      "passed": true,
+      "intentional_changes": {
+        "sections": [],
+        "relocations": [],
+        "public_symbols": []
+      }
+    }
+  ],
+  "preserved_function_profile_pairs": 646,
+  "note": "Every other function retains identical instruction/data sections and symbolic relocations."
+}

@@ -5,7 +5,7 @@
 #define FOC_PROFILE_SENSORLESS 0
 #endif
 
-/* Sensorless development has no startup/handover controller yet. */
+/* 无感开发配置尚未实现启动和闭环切换控制器。 */
 #define BOARD_SENSORED_CONTROL_ENABLE (!FOC_PROFILE_SENSORLESS)
 #define BOARD_AS5600_REFERENCE_ENABLE FOC_PROFILE_SENSORLESS
 

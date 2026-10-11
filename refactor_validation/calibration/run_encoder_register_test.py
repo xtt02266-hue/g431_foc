@@ -35,33 +35,33 @@ static uint32_t HAL_GetTick(void){return now;}
 static uint32_t __get_PRIMASK(void){return mask;}
 static void __disable_irq(void){mask=1;}
 static void __enable_irq(void){mask=0;}
-static void MT6826S_Select(void){}
-static void MT6826S_Unselect(void){}
+static void mt6826s_select(void){}
+static void mt6826s_unselect(void){}
 static unsigned HAL_SPI_TransmitReceive_DMA(SPI_HandleTypeDef *h,const uint8_t*t,uint8_t*r,uint16_t n){(void)h;(void)t;(void)r;(void)n;++dma_calls;return 0;}
-void MT6826S_RequestReadDMA(void);
+void mt6826s_request_read_dma(void);
 static unsigned HAL_SPI_TransmitReceive(SPI_HandleTypeDef *h,uint8_t*t,uint8_t*r,uint16_t n,uint32_t timeout){
  assert(h==&hspi1 && n==3 && timeout==1 && g_register_lock && !mask);
  ++spi_calls;memcpy(last_tx,t,3);r[2]=0xbd;
- MT6826S_RequestReadDMA();assert(dma_calls==0);return error;
+ mt6826s_request_read_dma();assert(dma_calls==0);return error;
 }
 '''
-for name in ('void MT6826S_RequestReadDMA(', 'static uint8_t MT6826S_RegisterTransfer(',
-             'uint8_t MT6826S_ReadRegister(', 'uint8_t MT6826S_WriteRegister(',
-             'void MT6826S_SuspendAngleReads('):s+=function(name)
+for name in ('void mt6826s_request_read_dma(', 'static uint8_t mt6826s_register_transfer(',
+             'uint8_t mt6826s_read_register(', 'uint8_t mt6826s_write_register(',
+             'void mt6826s_suspend_angle_reads('):s+=function(name)
 s+=r'''
 int main(void){
  uint8_t v=0;
- g_mt6826s_busy=1;assert(MT6826S_ReadRegister(0xe,&v)==0 && !spi_calls && !g_register_lock && !mask);
- g_mt6826s_busy=0;g_register_lock=1;assert(MT6826S_ReadRegister(0xe,&v)==0 && !spi_calls);g_register_lock=0;
- assert(MT6826S_ReadRegister(0xe,&v)==1 && v==0xbd && !g_register_lock);
+ g_mt6826s_busy=1;assert(mt6826s_read_register(0xe,&v)==0 && !spi_calls && !g_register_lock && !mask);
+ g_mt6826s_busy=0;g_register_lock=1;assert(mt6826s_read_register(0xe,&v)==0 && !spi_calls);g_register_lock=0;
+ assert(mt6826s_read_register(0xe,&v)==1 && v==0xbd && !g_register_lock);
  assert(last_tx[0]==0x30 && last_tx[1]==0xe && last_tx[2]==0);
- assert(MT6826S_WriteRegister(0x155,0x5e)==1);
+ assert(mt6826s_write_register(0x155,0x5e)==1);
  assert(last_tx[0]==0x61 && last_tx[1]==0x55 && last_tx[2]==0x5e);
- assert(MT6826S_ReadRegister(0x1000,&v)==2 && MT6826S_ReadRegister(0xe,0)==2);
- error=1;g_mt6826s_ok=1;assert(MT6826S_ReadRegister(0x113,&v)==2);
+ assert(mt6826s_read_register(0x1000,&v)==2 && mt6826s_read_register(0xe,0)==2);
+ error=1;g_mt6826s_ok=1;assert(mt6826s_read_register(0x113,&v)==2);
  assert(!g_mt6826s_ok && g_mt6826s_transfer_error_count==1 && !g_register_lock);
- MT6826S_SuspendAngleReads();MT6826S_RequestReadDMA();assert(!dma_calls);
- assert(MT6826S_ReadRegister(0xe,&v)==2);
+ mt6826s_suspend_angle_reads();mt6826s_request_read_dma();assert(!dma_calls);
+ assert(mt6826s_read_register(0xe,&v)==2);
  puts("PASS: production SPI register read/write bytes, DMA exclusion, busy return, bounded timeout, invalidation and post-calibration suspension");
 }
 '''

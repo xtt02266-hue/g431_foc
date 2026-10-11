@@ -117,10 +117,10 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    Motor_Parameters_BackgroundTask();
-    Motor_AngleReference_BackgroundTask();
-    PC_Protocol_Task();
-    Motor_EncoderCal_BackgroundTask();
+    motor_parameters_background_task();
+    motor_angle_reference_background_task();
+    pc_protocol_task();
+    motor_encoder_cal_background_task();
   }
   /* USER CODE END 3 */
 }

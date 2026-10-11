@@ -70,7 +70,7 @@ int main(void) {
     uint8_t bytes[256];for(unsigned i=0;i<256;i++)bytes[i]=(uint8_t)(i*73);
     for(unsigned n=0;n<=256;n++)assert(crc16(bytes,n)==reference(bytes,n));
     assert(crc16((uint8_t*)"123456789",9)==0x29b1);
-    assert(Motor_Calibration_Begin(1));
+    assert(motor_calibration_begin(1));
     assert(queue_frame(3,1,bytes,40,0));
     assert(queue_frame(4,2,bytes,126,0)); /* prepared while DMA is active */
     assert(!queue_frame(3,2,bytes,40,0)); /* full stream slot: status cannot spill into ACK slot */
@@ -92,8 +92,8 @@ int main(void) {
     unsigned max_backlog=0;
     while(now_us<2000000) {
         if (now_us>=next_sample) {
-            MotorCalSample record={0};record.tick_ms=next_sample/1000;record.flags=256;
-            Motor_Calibration_Push(&record);next_sample+=1000;
+            motor_cal_sample_t record={0};record.tick_ms=next_sample/1000;record.flags=256;
+            motor_calibration_push(&record);next_sample+=1000;
         }
         if (s_tx_busy && now_us>=done_us) complete();
         if (now_us>=main_ready_us) {
@@ -105,16 +105,16 @@ int main(void) {
                 if (now_us>=next_telem) {
                     assert(queue_frame(4,1,bytes,126,0));next_telem+=50000;main_ready_us=(unsigned)now_us+800;
                 } else {
-                    MotorCalSample records[3];uint8_t count=Motor_Calibration_Peek(records,3);
+                    motor_cal_sample_t records[3];uint8_t count=motor_calibration_peek(records,3);
                     if (count==3) {
                         uint8_t payload[204]={0};payload[6]=3;memcpy(payload+12,records,192);
-                        assert(queue_frame(5,0,payload,204,0));Motor_Calibration_Consume(3);
+                        assert(queue_frame(5,0,payload,204,0));motor_calibration_consume(3);
                         main_ready_us=(unsigned)now_us+800;
                     }
                 }
             }
         }
-        MotorCalStatus s;Motor_Calibration_GetStatus(&s);assert(s.dropped==0);
+        motor_cal_status_t s;motor_calibration_get_status(&s);assert(s.dropped==0);
         unsigned backlog=s.produced-wire_sequence;
         if (backlog>max_backlog)max_backlog=backlog;
         now_us+=50;

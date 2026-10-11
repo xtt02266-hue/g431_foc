@@ -1,0 +1,234 @@
+{
+  "equivalent": true,
+  "changed_sections": [],
+  "before": {
+    ".isr_vector": {
+      "address": 134217728,
+      "size": 472,
+      "type": 1,
+      "flags": 2,
+      "alignment": 1,
+      "sha256": "daa1c52d4ea409ad91a44db04a7b7a1b2ca5080af34ecb65c23aa9de81715492",
+      "ignored_build_timestamp": []
+    },
+    ".text": {
+      "address": 134218200,
+      "size": 102488,
+      "type": 1,
+      "flags": 6,
+      "alignment": 4,
+      "sha256": "9a1add89dbcde153d9e3d301e8dc7abce3f0796946ba7eb3c5788fe74c1b5a7b",
+      "ignored_build_timestamp": []
+    },
+    ".rodata": {
+      "address": 134320688,
+      "size": 1312,
+      "type": 1,
+      "flags": 2,
+      "alignment": 4,
+      "sha256": "8c48a4c1526a52092c72988b165d9d92b0bed6f3769e0c8b8d1a790f7a56a12e",
+      "ignored_build_timestamp": [
+        {
+          "offset": 4,
+          "size": 21
+        }
+      ]
+    },
+    ".ARM": {
+      "address": 134322000,
+      "size": 8,
+      "type": 1879048193,
+      "flags": 130,
+      "alignment": 4,
+      "sha256": "15de454551deb4e6590f537e79a6a8e0b3f3f1f715b8df4d1b8fa6c979849ae1",
+      "ignored_build_timestamp": []
+    },
+    ".preinit_array": {
+      "address": 134322008,
+      "size": 0,
+      "type": 16,
+      "flags": 3,
+      "alignment": 1,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "ignored_build_timestamp": []
+    },
+    ".init_array": {
+      "address": 134322008,
+      "size": 4,
+      "type": 14,
+      "flags": 3,
+      "alignment": 4,
+      "sha256": "a4e720d41bdcc65374b73b627af6b312578b86c5a9c487adb71fa75b368e6467",
+      "ignored_build_timestamp": []
+    },
+    ".fini_array": {
+      "address": 134322012,
+      "size": 4,
+      "type": 15,
+      "flags": 3,
+      "alignment": 4,
+      "sha256": "f67e4173fffc92ff491742df4d1c902d7ebe5558b3c83f29f153748eea289112",
+      "ignored_build_timestamp": []
+    },
+    ".data": {
+      "address": 536870912,
+      "size": 212,
+      "type": 1,
+      "flags": 3,
+      "alignment": 4,
+      "sha256": "3c4b6ae74667b3938dbf5ee2667bffaf7735ee290ed33a1c2deb584e0f8dba37",
+      "ignored_build_timestamp": []
+    },
+    ".tdata": {
+      "address": 536871124,
+      "size": 0,
+      "type": 1,
+      "flags": 1027,
+      "alignment": 4,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "ignored_build_timestamp": []
+    },
+    ".tbss": {
+      "address": 536871124,
+      "size": 0,
+      "type": 8,
+      "flags": 1027,
+      "alignment": 4,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "ignored_build_timestamp": []
+    },
+    ".bss": {
+      "address": 536871124,
+      "size": 25996,
+      "type": 8,
+      "flags": 3,
+      "alignment": 4,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "ignored_build_timestamp": []
+    },
+    "._user_heap_stack": {
+      "address": 536897120,
+      "size": 1536,
+      "type": 8,
+      "flags": 3,
+      "alignment": 1,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "ignored_build_timestamp": []
+    }
+  },
+  "after": {
+    ".isr_vector": {
+      "address": 134217728,
+      "size": 472,
+      "type": 1,
+      "flags": 2,
+      "alignment": 1,
+      "sha256": "daa1c52d4ea409ad91a44db04a7b7a1b2ca5080af34ecb65c23aa9de81715492",
+      "ignored_build_timestamp": []
+    },
+    ".text": {
+      "address": 134218200,
+      "size": 102488,
+      "type": 1,
+      "flags": 6,
+      "alignment": 4,
+      "sha256": "9a1add89dbcde153d9e3d301e8dc7abce3f0796946ba7eb3c5788fe74c1b5a7b",
+      "ignored_build_timestamp": []
+    },
+    ".rodata": {
+      "address": 134320688,
+      "size": 1312,
+      "type": 1,
+      "flags": 2,
+      "alignment": 4,
+      "sha256": "8c48a4c1526a52092c72988b165d9d92b0bed6f3769e0c8b8d1a790f7a56a12e",
+      "ignored_build_timestamp": [
+        {
+          "offset": 4,
+          "size": 21
+        }
+      ]
+    },
+    ".ARM": {
+      "address": 134322000,
+      "size": 8,
+      "type": 1879048193,
+      "flags": 130,
+      "alignment": 4,
+      "sha256": "15de454551deb4e6590f537e79a6a8e0b3f3f1f715b8df4d1b8fa6c979849ae1",
+      "ignored_build_timestamp": []
+    },
+    ".preinit_array": {
+      "address": 134322008,
+      "size": 0,
+      "type": 16,
+      "flags": 3,
+      "alignment": 1,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "ignored_build_timestamp": []
+    },
+    ".init_array": {
+      "address": 134322008,
+      "size": 4,
+      "type": 14,
+      "flags": 3,
+      "alignment": 4,
+      "sha256": "a4e720d41bdcc65374b73b627af6b312578b86c5a9c487adb71fa75b368e6467",
+      "ignored_build_timestamp": []
+    },
+    ".fini_array": {
+      "address": 134322012,
+      "size": 4,
+      "type": 15,
+      "flags": 3,
+      "alignment": 4,
+      "sha256": "f67e4173fffc92ff491742df4d1c902d7ebe5558b3c83f29f153748eea289112",
+      "ignored_build_timestamp": []
+    },
+    ".data": {
+      "address": 536870912,
+      "size": 212,
+      "type": 1,
+      "flags": 3,
+      "alignment": 4,
+      "sha256": "3c4b6ae74667b3938dbf5ee2667bffaf7735ee290ed33a1c2deb584e0f8dba37",
+      "ignored_build_timestamp": []
+    },
+    ".tdata": {
+      "address": 536871124,
+      "size": 0,
+      "type": 1,
+      "flags": 1027,
+      "alignment": 4,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "ignored_build_timestamp": []
+    },
+    ".tbss": {
+      "address": 536871124,
+      "size": 0,
+      "type": 8,
+      "flags": 1027,
+      "alignment": 4,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "ignored_build_timestamp": []
+    },
+    ".bss": {
+      "address": 536871124,
+      "size": 25996,
+      "type": 8,
+      "flags": 3,
+      "alignment": 4,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "ignored_build_timestamp": []
+    },
+    "._user_heap_stack": {
+      "address": 536897120,
+      "size": 1536,
+      "type": 8,
+      "flags": 3,
+      "alignment": 1,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "ignored_build_timestamp": []
+    }
+  }
+}
