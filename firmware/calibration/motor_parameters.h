@@ -24,6 +24,9 @@ void motor_parameters_init(void);
  */
 uint8_t motor_parameters_identify_and_save(void);
 
+// 取消待触发、正在辨识或待保存会话；恢复此前有效参数，保持停机。
+void motor_parameters_cancel_identification(void);
+
 /* Internal scheduler hooks. */
 void motor_parameters_control_task1ms(void);
 // 前台处理辨识完成后的参数保存与状态发布。

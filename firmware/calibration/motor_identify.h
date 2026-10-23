@@ -29,6 +29,9 @@ extern motor_identified_params_t g_identified_params;
 // 启动辨识流程序列。
 void motor_identify_start(void);
 
+// 撤销本次辨识并清理阶段历史；调用方须与 1 ms 任务互斥。
+void motor_identify_cancel(void);
+
 // 获取当前辨识器运行状态。
 uint8_t motor_identify_get_state(void);
 

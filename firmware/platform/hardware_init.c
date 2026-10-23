@@ -51,6 +51,7 @@ void hardware_init(void)
     HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
     HAL_ADCEx_Calibration_Start(&hadc2, ADC_SINGLE_ENDED);
 
+    // 启动电位器 ADC 的 DMA 采样，供周期任务读取给定。
     user_io_start_dma();
 
     /* SPI1已由CubeMX初始化；先建立首个15位角度快照，再启动FOC采样中断。 */
@@ -64,7 +65,7 @@ void hardware_init(void)
     // 3. 首先配置并开启 ADC 注入通道，等待被 TIM1 触发
     motor_current_loop_init();
     HAL_Delay(10);
-    // 调用封装好的偏置校准函数
+    // 在无驱动电压时采样 U/W 相零点，分别保存电流偏置。
     hardware_calibrate_current_bias();
     HAL_Delay(10);
     HAL_ADCEx_InjectedStart_IT(&hadc1);
@@ -80,14 +81,14 @@ void hardware_init(void)
     // 初始化 SVPWM 模块（三相输出 50% 零矢量，上电安全）
     svpwm_init();
 
-    // 5. 启动 TIM2 (用于 1ms / 1000Hz 周期任务调度)
-
-    // 6. 启动串口接收 (与 VOFA+ 上位机通信)
+    // 启动串口接收，供上位机协议处理使用。
     vofa_init();
 
+    // 初始化运行状态、控制环及补偿模块，保持未请求运行状态。
     motor_system_init();
 
     // 加载 Flash 参数；缺失时是否请求辨识由现有自动辨识配置决定。
     motor_parameters_init();
+    // 控制状态和参数初始化完成后，启动 TIM2 的 1 ms 调度中断。
     HAL_TIM_Base_Start_IT(&htim2);
 }

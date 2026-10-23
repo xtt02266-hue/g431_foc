@@ -451,7 +451,659 @@ static uint8_t cal_command_allowed(uint8_t cmd)
            cmd == CMD_CAL_STATUS || cmd == CMD_CAL_ABORT || cmd == CMD_GET_SPEED_PI || cmd == CMD_CAL_REPLAY;
 }
 
-// 前台校验请求与控制权后分派命令，保持错误优先级、重放和回复内容。
+_Static_assert(sizeof(motor_cal_sample_t) == 64U, "Calibration wire sample layout changed");
+
+// 编码 12 字节批头和 64/68 字节记录；发送消费与历史回放由调用方决定。
+static uint16_t build_calibration_batch(uint8_t *out, const motor_cal_status_t *status,
+                                       const motor_cal_sample_t *samples, const float *targets, uint8_t count)
+{
+    uint8_t point = status->mode == 5U;
+    uint16_t size = point ? 68U : 64U;
+    put_u16(out, point ? motor_calibration_point_schema() : MOTOR_CAL_SCHEMA);
+    put_u32(out + 2, status->session);
+    out[6] = count;
+    out[7] = 0U;
+    put_u32(out + 8, status->dropped);
+    for (uint8_t i = 0; i < count; i++) {
+        memcpy(out + 12 + i * size, &samples[i], 64U);
+        if (point) {
+            put_f32(out + 12 + i * size + 64, targets[i]);
+        }
+    }
+    return (uint16_t)(12U + count * size);
+}
+
+// 处理连接、查询和无令牌停机命令，保持原有权限语义。
+static uint8_t handle_connection_command(uint8_t cmd, uint16_t bn, uint8_t *out,
+                                         uint16_t *out_n, motor_command_result_t *result)
+{
+    motor_command_result_t r = MOTOR_CMD_OK;
+    switch (cmd) {
+    case CMD_HELLO:
+    {
+        if (bn != 0U) {
+            r = MOTOR_CMD_INVALID_LENGTH;
+        } else {
+            out[0] = 1U;
+            out[1] = 13U;
+            out[2] = 3U;
+            put_u16(&out[3], 7U);
+            put_u32(&out[5], HAL_GetUIDw0());
+            put_u32(&out[9], HAL_GetUIDw1());
+            put_u32(&out[13], HAL_GetUIDw2());
+            put_u32(&out[17], 0xFFU);
+            put_u32(&out[21], 0xFFU | PC_FEATURE_COGGING_GAIN_10X | PC_FEATURE_CALIBRATION |
+                                  PC_FEATURE_FRICTION_CALIBRATION | PC_FEATURE_FRICTION_FLASH | PC_FEATURE_SPEED_PI |
+                                  PC_FEATURE_POINT_CAL | PC_FEATURE_POSITION_FRICTION | PC_FEATURE_CAL_REPLAY |
+                                  PC_FEATURE_POINT_CAL_256 | PC_FEATURE_POINT_QUALITY_RETRY |
+                                  PC_FEATURE_POINT_8COUNT_30S | PC_FEATURE_POINT_SINGLE_PAIR_WAIT |
+                                  PC_FEATURE_POINT_512_4COUNT | PC_FEATURE_POINT_3COUNT | PC_FEATURE_POINT_AVERAGE |
+                                  PC_FEATURE_ENCODER_AUTOCAL | PC_FEATURE_POINT_2COUNT |
+                                  PC_FEATURE_POINT_AVERAGE_POSITION);
+            put_f32(&out[25], MOTOR_TORQUE_CURRENT_LIMIT_A);
+            put_f32(&out[29], MOTOR_HOST_DEFAULT_IQ_LIMIT_A);
+            put_u16(&out[33], PC_PROTOCOL_MAX_PAYLOAD);
+            put_u16(&out[35], MOTOR_HOST_HEARTBEAT_TIMEOUT_MS);
+            *out_n = 37U;
+        }
+        break;
+    }
+    case CMD_GET_STATUS:
+    {
+        if (bn != 0U) {
+            r = MOTOR_CMD_INVALID_LENGTH;
+        } else {
+            *out_n = build_status(out);
+        }
+        break;
+    }
+    case CMD_ENCODER_CAL_STATUS:
+    {
+        if (bn != 0U) {
+            r = MOTOR_CMD_INVALID_LENGTH;
+        } else {
+            *out_n = build_encoder_cal_status(out);
+        }
+        break;
+    }
+    case CMD_CLAIM:
+    {
+        if (bn != 0U) {
+            r = MOTOR_CMD_INVALID_LENGTH;
+        } else {
+            r = motor_system_claim_host();
+            if (r == MOTOR_CMD_OK) {
+                ++s_token_counter;
+                if (s_token_counter == 0U) {
+                    ++s_token_counter;
+                }
+                s_token = s_token_counter;
+                motor_system_host_heartbeat();
+                put_u32(out, s_token);
+                *out_n = 4U;
+            }
+        }
+        break;
+    }
+    case CMD_STOP:
+    {
+        motor_system_release_host();
+        s_token = 0U;
+        break;
+    }
+    case CMD_CLEAR_FAULT:
+    {
+        r = motor_system_clear_fault() ? MOTOR_CMD_OK : MOTOR_CMD_NOT_READY;
+        break;
+    }
+    default: return 0U;
+    }
+    *result = r;
+    return 1U;
+}
+
+// 处理标定管理与编码器校准命令，保留既有校验顺序与应答字段。
+static motor_command_result_t handle_calibration_command(uint8_t cmd, const uint8_t *b,
+                                                            uint16_t bn, uint8_t *out, uint16_t *out_n)
+{
+    motor_command_result_t r = MOTOR_CMD_OK;
+    switch (cmd) {
+    case CMD_CAL_INFO:
+    {
+        if (bn != 0U) {
+            r = MOTOR_CMD_INVALID_LENGTH;
+        } else {
+            *out_n = build_cal_info(out);
+        }
+        break;
+    }
+    case CMD_ENCODER_CAL_START:
+    {
+        if (bn != 0U) {
+            r = MOTOR_CMD_INVALID_LENGTH;
+        } else {
+            r = motor_system_host_start_encoder_calibration();
+            *out_n = build_encoder_cal_status(out);
+        }
+        break;
+    }
+    case CMD_CAL_START:
+    {
+        uint8_t mode, repeats, retry_until_good, policy;
+        uint16_t points;
+        if (bn != 1U && bn != 3U && bn != 5U && bn != 6U) {
+            r = MOTOR_CMD_INVALID_LENGTH;
+        } else if (!motor_calibration_decode_start_policy(b, bn, &mode, &points, &repeats, &retry_until_good,
+                                                          &policy)) {
+            r = MOTOR_CMD_INVALID_VALUE;
+        } else {
+            r = motor_system_host_start_calibration(mode, points, repeats, retry_until_good, policy);
+            *out_n = build_cal_status(out);
+        }
+        break;
+    }
+    case CMD_CAL_ABORT:
+    {
+        if (bn != 0U) {
+            r = MOTOR_CMD_INVALID_LENGTH;
+        } else {
+            motor_system_abort_calibration();
+            *out_n = build_cal_status(out);
+        }
+        break;
+    }
+    case CMD_CAL_STATUS:
+    {
+        if (bn != 0U) {
+            r = MOTOR_CMD_INVALID_LENGTH;
+        } else {
+            *out_n = build_cal_status(out);
+        }
+        break;
+    }
+    default: return MOTOR_CMD_UNSUPPORTED;
+    }
+    return r;
+}
+
+// 处理标定历史回放命令，保留既有校验顺序与应答字段。
+static motor_command_result_t handle_calibration_replay_command(uint8_t cmd, const uint8_t *b,
+                                                            uint16_t bn, uint8_t *out, uint16_t *out_n)
+{
+    motor_command_result_t r = MOTOR_CMD_OK;
+    switch (cmd) {
+    case CMD_CAL_REPLAY:
+    {
+        if (bn != 9U) {
+            r = MOTOR_CMD_INVALID_LENGTH;
+        } else {
+            motor_cal_sample_t records[3];
+            float targets[3];
+            motor_cal_status_t status;
+            uint32_t mask = __get_PRIMASK();
+            __disable_irq();
+            motor_calibration_get_status(&status);
+            uint8_t count =
+                get_u32(b) == status.session ? motor_calibration_replay(get_u32(b + 4), b[8], records, targets) : 0U;
+            if (!mask) {
+                __enable_irq();
+            }
+            if (!count) {
+                r = MOTOR_CMD_NOT_READY;
+            } else {
+                *out_n = build_calibration_batch(out, &status, records, targets, count);
+            }
+        }
+        break;
+    }
+    default: return MOTOR_CMD_UNSUPPORTED;
+    }
+    return r;
+}
+
+// 处理启停与辨识命令，保留既有校验顺序与应答字段。
+static motor_command_result_t handle_control_command(uint8_t cmd, const uint8_t *b,
+                                                            uint16_t bn, uint8_t *out, uint16_t *out_n)
+{
+    motor_command_result_t r = MOTOR_CMD_OK;
+    switch (cmd) {
+    case CMD_IDENTIFY:
+    {
+        if (bn != 0U) {
+            r = MOTOR_CMD_INVALID_LENGTH;
+        } else if (motor_encoder_is_data_fresh(2U) == 0U) {
+            r = MOTOR_CMD_NOT_READY;
+        } else {
+            r = motor_system_identify_and_save() ? MOTOR_CMD_OK : MOTOR_CMD_BUSY;
+        }
+        break;
+    }
+    case CMD_RELEASE:
+    {
+        motor_system_release_host();
+        s_token = 0U;
+        break;
+    }
+    case CMD_HEARTBEAT:
+    {
+        motor_system_host_heartbeat();
+        *out_n = build_status(out);
+        break;
+    }
+    case CMD_START:
+    {
+        r = motor_system_host_start();
+        break;
+    }
+    case CMD_FORCE_DRAG_250:
+    {
+        if (bn != 0U) {
+            r = MOTOR_CMD_INVALID_LENGTH;
+        } else {
+            r = motor_system_host_start_force_drag250();
+        }
+        break;
+    }
+    default: return MOTOR_CMD_UNSUPPORTED;
+    }
+    return r;
+}
+
+// 处理模式与主机目标命令，保留既有校验顺序与应答字段。
+static motor_command_result_t handle_targets_command(uint8_t cmd, const uint8_t *b,
+                                                            uint16_t bn, uint8_t *out, uint16_t *out_n)
+{
+    motor_command_result_t r = MOTOR_CMD_OK;
+    switch (cmd) {
+    case CMD_SET_MODE:
+    {
+        if (bn != 2U) {
+            r = MOTOR_CMD_INVALID_LENGTH;
+        } else {
+            r = motor_system_host_set_mode(b[0], b[1]);
+        }
+        break;
+    }
+    case CMD_SET_IQ:
+    {
+        float accepted = 0.0f;
+        float slew = MOTOR_HOST_IQ_SLEW_A_PER_S;
+        if ((bn != 4U) && (bn != 8U)) {
+            r = MOTOR_CMD_INVALID_LENGTH;
+        } else {
+            if (bn == 8U) {
+                slew = get_f32(&b[4]);
+            }
+            r = motor_system_host_set_iq(get_f32(b), slew);
+            if (r == MOTOR_CMD_OK) {
+                accepted = motor_system_get_last_accepted_iq();
+            }
+            put_f32(out, accepted);
+            *out_n = 4U;
+        }
+        break;
+    }
+    case CMD_SET_IQ_LIMIT:
+    {
+        if (bn != 4U) {
+            r = MOTOR_CMD_INVALID_LENGTH;
+        } else {
+            r = motor_system_host_set_iq_limit(get_f32(b));
+            put_f32(out, motor_system_get_control_owner() == MOTOR_OWNER_HOST ? get_f32(b) : 0.0f);
+            *out_n = 4U;
+        }
+        break;
+    }
+    case CMD_SET_SPEED:
+    {
+        float accepted = 0.0f;
+        if ((bn != 4U) && (bn != 8U)) {
+            r = MOTOR_CMD_INVALID_LENGTH;
+        } else {
+            float slew = (bn == 8U) ? get_f32(&b[4]) : MOTOR_HOST_SPEED_SLEW_RPM_PER_S;
+            r = motor_system_host_set_speed(get_f32(b), slew);
+            if (r == MOTOR_CMD_OK) {
+                accepted = motor_system_get_last_accepted_speed();
+            }
+            put_f32(out, accepted);
+            put_f32(&out[4], slew);
+            *out_n = 8U;
+        }
+        break;
+    }
+    default: return MOTOR_CMD_UNSUPPORTED;
+    }
+    return r;
+}
+
+// 处理触觉配置与参数查询命令，保留既有校验顺序与应答字段。
+static motor_command_result_t handle_haptic_command(uint8_t cmd, const uint8_t *b,
+                                                            uint16_t bn, uint8_t *out, uint16_t *out_n)
+{
+    motor_command_result_t r = MOTOR_CMD_OK;
+    switch (cmd) {
+    case CMD_SET_HAPTIC:
+    {
+        motor_haptic_params_t hp;
+        if (bn != 22U) {
+            r = MOTOR_CMD_INVALID_LENGTH;
+        } else {
+            hp.spring_k_a_per_rad = get_f32(&b[0]);
+            hp.damping_b_a_per_rad_s = get_f32(&b[4]);
+            hp.detent_k_a_per_rad = get_f32(&b[8]);
+            hp.limit_k_a_per_rad = get_f32(&b[12]);
+            hp.limit_half_range_deg = get_f32(&b[16]);
+            hp.detent_count = get_u16(&b[20]);
+            r = motor_system_host_set_haptic_params(hp.spring_k_a_per_rad, hp.damping_b_a_per_rad_s,
+                                                    hp.detent_k_a_per_rad, hp.limit_k_a_per_rad,
+                                                    hp.limit_half_range_deg, hp.detent_count);
+        }
+        break;
+    }
+    case CMD_GET_PARAMS:
+    {
+        motor_control_snapshot_t cs;
+        motor_haptic_params_t hp;
+        motor_system_get_control_snapshot(&cs);
+        motor_system_get_haptic_params(&hp);
+        out[0] = (uint8_t)cs.mode;
+        out[1] = (uint8_t)cs.source;
+        put_f32(&out[2], cs.iq_limit_a);
+        put_f32(&out[6], MOTOR_HOST_IQ_SLEW_A_PER_S);
+        put_f32(&out[10], hp.spring_k_a_per_rad);
+        put_f32(&out[14], hp.damping_b_a_per_rad_s);
+        put_f32(&out[18], hp.detent_k_a_per_rad);
+        put_f32(&out[22], hp.limit_k_a_per_rad);
+        put_f32(&out[26], hp.limit_half_range_deg);
+        put_u16(&out[30], hp.detent_count);
+        *out_n = 32U;
+        break;
+    }
+    default: return MOTOR_CMD_UNSUPPORTED;
+    }
+    return r;
+}
+
+// 处理摩擦补偿配置命令，保留既有校验顺序与应答字段。
+static motor_command_result_t handle_friction_command(uint8_t cmd, const uint8_t *b,
+                                                            uint16_t bn, uint8_t *out, uint16_t *out_n)
+{
+    motor_command_result_t r = MOTOR_CMD_OK;
+    switch (cmd) {
+    case CMD_SET_FRICTION:
+    case CMD_SAVE_FRICTION:
+    {
+        motor_friction_config_t fc;
+        if (bn != 17U) {
+            r = MOTOR_CMD_INVALID_LENGTH;
+        } else {
+            fc.enabled = b[0];
+            fc.coulomb_iq_a = get_f32(&b[1]);
+            fc.viscous_iq_a_per_rpm = get_f32(&b[5]);
+            fc.smooth_speed_rpm = get_f32(&b[9]);
+            fc.max_iq_a = get_f32(&b[13]);
+            r = cmd == CMD_SAVE_FRICTION
+                    ? motor_system_host_save_friction_config(fc.enabled, fc.coulomb_iq_a, fc.viscous_iq_a_per_rpm,
+                                                             fc.smooth_speed_rpm, fc.max_iq_a)
+                    : motor_system_host_set_friction_config(fc.enabled, fc.coulomb_iq_a, fc.viscous_iq_a_per_rpm,
+                                                            fc.smooth_speed_rpm, fc.max_iq_a);
+            if (r == MOTOR_CMD_OK) {
+                memcpy(out, b, 17U);
+                *out_n = 17U;
+            }
+        }
+        break;
+    }
+    case CMD_GET_FRICTION:
+    {
+        motor_friction_config_t fc;
+        if (bn != 0U) {
+            r = MOTOR_CMD_INVALID_LENGTH;
+        } else {
+            motor_system_get_friction_config(&fc);
+            out[0] = fc.enabled;
+            put_f32(&out[1], fc.coulomb_iq_a);
+            put_f32(&out[5], fc.viscous_iq_a_per_rpm);
+            put_f32(&out[9], fc.smooth_speed_rpm);
+            put_f32(&out[13], fc.max_iq_a);
+            *out_n = 17U;
+        }
+        break;
+    }
+    default: return MOTOR_CMD_UNSUPPORTED;
+    }
+    return r;
+}
+
+// 处理速度 PI 配置命令，保留既有校验顺序与应答字段。
+static motor_command_result_t handle_speed_pi_command(uint8_t cmd, const uint8_t *b,
+                                                            uint16_t bn, uint8_t *out, uint16_t *out_n)
+{
+    motor_command_result_t r = MOTOR_CMD_OK;
+    switch (cmd) {
+    case CMD_SET_SPEED_PI:
+    case CMD_GET_SPEED_PI:
+    {
+        if (bn != (cmd == CMD_SET_SPEED_PI ? 8U : 0U)) {
+            r = MOTOR_CMD_INVALID_LENGTH;
+        } else {
+            if (cmd == CMD_SET_SPEED_PI) {
+                r = motor_system_host_set_speed_pi(get_f32(b), get_f32(b + 4));
+            }
+            if (r == MOTOR_CMD_OK) {
+                put_f32(out, speed_pid.kp);
+                put_f32(out + 4, speed_pid.ki);
+                put_f32(out + 8, speed_pid.kd);
+                *out_n = 12U;
+            }
+        }
+        break;
+    }
+    default: return MOTOR_CMD_UNSUPPORTED;
+    }
+    return r;
+}
+
+// 处理齿槽补偿配置命令，保留既有校验顺序与应答字段。
+static motor_command_result_t handle_cogging_config_command(uint8_t cmd, const uint8_t *b,
+                                                            uint16_t bn, uint8_t *out, uint16_t *out_n)
+{
+    motor_command_result_t r = MOTOR_CMD_OK;
+    switch (cmd) {
+    case CMD_SET_COGGING_CONFIG:
+    {
+        motor_cogging_config_t cc;
+        if (bn != 19U) {
+            r = MOTOR_CMD_INVALID_LENGTH;
+        } else {
+            cc.enabled = b[0];
+            cc.gain = get_f32(&b[1]);
+            cc.max_iq_a = get_f32(&b[5]);
+            cc.fade_start_rpm = get_f32(&b[9]);
+            cc.fade_end_rpm = get_f32(&b[13]);
+            cc.phase_offset_counts = get_u16(&b[17]);
+            r = motor_system_host_set_cogging_config(cc.enabled, cc.gain, cc.max_iq_a, cc.fade_start_rpm,
+                                                     cc.fade_end_rpm, cc.phase_offset_counts);
+            if (r == MOTOR_CMD_OK) {
+                memcpy(out, b, 19U);
+                *out_n = 19U;
+            }
+        }
+        break;
+    }
+    case CMD_GET_COGGING_CONFIG:
+    {
+        motor_cogging_config_t cc;
+        motor_control_snapshot_t cs;
+        if (bn != 0U) {
+            r = MOTOR_CMD_INVALID_LENGTH;
+        } else {
+            motor_system_get_cogging_config(&cc);
+            motor_system_get_control_snapshot(&cs);
+            out[0] = cc.enabled;
+            put_f32(&out[1], cc.gain);
+            put_f32(&out[5], cc.max_iq_a);
+            put_f32(&out[9], cc.fade_start_rpm);
+            put_f32(&out[13], cc.fade_end_rpm);
+            put_u16(&out[17], cc.phase_offset_counts);
+            put_u32(&out[19], cs.cogging_table_revision);
+            put_u32(&out[23], cs.cogging_table_crc);
+            out[27] = motor_cogging_is_persisted();
+            *out_n = 28U;
+        }
+        break;
+    }
+    default: return MOTOR_CMD_UNSUPPORTED;
+    }
+    return r;
+}
+
+// 处理齿槽表事务与保存命令，保留既有校验顺序与应答字段。
+static motor_command_result_t handle_cogging_table_command(uint8_t cmd, const uint8_t *b,
+                                                            uint16_t bn, uint8_t *out, uint16_t *out_n)
+{
+    motor_command_result_t r = MOTOR_CMD_OK;
+    switch (cmd) {
+    case CMD_COGGING_TABLE_BEGIN:
+    {
+        uint16_t transaction = 0U;
+        if (bn != 6U) {
+            r = MOTOR_CMD_INVALID_LENGTH;
+        } else {
+            r = motor_system_host_begin_cogging_table(get_u16(&b[0]), get_u32(&b[2]));
+            if (r == MOTOR_CMD_OK) {
+                transaction = motor_cogging_get_transaction_id();
+            }
+            if (r == MOTOR_CMD_OK) {
+                put_u16(out, transaction);
+                *out_n = 2U;
+            }
+        }
+        break;
+    }
+    case CMD_COGGING_TABLE_CHUNK:
+    {
+        int16_t values[MOTOR_COGGING_CHUNK_MAX_POINTS];
+        if ((bn < 5U) || (b[4] == 0U) || (b[4] > MOTOR_COGGING_CHUNK_MAX_POINTS) ||
+            (bn != (uint16_t)(5U + 2U * b[4]))) {
+            r = MOTOR_CMD_INVALID_LENGTH;
+        } else {
+            for (uint16_t i = 0U; i < b[4]; ++i) {
+                values[i] = get_i16(&b[5U + 2U * i]);
+            }
+            r = motor_system_host_write_cogging_chunk(get_u16(&b[0]), get_u16(&b[2]), b[4], values);
+            if (r == MOTOR_CMD_OK) {
+                put_u16(&out[0], get_u16(&b[2]));
+                out[2] = b[4];
+                *out_n = 3U;
+            }
+        }
+        break;
+    }
+    case CMD_COGGING_TABLE_COMMIT:
+    {
+        motor_control_snapshot_t cs;
+        if (bn != 2U) {
+            r = MOTOR_CMD_INVALID_LENGTH;
+        } else {
+            r = motor_system_host_commit_cogging_table(get_u16(b));
+            if (r == MOTOR_CMD_OK) {
+                motor_system_get_control_snapshot(&cs);
+                put_u32(&out[0], cs.cogging_table_revision);
+                put_u32(&out[4], cs.cogging_table_crc);
+                *out_n = 8U;
+            }
+        }
+        break;
+    }
+    case CMD_GET_COGGING_TABLE_CHUNK:
+    {
+        int16_t values[MOTOR_COGGING_CHUNK_MAX_POINTS];
+        if ((bn != 3U) || (b[2] == 0U) || (b[2] > MOTOR_COGGING_CHUNK_MAX_POINTS)) {
+            r = MOTOR_CMD_INVALID_LENGTH;
+        } else {
+            r = motor_system_host_read_cogging_chunk(get_u16(&b[0]), b[2], values);
+            if (r == MOTOR_CMD_OK) {
+                put_u16(&out[0], get_u16(&b[0]));
+                out[2] = b[2];
+                for (uint16_t i = 0U; i < b[2]; ++i) {
+                    put_u16(&out[3U + 2U * i], (uint16_t)values[i]);
+                }
+                *out_n = (uint16_t)(3U + 2U * b[2]);
+            }
+        }
+        break;
+    }
+    case CMD_SAVE_COGGING:
+    {
+        motor_control_snapshot_t cs;
+        if (bn != 0U) {
+            r = MOTOR_CMD_INVALID_LENGTH;
+        } else {
+            r = motor_system_host_save_cogging();
+            motor_system_get_control_snapshot(&cs);
+            if (r == MOTOR_CMD_OK) {
+                put_u32(&out[0], cs.cogging_table_revision);
+                put_u32(&out[4], cs.cogging_table_crc);
+                out[8] = motor_cogging_is_persisted();
+                *out_n = 9U;
+            }
+        }
+        break;
+    }
+    default: return MOTOR_CMD_UNSUPPORTED;
+    }
+    return r;
+}
+
+// 仅在令牌和校准门控通过后分发业务；未知命令维持原错误码。
+static motor_command_result_t handle_owned_command(uint8_t cmd, const uint8_t *b, uint16_t bn,
+                                                   uint8_t *out, uint16_t *out_n)
+{
+    switch (cmd) {
+    case CMD_CAL_INFO:
+    case CMD_ENCODER_CAL_START:
+    case CMD_CAL_START:
+    case CMD_CAL_ABORT:
+    case CMD_CAL_STATUS:
+        return handle_calibration_command(cmd, b, bn, out, out_n);
+    case CMD_CAL_REPLAY:
+        return handle_calibration_replay_command(cmd, b, bn, out, out_n);
+    case CMD_IDENTIFY:
+    case CMD_RELEASE:
+    case CMD_HEARTBEAT:
+    case CMD_START:
+    case CMD_FORCE_DRAG_250:
+        return handle_control_command(cmd, b, bn, out, out_n);
+    case CMD_SET_MODE:
+    case CMD_SET_IQ:
+    case CMD_SET_IQ_LIMIT:
+    case CMD_SET_SPEED:
+        return handle_targets_command(cmd, b, bn, out, out_n);
+    case CMD_SET_HAPTIC:
+    case CMD_GET_PARAMS:
+        return handle_haptic_command(cmd, b, bn, out, out_n);
+    case CMD_SET_FRICTION:
+    case CMD_SAVE_FRICTION:
+    case CMD_GET_FRICTION:
+        return handle_friction_command(cmd, b, bn, out, out_n);
+    case CMD_SET_SPEED_PI:
+    case CMD_GET_SPEED_PI:
+        return handle_speed_pi_command(cmd, b, bn, out, out_n);
+    case CMD_SET_COGGING_CONFIG:
+    case CMD_GET_COGGING_CONFIG:
+        return handle_cogging_config_command(cmd, b, bn, out, out_n);
+    case CMD_COGGING_TABLE_BEGIN:
+    case CMD_COGGING_TABLE_CHUNK:
+    case CMD_COGGING_TABLE_COMMIT:
+    case CMD_GET_COGGING_TABLE_CHUNK:
+    case CMD_SAVE_COGGING:
+        return handle_cogging_table_command(cmd, b, bn, out, out_n);
+    default: return MOTOR_CMD_UNSUPPORTED;
+    }
+}
+
+// 校验请求、控制权和校准互斥后分派业务，再统一回复和缓存。
 static void handle_command(uint16_t seq, const uint8_t *p, uint16_t n)
 {
     if (n < 5U) {
@@ -479,66 +1131,8 @@ static void handle_command(uint16_t seq, const uint8_t *p, uint16_t n)
         }
         return;
     }
-    if (cmd == CMD_HELLO) {
-        if (bn != 0U) {
-            r = MOTOR_CMD_INVALID_LENGTH;
-        } else {
-            out[0] = 1U;
-            out[1] = 13U;
-            out[2] = 3U;
-            put_u16(&out[3], 7U);
-            put_u32(&out[5], HAL_GetUIDw0());
-            put_u32(&out[9], HAL_GetUIDw1());
-            put_u32(&out[13], HAL_GetUIDw2());
-            put_u32(&out[17], 0xFFU);
-            put_u32(&out[21], 0xFFU | PC_FEATURE_COGGING_GAIN_10X | PC_FEATURE_CALIBRATION |
-                                  PC_FEATURE_FRICTION_CALIBRATION | PC_FEATURE_FRICTION_FLASH | PC_FEATURE_SPEED_PI |
-                                  PC_FEATURE_POINT_CAL | PC_FEATURE_POSITION_FRICTION | PC_FEATURE_CAL_REPLAY |
-                                  PC_FEATURE_POINT_CAL_256 | PC_FEATURE_POINT_QUALITY_RETRY |
-                                  PC_FEATURE_POINT_8COUNT_30S | PC_FEATURE_POINT_SINGLE_PAIR_WAIT |
-                                  PC_FEATURE_POINT_512_4COUNT | PC_FEATURE_POINT_3COUNT | PC_FEATURE_POINT_AVERAGE |
-                                  PC_FEATURE_ENCODER_AUTOCAL | PC_FEATURE_POINT_2COUNT |
-                                  PC_FEATURE_POINT_AVERAGE_POSITION);
-            put_f32(&out[25], MOTOR_TORQUE_CURRENT_LIMIT_A);
-            put_f32(&out[29], MOTOR_HOST_DEFAULT_IQ_LIMIT_A);
-            put_u16(&out[33], PC_PROTOCOL_MAX_PAYLOAD);
-            put_u16(&out[35], MOTOR_HOST_HEARTBEAT_TIMEOUT_MS);
-            out_n = 37U;
-        }
-    } else if (cmd == CMD_GET_STATUS) {
-        if (bn != 0U) {
-            r = MOTOR_CMD_INVALID_LENGTH;
-        } else {
-            out_n = build_status(out);
-        }
-    } else if (cmd == CMD_ENCODER_CAL_STATUS) {
-        if (bn != 0U) {
-            r = MOTOR_CMD_INVALID_LENGTH;
-        } else {
-            out_n = build_encoder_cal_status(out);
-        }
-    } else if (cmd == CMD_CLAIM) {
-        if (bn != 0U) {
-            r = MOTOR_CMD_INVALID_LENGTH;
-        } else {
-            r = motor_system_claim_host();
-            if (r == MOTOR_CMD_OK) {
-                ++s_token_counter;
-                if (s_token_counter == 0U) {
-                    ++s_token_counter;
-                }
-                s_token = s_token_counter;
-                motor_system_host_heartbeat();
-                put_u32(out, s_token);
-                out_n = 4U;
-            }
-        }
-    } else if (cmd == CMD_STOP) {
-        motor_system_stop_control();
-        motor_system_release_host();
-        s_token = 0U;
-    } else if (cmd == CMD_CLEAR_FAULT) {
-        r = motor_system_clear_fault() ? MOTOR_CMD_OK : MOTOR_CMD_NOT_READY;
+    if (handle_connection_command(cmd, bn, out, &out_n, &r)) {
+        // 无令牌命令已处理，继续走统一回复和请求去重缓存。
     } else if (!token_ok(token)) {
         r = MOTOR_CMD_NOT_OWNER;
     } else if ((motor_encoder_cal_is_active() || motor_encoder_cal_requires_power_cycle()) &&
@@ -546,333 +1140,8 @@ static void handle_command(uint16_t seq, const uint8_t *p, uint16_t n)
         r = motor_encoder_cal_requires_power_cycle() ? MOTOR_CMD_NOT_READY : MOTOR_CMD_BUSY;
     } else if (motor_calibration_is_active() && !cal_command_allowed(cmd)) {
         r = MOTOR_CMD_BUSY;
-    } else if (cmd == CMD_CAL_INFO) {
-        if (bn != 0U) {
-            r = MOTOR_CMD_INVALID_LENGTH;
-        } else {
-            out_n = build_cal_info(out);
-        }
-    } else if (cmd == CMD_ENCODER_CAL_START) {
-        if (bn != 0U) {
-            r = MOTOR_CMD_INVALID_LENGTH;
-        } else {
-            r = motor_system_host_start_encoder_calibration();
-            out_n = build_encoder_cal_status(out);
-        }
-    } else if (cmd == CMD_CAL_START) {
-        uint8_t mode, repeats, retry_until_good, policy;
-        uint16_t points;
-        if (bn != 1U && bn != 3U && bn != 5U && bn != 6U) {
-            r = MOTOR_CMD_INVALID_LENGTH;
-        } else if (!motor_calibration_decode_start_policy(b, bn, &mode, &points, &repeats, &retry_until_good,
-                                                          &policy)) {
-            r = MOTOR_CMD_INVALID_VALUE;
-        } else {
-            r = motor_system_host_start_calibration(mode, points, repeats, retry_until_good, policy);
-            out_n = build_cal_status(out);
-        }
-    } else if (cmd == CMD_CAL_ABORT) {
-        if (bn != 0U) {
-            r = MOTOR_CMD_INVALID_LENGTH;
-        } else {
-            motor_system_abort_calibration();
-            out_n = build_cal_status(out);
-        }
-    } else if (cmd == CMD_CAL_STATUS) {
-        if (bn != 0U) {
-            r = MOTOR_CMD_INVALID_LENGTH;
-        } else {
-            out_n = build_cal_status(out);
-        }
-    } else if (cmd == CMD_CAL_REPLAY) {
-        if (bn != 9U) {
-            r = MOTOR_CMD_INVALID_LENGTH;
-        } else {
-            motor_cal_sample_t records[3];
-            float targets[3];
-            motor_cal_status_t status;
-            uint32_t mask = __get_PRIMASK();
-            __disable_irq();
-            motor_calibration_get_status(&status);
-            uint8_t count =
-                get_u32(b) == status.session ? motor_calibration_replay(get_u32(b + 4), b[8], records, targets) : 0U;
-            if (!mask) {
-                __enable_irq();
-            }
-            if (!count) {
-                r = MOTOR_CMD_NOT_READY;
-            } else {
-                uint8_t point = status.mode == 5U;
-                uint16_t size = point ? 68U : 64U;
-                put_u16(out, point ? motor_calibration_point_schema() : MOTOR_CAL_SCHEMA);
-                put_u32(out + 2, status.session);
-                out[6] = count;
-                out[7] = 0U;
-                put_u32(out + 8, status.dropped);
-                for (uint8_t i = 0; i < count; i++) {
-                    memcpy(out + 12 + i * size, &records[i], 64U);
-                    if (point) {
-                        put_f32(out + 12 + i * size + 64, targets[i]);
-                    }
-                }
-                out_n = (uint16_t)(12U + count * size);
-            }
-        }
-    } else if (cmd == CMD_IDENTIFY) {
-        if (bn != 0U) {
-            r = MOTOR_CMD_INVALID_LENGTH;
-        } else if (motor_encoder_is_data_fresh(2U) == 0U) {
-            r = MOTOR_CMD_NOT_READY;
-        } else {
-            r = motor_parameters_identify_and_save() ? MOTOR_CMD_OK : MOTOR_CMD_BUSY;
-        }
-    } else if (cmd == CMD_RELEASE) {
-        motor_system_release_host();
-        s_token = 0U;
-    } else if (cmd == CMD_HEARTBEAT) {
-        motor_system_host_heartbeat();
-        out_n = build_status(out);
-    } else if (cmd == CMD_START) {
-        r = motor_system_host_start();
-    } else if (cmd == CMD_FORCE_DRAG_250) {
-        if (bn != 0U) {
-            r = MOTOR_CMD_INVALID_LENGTH;
-        } else {
-            r = motor_system_host_start_force_drag250();
-        }
-    } else if (cmd == CMD_SET_MODE) {
-        if (bn != 2U) {
-            r = MOTOR_CMD_INVALID_LENGTH;
-        } else {
-            r = motor_system_host_set_mode(b[0], b[1]);
-        }
-    } else if (cmd == CMD_SET_IQ) {
-        float accepted = 0.0f;
-        float slew = MOTOR_HOST_IQ_SLEW_A_PER_S;
-        if ((bn != 4U) && (bn != 8U)) {
-            r = MOTOR_CMD_INVALID_LENGTH;
-        } else {
-            if (bn == 8U) {
-                slew = get_f32(&b[4]);
-            }
-            r = motor_system_host_set_iq(get_f32(b), slew);
-            if (r == MOTOR_CMD_OK) {
-                accepted = motor_system_get_last_accepted_iq();
-            }
-            put_f32(out, accepted);
-            out_n = 4U;
-        }
-    } else if (cmd == CMD_SET_IQ_LIMIT) {
-        if (bn != 4U) {
-            r = MOTOR_CMD_INVALID_LENGTH;
-        } else {
-            r = motor_system_host_set_iq_limit(get_f32(b));
-            put_f32(out, motor_system_get_control_owner() == MOTOR_OWNER_HOST ? get_f32(b) : 0.0f);
-            out_n = 4U;
-        }
-    } else if (cmd == CMD_SET_HAPTIC) {
-        motor_haptic_params_t hp;
-        if (bn != 22U) {
-            r = MOTOR_CMD_INVALID_LENGTH;
-        } else {
-            hp.spring_k_a_per_rad = get_f32(&b[0]);
-            hp.damping_b_a_per_rad_s = get_f32(&b[4]);
-            hp.detent_k_a_per_rad = get_f32(&b[8]);
-            hp.limit_k_a_per_rad = get_f32(&b[12]);
-            hp.limit_half_range_deg = get_f32(&b[16]);
-            hp.detent_count = get_u16(&b[20]);
-            r = motor_system_host_set_haptic_params(hp.spring_k_a_per_rad, hp.damping_b_a_per_rad_s,
-                                                    hp.detent_k_a_per_rad, hp.limit_k_a_per_rad,
-                                                    hp.limit_half_range_deg, hp.detent_count);
-        }
-    } else if (cmd == CMD_GET_PARAMS) {
-        motor_control_snapshot_t cs;
-        motor_haptic_params_t hp;
-        motor_system_get_control_snapshot(&cs);
-        motor_system_get_haptic_params(&hp);
-        out[0] = (uint8_t)cs.mode;
-        out[1] = (uint8_t)cs.source;
-        put_f32(&out[2], cs.iq_limit_a);
-        put_f32(&out[6], MOTOR_HOST_IQ_SLEW_A_PER_S);
-        put_f32(&out[10], hp.spring_k_a_per_rad);
-        put_f32(&out[14], hp.damping_b_a_per_rad_s);
-        put_f32(&out[18], hp.detent_k_a_per_rad);
-        put_f32(&out[22], hp.limit_k_a_per_rad);
-        put_f32(&out[26], hp.limit_half_range_deg);
-        put_u16(&out[30], hp.detent_count);
-        out_n = 32U;
-    } else if (cmd == CMD_SET_FRICTION || cmd == CMD_SAVE_FRICTION) {
-        motor_friction_config_t fc;
-        if (bn != 17U) {
-            r = MOTOR_CMD_INVALID_LENGTH;
-        } else {
-            fc.enabled = b[0];
-            fc.coulomb_iq_a = get_f32(&b[1]);
-            fc.viscous_iq_a_per_rpm = get_f32(&b[5]);
-            fc.smooth_speed_rpm = get_f32(&b[9]);
-            fc.max_iq_a = get_f32(&b[13]);
-            r = cmd == CMD_SAVE_FRICTION
-                    ? motor_system_host_save_friction_config(fc.enabled, fc.coulomb_iq_a, fc.viscous_iq_a_per_rpm,
-                                                             fc.smooth_speed_rpm, fc.max_iq_a)
-                    : motor_system_host_set_friction_config(fc.enabled, fc.coulomb_iq_a, fc.viscous_iq_a_per_rpm,
-                                                            fc.smooth_speed_rpm, fc.max_iq_a);
-            if (r == MOTOR_CMD_OK) {
-                memcpy(out, b, 17U);
-                out_n = 17U;
-            }
-        }
-    } else if (cmd == CMD_GET_FRICTION) {
-        motor_friction_config_t fc;
-        if (bn != 0U) {
-            r = MOTOR_CMD_INVALID_LENGTH;
-        } else {
-            motor_system_get_friction_config(&fc);
-            out[0] = fc.enabled;
-            put_f32(&out[1], fc.coulomb_iq_a);
-            put_f32(&out[5], fc.viscous_iq_a_per_rpm);
-            put_f32(&out[9], fc.smooth_speed_rpm);
-            put_f32(&out[13], fc.max_iq_a);
-            out_n = 17U;
-        }
-    } else if (cmd == CMD_SET_SPEED_PI || cmd == CMD_GET_SPEED_PI) {
-        if (bn != (cmd == CMD_SET_SPEED_PI ? 8U : 0U)) {
-            r = MOTOR_CMD_INVALID_LENGTH;
-        } else {
-            if (cmd == CMD_SET_SPEED_PI) {
-                r = motor_system_host_set_speed_pi(get_f32(b), get_f32(b + 4));
-            }
-            if (r == MOTOR_CMD_OK) {
-                put_f32(out, speed_pid.kp);
-                put_f32(out + 4, speed_pid.ki);
-                put_f32(out + 8, speed_pid.kd);
-                out_n = 12U;
-            }
-        }
-    } else if (cmd == CMD_SET_SPEED) {
-        float accepted = 0.0f;
-        if ((bn != 4U) && (bn != 8U)) {
-            r = MOTOR_CMD_INVALID_LENGTH;
-        } else {
-            float slew = (bn == 8U) ? get_f32(&b[4]) : MOTOR_HOST_SPEED_SLEW_RPM_PER_S;
-            r = motor_system_host_set_speed(get_f32(b), slew);
-            if (r == MOTOR_CMD_OK) {
-                accepted = motor_system_get_last_accepted_speed();
-            }
-            put_f32(out, accepted);
-            put_f32(&out[4], slew);
-            out_n = 8U;
-        }
-    } else if (cmd == CMD_SET_COGGING_CONFIG) {
-        motor_cogging_config_t cc;
-        if (bn != 19U) {
-            r = MOTOR_CMD_INVALID_LENGTH;
-        } else {
-            cc.enabled = b[0];
-            cc.gain = get_f32(&b[1]);
-            cc.max_iq_a = get_f32(&b[5]);
-            cc.fade_start_rpm = get_f32(&b[9]);
-            cc.fade_end_rpm = get_f32(&b[13]);
-            cc.phase_offset_counts = get_u16(&b[17]);
-            r = motor_system_host_set_cogging_config(cc.enabled, cc.gain, cc.max_iq_a, cc.fade_start_rpm,
-                                                     cc.fade_end_rpm, cc.phase_offset_counts);
-            if (r == MOTOR_CMD_OK) {
-                memcpy(out, b, 19U);
-                out_n = 19U;
-            }
-        }
-    } else if (cmd == CMD_GET_COGGING_CONFIG) {
-        motor_cogging_config_t cc;
-        motor_control_snapshot_t cs;
-        if (bn != 0U) {
-            r = MOTOR_CMD_INVALID_LENGTH;
-        } else {
-            motor_system_get_cogging_config(&cc);
-            motor_system_get_control_snapshot(&cs);
-            out[0] = cc.enabled;
-            put_f32(&out[1], cc.gain);
-            put_f32(&out[5], cc.max_iq_a);
-            put_f32(&out[9], cc.fade_start_rpm);
-            put_f32(&out[13], cc.fade_end_rpm);
-            put_u16(&out[17], cc.phase_offset_counts);
-            put_u32(&out[19], cs.cogging_table_revision);
-            put_u32(&out[23], cs.cogging_table_crc);
-            out[27] = motor_cogging_is_persisted();
-            out_n = 28U;
-        }
-    } else if (cmd == CMD_COGGING_TABLE_BEGIN) {
-        uint16_t transaction = 0U;
-        if (bn != 6U) {
-            r = MOTOR_CMD_INVALID_LENGTH;
-        } else {
-            r = motor_system_host_begin_cogging_table(get_u16(&b[0]), get_u32(&b[2]));
-            if (r == MOTOR_CMD_OK) {
-                transaction = motor_cogging_get_transaction_id();
-            }
-            if (r == MOTOR_CMD_OK) {
-                put_u16(out, transaction);
-                out_n = 2U;
-            }
-        }
-    } else if (cmd == CMD_COGGING_TABLE_CHUNK) {
-        int16_t values[MOTOR_COGGING_CHUNK_MAX_POINTS];
-        if ((bn < 5U) || (b[4] == 0U) || (b[4] > MOTOR_COGGING_CHUNK_MAX_POINTS) ||
-            (bn != (uint16_t)(5U + 2U * b[4]))) {
-            r = MOTOR_CMD_INVALID_LENGTH;
-        } else {
-            for (uint16_t i = 0U; i < b[4]; ++i) {
-                values[i] = get_i16(&b[5U + 2U * i]);
-            }
-            r = motor_system_host_write_cogging_chunk(get_u16(&b[0]), get_u16(&b[2]), b[4], values);
-            if (r == MOTOR_CMD_OK) {
-                put_u16(&out[0], get_u16(&b[2]));
-                out[2] = b[4];
-                out_n = 3U;
-            }
-        }
-    } else if (cmd == CMD_COGGING_TABLE_COMMIT) {
-        motor_control_snapshot_t cs;
-        if (bn != 2U) {
-            r = MOTOR_CMD_INVALID_LENGTH;
-        } else {
-            r = motor_system_host_commit_cogging_table(get_u16(b));
-            if (r == MOTOR_CMD_OK) {
-                motor_system_get_control_snapshot(&cs);
-                put_u32(&out[0], cs.cogging_table_revision);
-                put_u32(&out[4], cs.cogging_table_crc);
-                out_n = 8U;
-            }
-        }
-    } else if (cmd == CMD_GET_COGGING_TABLE_CHUNK) {
-        int16_t values[MOTOR_COGGING_CHUNK_MAX_POINTS];
-        if ((bn != 3U) || (b[2] == 0U) || (b[2] > MOTOR_COGGING_CHUNK_MAX_POINTS)) {
-            r = MOTOR_CMD_INVALID_LENGTH;
-        } else {
-            r = motor_system_host_read_cogging_chunk(get_u16(&b[0]), b[2], values);
-            if (r == MOTOR_CMD_OK) {
-                put_u16(&out[0], get_u16(&b[0]));
-                out[2] = b[2];
-                for (uint16_t i = 0U; i < b[2]; ++i) {
-                    put_u16(&out[3U + 2U * i], (uint16_t)values[i]);
-                }
-                out_n = (uint16_t)(3U + 2U * b[2]);
-            }
-        }
-    } else if (cmd == CMD_SAVE_COGGING) {
-        motor_control_snapshot_t cs;
-        if (bn != 0U) {
-            r = MOTOR_CMD_INVALID_LENGTH;
-        } else {
-            r = motor_system_host_save_cogging();
-            motor_system_get_control_snapshot(&cs);
-            if (r == MOTOR_CMD_OK) {
-                put_u32(&out[0], cs.cogging_table_revision);
-                put_u32(&out[4], cs.cogging_table_crc);
-                out[8] = motor_cogging_is_persisted();
-                out_n = 9U;
-            }
-        }
     } else {
-        r = MOTOR_CMD_UNSUPPORTED;
+        r = handle_owned_command(cmd, b, bn, out, &out_n);
     }
     response(seq, cmd, r, out, out_n);
     if (command_uses_replay_cache(cmd)) {
@@ -881,6 +1150,7 @@ static void handle_command(uint16_t seq, const uint8_t *p, uint16_t n)
         memcpy(s_last_request, p, n);
     }
 }
+
 
 // 复位解析、发送、令牌及重放缓存，保留协议初始序号和诊断计数。
 void pc_protocol_init(void)
@@ -974,23 +1244,11 @@ void pc_protocol_task(void)
         motor_cal_status_t status;
         uint8_t count = motor_calibration_peek(samples, 3U);
         motor_calibration_get_status(&status);
-        uint8_t point = status.mode == 5U;
-        uint16_t size = point ? 68U : 64U;
-        put_u16(payload, point ? motor_calibration_point_schema() : MOTOR_CAL_SCHEMA);
-        put_u32(payload + 2, status.session);
-        payload[6] = count;
-        payload[7] = 0U;
-        put_u32(payload + 8, status.dropped);
         float targets[3];
         motor_calibration_peek_targets(targets, count);
-        for (uint8_t i = 0; i < count; i++) {
-            memcpy(payload + 12 + i * size, &samples[i], 64U);
-            if (point) {
-                put_f32(payload + 12 + i * size + 64, targets[i]);
-            }
-        }
+        uint16_t payload_len = build_calibration_batch(payload, &status, samples, targets, count);
         if ((count == 3U || !motor_calibration_is_active()) &&
-            queue_frame(TYPE_CALIBRATION, 0U, payload, (uint16_t)(12U + count * size), 0U)) {
+            queue_frame(TYPE_CALIBRATION, 0U, payload, payload_len, 0U)) {
             motor_calibration_consume(count);
         }
     }

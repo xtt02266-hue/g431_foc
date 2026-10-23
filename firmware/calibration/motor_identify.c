@@ -5,7 +5,6 @@
 #include "tim.h"
 #include <math.h>
 #include <stddef.h>
-// #include "motor_current_loop.h" // 后续可能需要调用开环输出电压/电流的接口
 
 static motor_identify_state_t g_identify_state = IDENTIFY_STATE_IDLE;
 motor_identified_params_t g_identified_params = {0};
@@ -16,6 +15,8 @@ static float g_uvw_elec_angle = 0.0f;
 static float g_align_sin_sum = 0.0f;
 static float g_align_cos_sum = 0.0f;
 static uint32_t g_align_sample_count = 0U;
+static float g_accumulated_mech_angle = 0.0f;
+static uint16_t g_last_raw_angle = 0U;
 
 #define MOTOR_TWO_PI                6.2832f // 辨识用一圈电角度 rad，保留原有近似精度
 #define MOTOR_HALF_PI               1.5708f // 辨识用四分之一圈 rad，保留原有近似精度
@@ -88,6 +89,10 @@ void motor_identify_start(void)
 {
     if (g_identify_state == IDENTIFY_STATE_IDLE || g_identify_state == IDENTIFY_STATE_DONE ||
         g_identify_state == IDENTIFY_STATE_ERROR) {
+        if (motor_encoder_is_data_fresh(2U) == 0U) {
+            motor_identify_fail();
+            return;
+        }
         g_identified_params = (motor_identified_params_t){0};
         g_identify_timer = 0U;
         g_uvw_elec_angle = 0.0f;
@@ -98,6 +103,19 @@ void motor_identify_start(void)
         // 优先测量电阻，为后续提供安全的对齐电压估算
         g_identify_state = IDENTIFY_STATE_MEASURE_R;
     }
+}
+
+// 不改变已保存参数；参数模块负责恢复辨识前的有效 RAM 副本。
+void motor_identify_cancel(void)
+{
+    motor_open_loop_drive(0.0f, 0.0f);
+    g_identify_state = IDENTIFY_STATE_IDLE;
+    g_identify_timer = 0U;
+    g_uvw_elec_angle = 0.0f;
+    g_align_sin_sum = g_align_cos_sum = 0.0f;
+    g_align_sample_count = 0U;
+    g_accumulated_mech_angle = 0.0f;
+    g_last_raw_angle = 0U;
 }
 
 // 查询电机参数辨识的当前状态
@@ -153,7 +171,7 @@ void motor_identify_use_result(float resistance, float inductance, uint16_t pole
 // 由于云台电机内阻大、极对数多，且容易发热，
 // 流程先装载规格 R/L，再低速确认相序并对齐零点。
 // 1. 装载 GB4310 标称单相电阻。
-static void identify_measure_r(void)
+static void identify_load_nominal_resistance(void)
 {
     motor_open_loop_drive(0.0f, 0.0f);
     g_identified_params.resistance = MOTOR_NOMINAL_PHASE_RESISTANCE_OHM;
@@ -163,7 +181,7 @@ static void identify_measure_r(void)
 
 // 2. 装载标称相电感（保留原状态名，并非实际测量电感）。
 // 目的：给电流环 PI 整定提供已确认的相电感，避免使用旧的 0.6mH 占位值。
-static void identify_measure_l(void)
+static void identify_load_nominal_inductance(void)
 {
     // GB4310 规格为 4.76mH 相间电感，星形绕组换算为 2.38mH 单相电感。
 
@@ -239,8 +257,6 @@ static void identify_align(void)
 // 4. 同时识别 UVW 相序方向与极对数
 // 目的1：判断接线方向(相序)。知道给正向电压时，编码器的读数是变大还是变小。
 // 目的2：计算极对数(Pole Pairs)。知道转子上有几块磁铁，这是电角度和机械角度相互转换的核心参数。
-static float g_accumulated_mech_angle = 0.0f; // 累加的机械角度
-static uint16_t g_last_raw_angle = 0;         // 上一次循环的编码器角度
 
 // 推进开环旋转辨识 UVW 方向和极对数，保留锁定、转动和采样判定次序。
 static void identify_uvw_and_poles(void)
@@ -316,17 +332,23 @@ static void identify_uvw_and_poles(void)
 // 辨识状态机轮询任务
 void motor_identify_task(void)
 {
+    // 必须在任何活动步骤写 PWM 前检查；直接调用任务也受此保护。
+    if ((g_identify_state >= IDENTIFY_STATE_MEASURE_R) && (g_identify_state <= IDENTIFY_STATE_ALIGN) &&
+        (motor_encoder_is_data_fresh(2U) == 0U)) {
+        motor_identify_fail();
+        return;
+    }
     switch (g_identify_state) {
     case IDENTIFY_STATE_IDLE:
         // 等待启动指令
         break;
 
     case IDENTIFY_STATE_MEASURE_R:
-        identify_measure_r();
+        identify_load_nominal_resistance();
         break;
 
     case IDENTIFY_STATE_MEASURE_L:
-        identify_measure_l();
+        identify_load_nominal_inductance();
         break;
 
     case IDENTIFY_STATE_ALIGN:

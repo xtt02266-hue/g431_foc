@@ -104,13 +104,23 @@ uint8_t motor_system_host_start(void)
     if (motor_parameters_is_busy() != 0U) {
         return MOTOR_CMD_BUSY;
     }
+    // 重复 START 不重新捕获触觉中心或清除正在运行的电流历史。
+    if (g_run_requested != 0U) {
+        return MOTOR_CMD_OK;
+    }
     if ((g_control_mode >= MOTOR_CONTROL_FREE) && (g_control_mode <= MOTOR_CONTROL_SPEED)) {
         int8_t direction = motor_identify_get_result().uvw_dir;
         if ((direction != 1) && (direction != -1)) {
             return MOTOR_CMD_NOT_READY;
         }
     }
+    // 短临界区内完成启动历史，避免 TIM2 在运行请求与历史初始化之间执行。
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
     if (motor_system_start_control() == 0U) {
+        if (primask == 0U) {
+            __enable_irq();
+        }
         return MOTOR_CMD_NOT_READY;
     }
     g_torque_current_a = 0.0f;
@@ -118,10 +128,12 @@ uint8_t motor_system_host_start(void)
     g_host_speed_target_rpm = 0.0f;
     g_host_speed_applied_rpm = 0.0f;
     motor_cogging_runtime_start();
-    if ((g_control_mode >= MOTOR_CONTROL_SPRING) && (g_control_mode <= MOTOR_CONTROL_LIMIT)) {
-        g_haptic_center_rad = g_continuous_angle_rad;
-    }
+    // 触觉中心交由首次控制周期捕获，使用该周期的最新连续机械角。
+    motor_haptic_reset();
     g_host_last_heartbeat_ms = HAL_GetTick();
+    if (primask == 0U) {
+        __enable_irq();
+    }
     return MOTOR_CMD_OK;
 }
 
@@ -555,8 +567,15 @@ void motor_system_get_control_snapshot(motor_control_snapshot_t *s)
     s->run_requested = g_run_requested;
     s->iq_limit_a = g_host_iq_limit_a;
     s->continuous_angle_rad = g_continuous_angle_rad;
+    // 64 位运行位置与中心不能被 TIM2 拆开读取；临界区内只复制整数差。
+    uint32_t mask = __get_PRIMASK();
+    __disable_irq();
+    int64_t relative_counts = motor_haptic_get_relative_counts();
+    if (mask == 0U) {
+        __enable_irq();
+    }
     s->relative_center_angle_rad = ((g_control_mode >= MOTOR_CONTROL_SPRING) && (g_control_mode <= MOTOR_CONTROL_LIMIT))
-                                       ? g_continuous_angle_rad - g_haptic_center_rad
+                                       ? (float)relative_counts * MOTOR_ENCODER_RAD_PER_COUNT
                                        : 0.0f;
     s->target_speed_rpm = g_host_speed_applied_rpm;
     s->speed_loop_iq_a = g_debug_speed_loop_iq_a;

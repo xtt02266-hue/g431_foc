@@ -11,15 +11,27 @@ pid_controller_t speed_pid;
 motor_speed_estimator_t speed_est;
 
 /*
- * 滚动窗保存展开后的机械角度计数。每次覆盖的元素正好来自
+ * 滚动窗保存按 uint32_t 模运算累计的机械角度计数，避免长运行时有符号溢出。
+ * 最大 20 ms 窗口内的位置差远小于 INT32_MAX，跨累计计数回绕仍可恢复短距离。
+ * 每次覆盖的元素正好来自
  * SPEED_EST_WINDOW_TICKS 个系统周期之前，因此不需要在不同转速区间
  * 切换测速分频，也不会在 50/200/500 rpm 处产生反馈分辨率突变。
  */
-static int32_t g_speed_position_history[SPEED_EST_WINDOW_TICKS];
-static int32_t g_speed_unwrapped_counts = 0;
+static uint32_t g_speed_position_history[SPEED_EST_WINDOW_TICKS];
+static uint32_t g_speed_unwrapped_counts = 0U;
 static uint16_t g_speed_history_index = 0U;
 static uint16_t g_speed_history_valid_ticks = 0U;
 static uint16_t g_speed_window_ticks = SPEED_EST_WINDOW_TICKS;
+
+// 将模 2^32 的窗口差分解码为有符号短距离，避免超范围无符号转有符号转换。
+static int32_t calculate_position_delta(uint32_t position_counts, uint32_t previous_position_counts)
+{
+    uint32_t delta = position_counts - previous_position_counts;
+    if (delta <= (uint32_t)INT32_MAX) {
+        return (int32_t)delta;
+    }
+    return -(int32_t)(UINT32_MAX - delta) - 1;
+}
 
 // 读取当前速度估计窗口长度，单位 1 ms 周期数；不更新窗口或转速。
 uint8_t motor_speed_estimator_get_window_ticks(void)
@@ -41,12 +53,12 @@ void motor_speed_estimator_init(float filter_alpha)
     speed_est.instant_speed_rpm = 0.0f;
     speed_est.filter_alpha = filter_alpha;
     speed_est.initialized = 0;
-    g_speed_unwrapped_counts = 0;
+    g_speed_unwrapped_counts = 0U;
     g_speed_history_index = 0U;
     g_speed_history_valid_ticks = 0U;
     g_speed_window_ticks = SPEED_EST_WINDOW_TICKS;
     for (uint16_t i = 0U; i < SPEED_EST_WINDOW_TICKS; ++i) {
-        g_speed_position_history[i] = 0;
+        g_speed_position_history[i] = 0U;
     }
 }
 
@@ -122,7 +134,7 @@ float motor_speed_estimator_update_adaptive(float published_speed_rpm)
         speed_est.speed_rpm = 0.0f;
         speed_est.instant_speed_rpm = 0.0f;
         speed_est.initialized = 1U;
-        g_speed_unwrapped_counts = (int32_t)current_angle_raw;
+        g_speed_unwrapped_counts = (uint32_t)current_angle_raw;
         g_speed_history_index = 0U;
         g_speed_history_valid_ticks = 0U;
         g_speed_window_ticks = SPEED_EST_WINDOW_TICKS;
@@ -139,7 +151,7 @@ float motor_speed_estimator_update_adaptive(float published_speed_rpm)
         step_delta += (int32_t)MOTOR_ENCODER_COUNTS_PER_REV_U32;
     }
     speed_est.last_angle_raw = current_angle_raw;
-    g_speed_unwrapped_counts += step_delta;
+    g_speed_unwrapped_counts += (uint32_t)step_delta;
 
     uint16_t new_history_index = g_speed_history_index + 1U;
     if (new_history_index >= SPEED_EST_WINDOW_TICKS) {
@@ -152,7 +164,7 @@ float motor_speed_estimator_update_adaptive(float published_speed_rpm)
     }
     uint16_t old_history_index =
         (uint16_t)((new_history_index + SPEED_EST_WINDOW_TICKS - effective_window_ticks) % SPEED_EST_WINDOW_TICKS);
-    int32_t old_position = g_speed_position_history[old_history_index];
+    uint32_t old_position = g_speed_position_history[old_history_index];
     g_speed_position_history[new_history_index] = g_speed_unwrapped_counts;
     g_speed_history_index = new_history_index;
 
@@ -165,8 +177,9 @@ float motor_speed_estimator_update_adaptive(float published_speed_rpm)
     }
 
     float dt_seconds = (float)effective_window_ticks * MOTOR_SYSTEM_TASK_DT_SEC;
+    int32_t window_delta = calculate_position_delta(g_speed_unwrapped_counts, old_position);
     float instant_rpm =
-        ((float)(g_speed_unwrapped_counts - old_position) * 60.0f) / (MOTOR_ENCODER_COUNTS_PER_REV_F * dt_seconds);
+        ((float)window_delta * 60.0f) / (MOTOR_ENCODER_COUNTS_PER_REV_F * dt_seconds);
 
     speed_est.instant_speed_rpm = instant_rpm;
     speed_est.speed_rpm = speed_est.filter_alpha * instant_rpm + (1.0f - speed_est.filter_alpha) * speed_est.speed_rpm;

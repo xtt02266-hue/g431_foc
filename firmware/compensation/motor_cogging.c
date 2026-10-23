@@ -1,4 +1,5 @@
 #include "motor_cogging.h"
+#include "motor_cogging_builtin.h"
 #include "motor_config.h"
 #include "motor_encoder.h"
 #include "stm32g4xx_hal.h"
@@ -26,12 +27,14 @@ typedef struct {
     uint32_t table_crc;
     uint32_t table_revision;
     int16_t table[MOTOR_COGGING_TABLE_SIZE];
-    uint32_t reserved1;
+    uint32_t builtin_table_crc; // 内置表来源标签，沿用原保留字位置；旧记录为 0 时不覆盖新默认表
     uint32_t record_crc;
 } motor_cogging_flash_record_t;
 
 _Static_assert((sizeof(motor_cogging_flash_record_t) % 8U) == 0U, "Cogging flash record must be double-word aligned");
 _Static_assert(sizeof(motor_cogging_flash_record_t) <= FLASH_PAGE_SIZE, "Cogging flash record exceeds one flash page");
+_Static_assert(sizeof(s_motor_cogging_builtin_table) == MOTOR_COGGING_TABLE_SIZE * sizeof(int16_t),
+               "Built-in cogging table must contain 512 points");
 
 extern uint8_t __cogging_params_flash_start__[];
 
@@ -87,25 +90,33 @@ uint8_t motor_cogging_is_config_valid(const motor_cogging_config_t *config)
     return 1U;
 }
 
-// 装入齿槽补偿默认配置，保持上电默认使能与限幅规则。
+// 装入固件内置候选表及用户实测配置；CRC 正确才使能补偿。
 static void motor_cogging_set_defaults(void)
 {
     g_config.enabled = 0U;
-    g_config.gain = 0.3f;
-    g_config.max_iq_a = 0.03f;
-    g_config.fade_start_rpm = 30.0f;
-    g_config.fade_end_rpm = 100.0f;
+    g_config.gain = 0.90f;
+    g_config.max_iq_a = 0.080f;
+    g_config.fade_start_rpm = 100.0f;
+    g_config.fade_end_rpm = 200.0f;
     g_config.phase_offset_counts = 0U;
-    memset(g_table_a, 0, sizeof(g_table_a));
+    memcpy(g_table_a, s_motor_cogging_builtin_table, sizeof(g_table_a));
     memset(g_table_b, 0, sizeof(g_table_b));
     g_active_table = g_table_a;
     g_staging_table = g_table_b;
     g_active_crc = motor_cogging_crc32(g_active_table, sizeof(g_table_a));
     g_table_revision = 0U;
     g_persisted = 0U;
+    if (g_active_crc == MOTOR_COGGING_BUILTIN_CRC32) {
+        g_config.enabled = 1U;
+        g_table_revision = MOTOR_COGGING_BUILTIN_REVISION;
+        g_persisted = 1U;
+    } else {
+        memset(g_table_a, 0, sizeof(g_table_a));
+        g_active_crc = motor_cogging_crc32(g_active_table, sizeof(g_table_a));
+    }
 }
 
-// 校验 Flash 版本、布局、CRC 和参数后恢复活动表；失败保持默认配置。
+// 只恢复与本次内置表来源匹配的有效记录；旧表不覆盖新默认值，失败不擦写参数页。
 static uint8_t motor_cogging_load_from_flash(void)
 {
     motor_cogging_flash_record_t record;
@@ -113,6 +124,7 @@ static uint8_t motor_cogging_load_from_flash(void)
     memcpy(&record, address, sizeof(record));
     if ((record.magic != COGGING_FLASH_MAGIC) || (record.version != COGGING_FLASH_VERSION) ||
         (record.record_size != sizeof(record)) || (record.table_count != MOTOR_COGGING_TABLE_SIZE) ||
+        (record.builtin_table_crc != MOTOR_COGGING_BUILTIN_CRC32) ||
         (record.record_crc != motor_cogging_crc32(&record, offsetof(motor_cogging_flash_record_t, record_crc)))) {
         return 0U;
     }
@@ -134,14 +146,16 @@ static uint8_t motor_cogging_load_from_flash(void)
     return 1U;
 }
 
-// 初始化活动/暂存表和事务状态，再按原规则加载 Flash 记录。
+// 初始化内置表及事务状态，再恢复来源匹配的已保存配置；不启动电机或擦写 Flash。
 void motor_cogging_init(void)
 {
+    // 先提供随固件下载的默认补偿表，无需上位机导入。
     motor_cogging_set_defaults();
     g_transaction_counter = 0U;
     g_active_transaction = 0U;
     g_ramp_elapsed_ms = 0U;
     g_effective_gain = 0.0f;
+    // 保留本版本主动保存的配置，包括编码器重标定时保存的禁用状态。
     (void)motor_cogging_load_from_flash();
 }
 
@@ -278,6 +292,7 @@ uint8_t motor_cogging_save_to_flash(void)
     record.table_crc = g_active_crc;
     record.table_revision = g_table_revision;
     memcpy(record.table, g_active_table, sizeof(record.table));
+    record.builtin_table_crc = MOTOR_COGGING_BUILTIN_CRC32;
     record.record_crc = motor_cogging_crc32(&record, offsetof(motor_cogging_flash_record_t, record_crc));
 
     if (HAL_FLASH_Unlock() != HAL_OK) {
@@ -386,7 +401,7 @@ float motor_cogging_get_effective_gain(void)
     return g_effective_gain;
 }
 
-// 查询当前活动表是否已按原规则保存到 Flash。
+// 查询当前表及配置是否可在重启后恢复，包含固件内置默认值与参数页保存值。
 uint8_t motor_cogging_is_persisted(void)
 {
     return g_persisted;

@@ -3,32 +3,28 @@
     "tasks": [
         {
             "label": "CMake: Configure Debug",
-            "type": "shell",
-            "command": "C:\\Users\\scott\\AppData\\Local\\stm32cube\\bundles\\cmake\\4.3.1+st.1\\bin\\cmake.exe",
+            "type": "process",
+            "command": "cmake",
             "args": [
                 "--preset",
                 "Debug"
             ],
             "options": {
-                "env": {
-                    "PATH": "D:\\software\\arm-gnu-toolchain-14.3.rel1\\bin;C:\\Users\\scott\\AppData\\Local\\stm32cube\\bundles\\ninja\\1.13.2+st.1\\bin;${env:PATH}"
-                }
+                "cwd": "${workspaceFolder}"
             },
             "problemMatcher": []
         },
         {
             "label": "CMake: Build Debug",
-            "type": "shell",
-            "command": "C:\\Users\\scott\\AppData\\Local\\stm32cube\\bundles\\cmake\\4.3.1+st.1\\bin\\cmake.exe",
+            "type": "process",
+            "command": "cmake",
             "args": [
                 "--build",
                 "--preset",
                 "Debug"
             ],
             "options": {
-                "env": {
-                    "PATH": "D:\\software\\arm-gnu-toolchain-14.3.rel1\\bin;C:\\Users\\scott\\AppData\\Local\\stm32cube\\bundles\\ninja\\1.13.2+st.1\\bin;${env:PATH}"
-                }
+                "cwd": "${workspaceFolder}"
             },
             "dependsOn": [
                 "CMake: Configure Debug"
@@ -43,12 +39,12 @@
         },
         {
             "label": "DAPLink: Flash Debug",
-            "type": "shell",
-            "command": "C:\\Users\\scott\\AppData\\Roaming\\uv\\tools\\pyocd\\Scripts\\pyocd.exe",
+            "type": "process",
+            "command": "pyocd",
             "args": [
                 "flash",
                 "--pack",
-                "D:\\software\\cmsis-packs\\Keil.STM32G4xx_DFP.2.2.0.pack",
+                "${env:LOCALAPPDATA}\\Arm\\Packs\\.Download\\Keil.STM32G4xx_DFP.2.0.0.pack",
                 "-O",
                 "cmsis_dap.limit_packets=1",
                 "-e",
@@ -62,6 +58,9 @@
                 "--no-wait",
                 "${workspaceFolder}\\build\\Debug\\g431_foc.elf"
             ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
             "dependsOn": [
                 "CMake: Build Debug"
             ],

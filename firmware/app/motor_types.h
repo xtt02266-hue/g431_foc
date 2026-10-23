@@ -53,12 +53,12 @@ typedef enum {
 } motor_command_result_t;
 
 typedef struct {
-    float spring_k_a_per_rad;
-    float damping_b_a_per_rad_s;
-    float detent_k_a_per_rad;
-    float limit_k_a_per_rad;
-    float limit_half_range_deg;
-    uint16_t detent_count;
+    float spring_k_a_per_rad;       // 弹簧基础刚度 A/rad，较大偏转按触觉曲线渐硬
+    float damping_b_a_per_rad_s;    // 基础阻尼 A/(rad/s)，三种位置触觉另按刚度增加阻尼
+    float detent_k_a_per_rad;       // 档心基础刚度 A/rad，档缘渐硬并使用换档迟滞
+    float limit_k_a_per_rad;        // 软墙基础刚度 A/rad，越界后渐硬
+    float limit_half_range_deg;    // 启动中心两侧的可转范围，单位 deg
+    uint16_t detent_count;         // 每机械圈档数
 } motor_haptic_params_t;
 
 typedef struct {
@@ -90,7 +90,7 @@ typedef struct {
 typedef struct {
     float speed_rpm;        // 实时转速 (RPM)
     uint16_t pot_raw;       // 电位器原始数值 (0-4095)
-    float target_torque_nm; // 限流后的目标电磁力矩，非实测轴端力矩
+    float target_torque_nm; // 基础命令对应的目标电磁力矩（不含补偿），非实测轴端力矩
 } motor_run_data_t;
 
 // 电机系统关键变量。

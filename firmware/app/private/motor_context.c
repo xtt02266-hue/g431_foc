@@ -32,11 +32,9 @@ float g_debug_friction_iq_a = 0.0f;
 float g_debug_cogging_iq_a = 0.0f;
 float g_continuous_angle_rad = 0.0f;
 float g_haptic_center_rad = 0.0f;
-uint8_t g_angle_initialized = 0U;
-motor_haptic_params_t g_haptic_params = {0.03f, 0.002f, 0.05f, 0.05f, 90.0f, 24U};
-// 标定会话与控制周期共享的恢复标记、摩擦配置和传感器错误计数；保持原临界区。
+// 三种位置触觉的初始刚度；单位依次为 A/rad、A/(rad/s)、A/rad、A/rad、deg、档/圈。
+motor_haptic_params_t g_haptic_params = {0.12f, 0.002f, 0.40f, 0.80f, 90.0f, 24U};
+// 标定会话与控制模式共享的恢复标记、摩擦配置和质量标志；保持原临界区。
 uint8_t g_cal_saved_valid;
 motor_friction_config_t g_cal_saved_friction;
 uint16_t g_cal_control_flags;
-uint32_t g_cal_last_crc, g_cal_last_transfer;
-uint8_t g_pot_filter_initialized = 0U;

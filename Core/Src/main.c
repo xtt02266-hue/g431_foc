@@ -95,16 +95,26 @@ int main(void)
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
+  // 配置板级引脚模式和初始电平。
   MX_GPIO_Init();
+  // 配置 DMA 通道和中断，供后续采样与通信使用。
   MX_DMA_Init();
+  // 配置 ADC1 的 U/W 相电流注入采样。
   MX_ADC1_Init();
+  // 配置三相 PWM 定时器及 ADC 采样触发通道。
   MX_TIM1_Init();
+  // 配置 1 ms 控制调度定时器。
   MX_TIM2_Init();
+  // 配置 ADC2 的电位器常规采样和 DMA 请求。
   MX_ADC2_Init();
+  // 配置 I2C1 外设。
   MX_I2C1_Init();
+  // 配置上位机通信串口。
   MX_USART2_UART_Init();
+  // 配置 MT6826S 编码器使用的 SPI 总线。
   MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
+  // 按板级时序校准采样、初始化控制模块并启动中断与通信。
   hardware_init();
 
   /* USER CODE END 2 */
@@ -116,8 +126,11 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    // 在前台处理参数辨识请求及结果保存，避免在控制中断中擦写 Flash。
     motor_parameters_background_task();
+    // 处理上位机命令、应答和遥测发送。
     pc_protocol_task();
+    // 推进编码器自校准，在前台处理设备寄存器事务。
     motor_encoder_cal_background_task();
   }
   /* USER CODE END 3 */

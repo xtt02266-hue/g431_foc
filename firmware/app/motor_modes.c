@@ -12,8 +12,15 @@
 
 // TIM2 发布反向映射后的 12 位 ADC 滤波计数；前台 VOFA 只读，不在读取时重新采样。
 static float g_pot_target_filtered = 0.0f;
+static uint8_t g_pot_filter_initialized = 0U;
 static float motor_system_pot_torque_nm(float filtered_pot);
 static float motor_system_clamp_host_iq(float iq);
+
+// 生命周期只请求重新装入首个采样，滤波历史仍由本模块持有。
+void motor_system_reset_pot_filter(void)
+{
+    g_pot_filter_initialized = 0U;
+}
 
 /* 为什么需要：FOC 电流环接收安培，上层使用 N·m，必须统一换算并限制电流。
  * 参数：torque_nm 为目标电磁力矩（N·m），符号沿用 Iq 方向。
@@ -85,12 +92,14 @@ float motor_system_update_pot_target(void)
 }
 
 /* 为什么需要：力矩模式给定换算独立成函数，使 Task 只表达模式调度。
- * 功能：按配置从电位器（或手动保存值）生成受限 Iq，写 q/d 目标并反算调试力矩。
- * 参数：无；调用上下文：状态为 SENSORED_RUN 且模式为 TORQUE 时，由 Task 调用。
+ * 功能：从电位器或主机生成基础 Iq，再叠加补偿、限制总电流及主机输出斜率。
+ * 参数：mechanical_speed_rpm 为实际机械 rpm，identified_direction 为换相方向 ±1，
+ *       mechanical_angle_counts 为机械编码器计数；仅在 SENSORED_RUN/TORQUE 调用。
  * 副作用：更新 g_torque_current_a、g_foc_state.target_q/target_d，
  *         并可能更新 run_data.target_torque_nm。
  */
-void motor_system_run_torque_mode(void)
+void motor_system_run_torque_mode(float mechanical_speed_rpm, int8_t identified_direction,
+                                 uint16_t mechanical_angle_counts)
 {
     if (g_input_source == MOTOR_INPUT_POT) {
         g_torque_current_a = motor_system_torque_to_iq(motor_system_pot_torque_nm(g_pot_target_filtered));
@@ -107,10 +116,31 @@ void motor_system_run_torque_mode(void)
             g_host_iq_applied_a = g_torque_current_a;
         }
     }
-    g_foc_state.target_q = g_host_iq_applied_a;
+    // 基础命令沿用电磁方向；仅摩擦模型需要从机械方向转换。
+    g_debug_friction_iq_a =
+        motor_feedforward_friction_compensation(mechanical_speed_rpm) * (float)identified_direction;
+    g_debug_cogging_iq_a = motor_cogging_compensation(mechanical_angle_counts, mechanical_speed_rpm);
+    // 电位器给定与补偿合计仍服从原旋钮满量程电流，不能借补偿扩大输出边界。
+    float iq_limit = (g_input_source == MOTOR_INPUT_POT)
+                         ? fminf(MOTOR_TORQUE_POT_MAX_CURRENT_A, MOTOR_TORQUE_CURRENT_LIMIT_A)
+                         : g_host_iq_limit_a;
+    float iq = g_host_iq_applied_a + g_debug_friction_iq_a + g_debug_cogging_iq_a;
+    if (!isfinite(iq)) {
+        iq = 0.0f;
+    }
+    iq = fmaxf(-iq_limit, fminf(iq_limit, iq));
+
+    /* 补偿不能绕过主机斜率；上一拍总输出由现有目标保存，停机时统一清零。
+     * g_host_iq_applied_a 仍只保存基础命令，避免下一周期把补偿重复累加。
+     */
+    if ((g_input_source != MOTOR_INPUT_POT) && (g_host_iq_slew_a_per_s > 0.0f)) {
+        float max_step = g_host_iq_slew_a_per_s * MOTOR_SYSTEM_TASK_DT_SEC;
+        iq = fmaxf(g_foc_state.target_q - max_step, fminf(g_foc_state.target_q + max_step, iq));
+    }
+    g_foc_state.target_q = fmaxf(-iq_limit, fminf(iq_limit, iq));
     g_foc_state.target_d = 0.0f;
     if (isfinite(MOTOR_TORQUE_CONSTANT_NM_PER_A) && (MOTOR_TORQUE_CONSTANT_NM_PER_A > 0.0f)) {
-        // 从限幅后的 Iq 反算目标力矩用于调试；这是模型估算，不是力矩传感器读数。
+        // 继续报告基础命令的估算力矩；补偿电流由独立诊断字段报告，不是轴端实测力矩。
         g_motor_system.run_data.target_torque_nm = g_host_iq_applied_a * MOTOR_TORQUE_CONSTANT_NM_PER_A;
     }
 }
@@ -159,16 +189,20 @@ void motor_system_run_position_mode(float target_pos, float current_rpm)
     }
     friction_iq = fmaxf(iq_min, fminf(iq_max, friction_iq));
     g_debug_friction_iq_a = friction_iq;
-    speed_pid.out_max = iq_max - friction_iq;
-    speed_pid.out_min = iq_min - friction_iq;
+    // 点位标定保留原始采样及摩擦辅助流程，不引入齿槽补偿污染待测模型。
+    g_debug_cogging_iq_a = (g_cal_saved_valid && motor_calibration_is_point_mode())
+                               ? 0.0f
+                               : motor_cogging_compensation((uint16_t)actual_pos, g_motor_system.run_data.speed_rpm);
+    float feedforward_iq = friction_iq + g_debug_cogging_iq_a;
+    speed_pid.out_max = iq_max - feedforward_iq;
+    speed_pid.out_min = iq_min - feedforward_iq;
 
     // 位置环输出的目标速度直接传给速度环。
     motor_speed_loop_set_target(target_signed_rpm);
 
     // 前馈占用的余量反馈给速度PI抗饱和；总电流仍服从原位置模式限幅。
     g_debug_speed_loop_iq_a = motor_speed_loop_update(current_rpm);
-    g_debug_cogging_iq_a = 0.0f;
-    g_foc_state.target_q = fmaxf(iq_min, fminf(iq_max, g_debug_speed_loop_iq_a + friction_iq));
+    g_foc_state.target_q = fmaxf(iq_min, fminf(iq_max, g_debug_speed_loop_iq_a + feedforward_iq));
     g_foc_state.target_d = 0.0f;
 }
 
@@ -187,7 +221,7 @@ static float motor_system_clamp_host_iq(float iq)
     return iq;
 }
 
-// 以 1 ms 步长和 A/s 斜率更新已应用 Iq；斜率为零时沿用立即给定语义。
+// 以 1 ms 步长和 A/s 斜率更新已应用 Iq；斜率为零时保持上次值。
 float motor_system_slew_host_iq(float target_iq, float slew_a_per_s)
 {
     float max_step = slew_a_per_s * MOTOR_SYSTEM_TASK_DT_SEC;

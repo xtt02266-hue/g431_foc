@@ -98,24 +98,163 @@ static void finish(uint8_t result_phase, uint8_t result_reason)
 
 /* 仅由前台调用；单次 SPI 寄存器事务最长 1 ms。
  * 角度 DMA 忙时跳过本次事务，避免在 1 kHz/20 kHz 控制中断中等待。 */
+// 撤销触发键或恢复原频率配置；清理结束后按原规则暂停角度读取。
+static void step_cleanup(uint32_t now)
+{
+    uint8_t r = 1U;
+    if (trigger_attempted) {
+        r = mt6826s_write_register(KEY_REG, 0U);
+    } else if (freq_known && freq_written) {
+        r = mt6826s_write_register(FREQ_REG, original_freq);
+    }
+    if (r || (uint32_t)(now - operation_started) > 100U) {
+        cleanup = 0U;
+        if (reboot_required) {
+            mt6826s_suspend_angle_reads();
+        }
+    }
+}
+
+// 推进编码器自校准阶段，保留事务、保护阈值及阶段转换时机。
+static void step_ramp(uint32_t now, const motor_control_snapshot_t *s)
+{
+    if (s->state == MOTOR_STATE_SENSORED_RUN && s->target_speed_rpm >= 249.9f) {
+        phase = ENC_CAL_SETTLE;
+        stage_started = now;
+    }
+}
+
+// 推进编码器自校准阶段，保留事务、保护阈值及阶段转换时机。
+static void step_settle(uint32_t now)
+{
+    if (fabsf(fabsf(measured_rpm) - 250.0f) <= 25.0f) {
+        if (!settle_started) {
+            settled_since = now;
+            settle_started = 1U;
+        }
+        if ((uint32_t)(now - settled_since) >= 1000U) {
+            phase = ENC_CAL_CONFIGURE;
+            operation_started = now;
+        }
+    } else {
+        settle_started = 0U;
+    }
+    if ((uint32_t)(now - stage_started) > 5000U) {
+        finish(ENC_CAL_FAILED, ENC_CAL_SPEED);
+    }
+}
+
+// 推进编码器自校准阶段，保留事务、保护阈值及阶段转换时机。
+static void step_configure(uint32_t now)
+{
+    uint8_t r = 0U, value = 0U;
+    switch (step) {
+    case 0:
+        r = mt6826s_read_register(FREQ_REG, &original_freq);
+        if (r == 1U) {
+            freq_known = 1U;
+        }
+        break;
+    case 1:
+        freq_written = 1U; /* 写入超时仍可能已到达芯片，保留恢复记录 */
+        r = mt6826s_write_register(FREQ_REG, (original_freq & 0x8FU) | 0x40U);
+        break;
+    case 2:
+        r = mt6826s_read_register(FREQ_REG, &value);
+        if (r == 1U && value != ((original_freq & 0x8FU) | 0x40U)) {
+            finish(ENC_CAL_FAILED, ENC_CAL_READBACK);
+            return;
+        }
+        break;
+    case 3:
+        r = mt6826s_write_register(KEY_REG, 0U);
+        break;
+    default:
+        /* 在可能结果不确定的写入前锁存重新上电要求。 */
+        trigger_attempted = 1U;
+        r = mt6826s_write_register(KEY_REG, 0x5EU);
+        if (r == 0U) {
+            trigger_attempted = 0U; /* 忙状态表示此次尚未发送字节 */
+        }
+        if (r == 1U && phase == ENC_CAL_CONFIGURE) {
+            phase = ENC_CAL_RUNNING;
+            stage_started = now;
+            last_poll = now;
+            last_angle = motor_encoder_get_raw_angle();
+        }
+        break;
+    }
+    if (phase != ENC_CAL_CONFIGURE && phase != ENC_CAL_RUNNING) {
+        return;
+    }
+    if (r == 2U) {
+        finish(ENC_CAL_FAILED, ENC_CAL_SPI);
+        return;
+    }
+    if (r == 1U) {
+        ++step;
+        operation_started = now;
+    }
+    if ((uint32_t)(now - operation_started) > 100U) {
+        finish(ENC_CAL_FAILED, ENC_CAL_SPI);
+    }
+}
+
+// 推进编码器自校准阶段，保留事务、保护阈值及阶段转换时机。
+static void step_running(uint32_t now)
+{
+    uint16_t angle = motor_encoder_get_raw_angle();
+    int32_t delta = (int32_t)angle - last_angle;
+    if (delta > 16384) {
+        delta -= 32768;
+    }
+    if (delta < -16384) {
+        delta += 32768;
+    }
+    travel += delta;
+    last_angle = angle;
+    counts = (uint32_t)(travel < 0 ? -travel : travel);
+    if (!isfinite(measured_rpm) || fabsf(measured_rpm) < 200.0f || fabsf(measured_rpm) >= 400.0f) {
+        finish(ENC_CAL_FAILED, ENC_CAL_SPEED);
+        return;
+    }
+    if ((uint32_t)(now - last_poll) < 100U) {
+        return;
+    }
+    uint8_t value = 0U, r = mt6826s_read_register(STATUS_REG, &value);
+    if (r == 2U) {
+        finish(ENC_CAL_FAILED, ENC_CAL_SPI);
+        return;
+    }
+    if (r == 0U) {
+        return;
+    }
+    last_poll = now;
+    chip_status = (value >> 6U) & 3U;
+    if (phase != ENC_CAL_RUNNING) {
+        return;
+    }
+    if (chip_status == 1U) {
+        saw_running = 1U;
+    }
+    if (chip_status == 2U) {
+        finish(ENC_CAL_FAILED, ENC_CAL_CHIP_FAILED);
+    } else if (chip_status == 3U) {
+        finish(saw_running && counts > 18UL * 32768UL ? ENC_CAL_SUCCESS : ENC_CAL_FAILED,
+               saw_running && counts > 18UL * 32768UL ? ENC_CAL_OK : ENC_CAL_UNCONFIRMED);
+    } else if ((uint32_t)(now - stage_started) > 30000U) {
+        finish(ENC_CAL_FAILED, ENC_CAL_TIMEOUT);
+    }
+}
+
 void motor_encoder_cal_background_task(void)
 {
     uint32_t now = HAL_GetTick();
     if (cleanup) {
-        uint8_t r = 1U;
-        if (trigger_attempted) {
-            r = mt6826s_write_register(KEY_REG, 0U);
-        } else if (freq_known && freq_written) {
-            r = mt6826s_write_register(FREQ_REG, original_freq);
-        }
-        if (r || (uint32_t)(now - operation_started) > 100U) {
-            cleanup = 0U;
-            if (reboot_required) {
-                mt6826s_suspend_angle_reads();
-            }
-        }
+        step_cleanup(now);
         return;
     }
+
     if (!motor_encoder_cal_is_active()) {
         return;
     }
@@ -135,124 +274,24 @@ void motor_encoder_cal_background_task(void)
         finish(ENC_CAL_FAILED, ENC_CAL_TIMEOUT);
         return;
     }
-    if (phase == ENC_CAL_RAMP) {
-        if (s.state == MOTOR_STATE_SENSORED_RUN && s.target_speed_rpm >= 249.9f) {
-            phase = ENC_CAL_SETTLE;
-            stage_started = now;
-        }
-    } else if (phase == ENC_CAL_SETTLE) {
-        if (fabsf(fabsf(measured_rpm) - 250.0f) <= 25.0f) {
-            if (!settle_started) {
-                settled_since = now;
-                settle_started = 1U;
-            }
-            if ((uint32_t)(now - settled_since) >= 1000U) {
-                phase = ENC_CAL_CONFIGURE;
-                operation_started = now;
-            }
-        } else {
-            settle_started = 0U;
-        }
-        if ((uint32_t)(now - stage_started) > 5000U) {
-            finish(ENC_CAL_FAILED, ENC_CAL_SPEED);
-        }
-    } else if (phase == ENC_CAL_CONFIGURE) {
-        uint8_t r = 0U, value = 0U;
-        switch (step) {
-        case 0:
-            r = mt6826s_read_register(FREQ_REG, &original_freq);
-            if (r == 1U) {
-                freq_known = 1U;
-            }
-            break;
-        case 1:
-            freq_written = 1U; /* 写入超时仍可能已到达芯片，保留恢复记录 */
-            r = mt6826s_write_register(FREQ_REG, (original_freq & 0x8FU) | 0x40U);
-            break;
-        case 2:
-            r = mt6826s_read_register(FREQ_REG, &value);
-            if (r == 1U && value != ((original_freq & 0x8FU) | 0x40U)) {
-                finish(ENC_CAL_FAILED, ENC_CAL_READBACK);
-                return;
-            }
-            break;
-        case 3:
-            r = mt6826s_write_register(KEY_REG, 0U);
-            break;
-        default:
-            /* 在可能结果不确定的写入前锁存重新上电要求。 */
-            trigger_attempted = 1U;
-            r = mt6826s_write_register(KEY_REG, 0x5EU);
-            if (r == 0U) {
-                trigger_attempted = 0U; /* 忙状态表示此次尚未发送字节 */
-            }
-            if (r == 1U && phase == ENC_CAL_CONFIGURE) {
-                phase = ENC_CAL_RUNNING;
-                stage_started = now;
-                last_poll = now;
-                last_angle = motor_encoder_get_raw_angle();
-            }
-            break;
-        }
-        if (phase != ENC_CAL_CONFIGURE && phase != ENC_CAL_RUNNING) {
-            return;
-        }
-        if (r == 2U) {
-            finish(ENC_CAL_FAILED, ENC_CAL_SPI);
-            return;
-        }
-        if (r == 1U) {
-            ++step;
-            operation_started = now;
-        }
-        if ((uint32_t)(now - operation_started) > 100U) {
-            finish(ENC_CAL_FAILED, ENC_CAL_SPI);
-        }
-    } else if (phase == ENC_CAL_RUNNING) {
-        uint16_t angle = motor_encoder_get_raw_angle();
-        int32_t delta = (int32_t)angle - last_angle;
-        if (delta > 16384) {
-            delta -= 32768;
-        }
-        if (delta < -16384) {
-            delta += 32768;
-        }
-        travel += delta;
-        last_angle = angle;
-        counts = (uint32_t)(travel < 0 ? -travel : travel);
-        if (!isfinite(measured_rpm) || fabsf(measured_rpm) < 200.0f || fabsf(measured_rpm) >= 400.0f) {
-            finish(ENC_CAL_FAILED, ENC_CAL_SPEED);
-            return;
-        }
-        if ((uint32_t)(now - last_poll) < 100U) {
-            return;
-        }
-        uint8_t value = 0U, r = mt6826s_read_register(STATUS_REG, &value);
-        if (r == 2U) {
-            finish(ENC_CAL_FAILED, ENC_CAL_SPI);
-            return;
-        }
-        if (r == 0U) {
-            return;
-        }
-        last_poll = now;
-        chip_status = (value >> 6U) & 3U;
-        if (phase != ENC_CAL_RUNNING) {
-            return;
-        }
-        if (chip_status == 1U) {
-            saw_running = 1U;
-        }
-        if (chip_status == 2U) {
-            finish(ENC_CAL_FAILED, ENC_CAL_CHIP_FAILED);
-        } else if (chip_status == 3U) {
-            finish(saw_running && counts > 18UL * 32768UL ? ENC_CAL_SUCCESS : ENC_CAL_FAILED,
-                   saw_running && counts > 18UL * 32768UL ? ENC_CAL_OK : ENC_CAL_UNCONFIRMED);
-        } else if ((uint32_t)(now - stage_started) > 30000U) {
-            finish(ENC_CAL_FAILED, ENC_CAL_TIMEOUT);
-        }
+    switch (phase) {
+    case ENC_CAL_RAMP:
+        step_ramp(now, &s);
+        break;
+    case ENC_CAL_SETTLE:
+        step_settle(now);
+        break;
+    case ENC_CAL_CONFIGURE:
+        step_configure(now);
+        break;
+    case ENC_CAL_RUNNING:
+        step_running(now);
+        break;
+    default:
+        break;
     }
 }
+
 
 // 复制校准阶段、原因、累计计数和测得 rpm；调用方须提供有效输出对象。
 void motor_encoder_cal_get_status(motor_encoder_cal_status_t *s)

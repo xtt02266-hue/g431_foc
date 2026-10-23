@@ -30,13 +30,8 @@ static void motor_status_led_task(void)
     }
 }
 
-// 定时器更新中断回调函数 (TIM2, 假设为 1000Hz / 1ms 周期)
-// 这是整个电机控制系统的"心跳"中断，所有实时控制逻辑在此统一调度:
-//   1. 辨识阶段: 执行开环辨识任务
-//   2. 辨识刚完成: 自动整定电流环 PI 参数 + 使能 SVPWM + 开启 FOC 闭环
-//   3. 正常运行时: 执行 motor_control_task (位置/速度/Iq 级联控制)
-//   4. 每 250ms 翻转一次状态 LED (2Hz 闪烁)
-// 注意: 中断中不得执行耗时操作 (如 OLED 刷新、VOFA 发送等)，那些应放在 main 循环中
+// TIM2 每 1 ms 依次推进辨识、更新状态、执行外环并更新 LED。
+// 辨识结束仍需显式 START；Flash 保存、协议发送和设备寄存器事务在前台执行。
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
     if (htim == &htim2) {

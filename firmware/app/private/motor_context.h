@@ -47,18 +47,22 @@ extern float g_debug_friction_iq_a;
 extern float g_debug_cogging_iq_a;
 extern float g_continuous_angle_rad;
 extern float g_haptic_center_rad;
-extern uint8_t g_angle_initialized;
 extern motor_haptic_params_t g_haptic_params;
 extern uint8_t g_cal_saved_valid;
 extern motor_friction_config_t g_cal_saved_friction;
 extern uint16_t g_cal_control_flags;
-extern uint32_t g_cal_last_crc, g_cal_last_transfer;
-extern uint8_t g_pot_filter_initialized;
 
 /* 应用内部的状态更新和模式计算接口；不得由协议直接绕过命令校验调用。 */
 void motor_system_restore_calibration(void);
 float motor_abs_float(float value);
 void motor_control_init(void);
+void motor_runtime_reset_feedback(void);
+// 获取连续整数位置；仅限 TIM2 或调用方已屏蔽中断时读取，单位为机械编码器计数。
+int64_t motor_runtime_get_position_counts(void);
+void motor_runtime_begin_calibration(void);
+void motor_system_reset_pot_filter(void);
+// 只清外环观测字段，不清积分、轨迹或输出。
+void motor_system_clear_control_debug(void);
 float motor_system_torque_to_iq(float torque_nm);
 void motor_system_reset_control_history(void);
 void motor_system_reset_outer_loops(void);
@@ -66,7 +70,8 @@ void motor_system_tune_current_loop_bandwidth(float bandwidth_hz);
 void motor_system_force_safe_stop(void);
 void motor_control_update_state(void);
 float motor_system_update_pot_target(void);
-void motor_system_run_torque_mode(void);
+void motor_system_run_torque_mode(float mechanical_speed_rpm, int8_t identified_direction,
+                                 uint16_t mechanical_angle_counts);
 void motor_system_run_position_mode(float target_pos, float current_rpm);
 float motor_system_slew_host_iq(float target_iq, float slew_a_per_s);
 void motor_system_run_speed_mode(float mechanical_speed_rpm, int8_t identified_direction,
@@ -74,4 +79,8 @@ void motor_system_run_speed_mode(float mechanical_speed_rpm, int8_t identified_d
 void motor_control_task(void);
 // 计算触觉模式的机械模型与补偿，并发布限幅后的 q/d 给定。
 void motor_haptic_task(int8_t identified_direction, uint16_t angle_counts);
+// 复位触觉参考点、档心和斜率历史；调用方负责生命周期同步。
+void motor_haptic_reset(void);
+// 获取有效触觉中心的整数相对计数；与运行计数使用相同的同步约束。
+int64_t motor_haptic_get_relative_counts(void);
 #endif

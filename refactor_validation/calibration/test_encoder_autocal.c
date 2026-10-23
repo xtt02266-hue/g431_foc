@@ -76,7 +76,10 @@ int main(void) {
  tick();assert(suspended==1);
 
  reset();g_motor_system.run_data.speed_rpm=0;
- for(unsigned i=0;i<5010;i++)tick();assert(status().phase==ENC_CAL_FAILED && status().reason==ENC_CAL_SPEED);
+ for(unsigned i=0;i<5010;i++) {
+  tick();
+ }
+ assert(status().phase==ENC_CAL_FAILED && status().reason==ENC_CAL_SPEED);
  assert(!motor_encoder_cal_requires_power_cycle() && key_writes==0);
 
  reset();motor_system_stop_control();tick();assert(status().phase==ENC_CAL_ABORTED);

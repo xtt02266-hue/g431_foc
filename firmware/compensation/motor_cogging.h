@@ -18,7 +18,7 @@ typedef struct {
     uint16_t phase_offset_counts;
 } motor_cogging_config_t;
 
-// 初始化活动/暂存表和事务状态，再按原规则加载 Flash 记录。
+// 初始化内置表及事务状态，再恢复来源匹配的已保存配置；不启动电机或擦写 Flash。
 void motor_cogging_init(void);
 // 检查增益、电流限幅、速度衰减区间和编码器相位偏移；无效配置返回 0。
 uint8_t motor_cogging_is_config_valid(const motor_cogging_config_t *config);
@@ -58,7 +58,7 @@ uint32_t motor_cogging_get_active_table_crc(void);
 uint32_t motor_cogging_get_table_revision(void);
 // 读取已应用渐入后的补偿增益；不等同于配置增益。
 float motor_cogging_get_effective_gain(void);
-// 查询当前活动表是否已按原规则保存到 Flash。
+// 查询当前表及配置是否可在重启后恢复，包含固件内置默认值与参数页保存值。
 uint8_t motor_cogging_is_persisted(void);
 
 #endif

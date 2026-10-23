@@ -333,21 +333,23 @@ static void fail_speed(uint8_t reason)
     enter(CAL_ZERO);
 }
 
-// 1 ms 标定状态机入口；速度单位 rpm、角度单位编码器计数，返回下一周期速度目标。
-float motor_calibration_step(uint16_t angle, float speed, float applied_target, uint16_t flags, uint8_t healthy)
+// 检查丢样与输入有效性；失败原因和优先级沿用原状态机。
+static uint8_t calibration_sample_valid(float speed, float target, uint8_t healthy)
 {
-    if (!motor_calibration_is_active()) {
-        return 0.0f;
-    }
     if (state.dropped) {
         motor_calibration_abort(CAL_OVERFLOW);
-        return 0.0f;
+        return 0U;
     }
-    if (!healthy || !isfinite(speed) || !isfinite(applied_target)) {
+    if (!healthy || !isfinite(speed) || !isfinite(target)) {
         motor_calibration_abort(CAL_SENSOR);
-        return 0.0f;
+        return 0U;
     }
-    ++elapsed;
+    return 1U;
+}
+
+// 展开单圈角度并按当前采集方向归一化，返回编码器计数增量。
+static int32_t calibration_angle_delta(uint16_t angle)
+{
     int32_t delta = angle_valid ? (int32_t)angle - previous_angle : 0;
     previous_angle = angle;
     angle_valid = 1U;
@@ -360,46 +362,53 @@ float motor_calibration_step(uint16_t angle, float speed, float applied_target, 
     if (state.reverse) {
         delta = -delta;
     }
-    if (state.phase == CAL_ZERO) {
-        if (fabsf(speed) < 2.0f && fabsf(applied_target) < 0.1f) {
-            ++zero_ticks;
-        } else {
-            zero_ticks = 0U;
-        }
-        if (elapsed > 10000U) {
-            motor_calibration_abort(CAL_TIMEOUT);
-        } else if (zero_ticks >= 500U) {
-            if (advance_speed || state.reverse) {
-                if (!advance_speed) {
-                    state.passed_mask |= (uint8_t)(1U << state.speed_index);
+    return delta;
+}
+
+// 等待零速后推进方向或速度档，返回当前目标 rpm。
+static float calibration_step_zero(float speed, float applied_target)
+{
+    if (fabsf(speed) < 2.0f && fabsf(applied_target) < 0.1f) {
+        ++zero_ticks;
+    } else {
+        zero_ticks = 0U;
+    }
+    if (elapsed > 10000U) {
+        motor_calibration_abort(CAL_TIMEOUT);
+    } else if (zero_ticks >= 500U) {
+        if (advance_speed || state.reverse) {
+            if (!advance_speed) {
+                state.passed_mask |= (uint8_t)(1U << state.speed_index);
+            }
+            state.reverse = 0U;
+            advance_speed = 0U;
+            ++state.speed_index;
+            if (state.speed_index >= 3U) {
+                uint8_t n = 0U;
+                for (uint8_t b = 0; b < 3; ++b) {
+                    n += (state.passed_mask >> b) & 1U;
                 }
-                state.reverse = 0U;
-                advance_speed = 0U;
-                ++state.speed_index;
-                if (state.speed_index >= 3U) {
-                    uint8_t n = 0U;
-                    for (uint8_t b = 0; b < 3; ++b) {
-                        n += (state.passed_mask >> b) & 1U;
-                    }
-                    uint8_t required = state.mode == 4U ? 3U : 2U;
-                    state.phase = n >= required ? CAL_DONE : CAL_FAILED;
-                    state.reason = n >= required ? CAL_OK : CAL_INSUFFICIENT;
-                    state.speed_index = 2U;
-                } else {
-                    enter(CAL_SETTLE);
-                }
+                uint8_t required = state.mode == 4U ? 3U : 2U;
+                state.phase = n >= required ? CAL_DONE : CAL_FAILED;
+                state.reason = n >= required ? CAL_OK : CAL_INSUFFICIENT;
+                state.speed_index = 2U;
             } else {
-                state.reverse = 1U;
                 enter(CAL_SETTLE);
             }
+        } else {
+            state.reverse = 1U;
+            enter(CAL_SETTLE);
         }
-        return state.target_rpm;
     }
-    float target = state.target_rpm, error = speed - target;
+    return state.target_rpm;
+}
+
+// 累积运动进度并检查停转；返回 1 表示当前速度档已失败。
+static uint8_t calibration_check_stall(int32_t delta, float speed, uint8_t commanded)
+{
     if (delta > 0) {
         progress += delta;
     }
-    uint8_t commanded = fabsf(applied_target - target) < 0.5f;
     if (commanded && speed * (state.reverse ? -1.0f : 1.0f) < 5.0f) {
         ++stall_ticks;
     } else {
@@ -407,74 +416,105 @@ float motor_calibration_step(uint16_t angle, float speed, float applied_target, 
     }
     if (stall_ticks >= 50U) {
         fail_speed(CAL_STALL);
+        return 1U;
+    }
+    return 0U;
+}
+
+// 按摩擦/齿槽各自的稳定窗口决定进入采集或失败，不改变阈值。
+static void calibration_step_settle(int32_t delta, float speed, float target, float error, uint16_t flags, uint8_t commanded)
+{
+    if (state.mode == 4U) {
+        ++friction_window_ticks;
+        friction_error_sum += error;
+        friction_error_sq += error * error;
+        if (!commanded || (flags & (uint16_t)~CAL_SLEW) ||
+            speed * (state.reverse ? -1.0f : 1.0f) < fabsf(target) * .5f) {
+            friction_window_bad = 1U;
+        }
+        /* 直流摩擦采集按平均运动误差判断稳定性；
+         * 保留独立窗口门限，不套用齿槽采集的逐周期误差门限。 */
+        if (friction_window_ticks >= 1000U) {
+            uint8_t good = !friction_window_bad && fabsf(friction_error_sum / 1000.0f) <= fabsf(target) * .05f &&
+                           sqrtf(friction_error_sq / 1000.0f) <= fabsf(target) * .15f;
+            stable_ticks = good ? stable_ticks + 1000U : 0U;
+            friction_window_ticks = 0U;
+            friction_error_sum = friction_error_sq = 0.0f;
+            friction_window_bad = 0U;
+        }
+    } else if (commanded && fabsf(error) <= fmaxf(1.0f, fabsf(target) * .03f) && !flags) {
+        ++stable_ticks;
+        if (delta > 0) {
+            stable_progress += delta;
+        }
+    } else {
+        stable_ticks = 0U;
+        stable_progress = 0;
+    }
+    /* 5 seconds and 5 complete revolutions in total, plus a continuous
+     * 2-second stable window. No samples from startup qualify as turns. */
+    if (elapsed >= 5000U && progress >= 5 * 32768 && ((stable_ticks >= 2000U) || state.mode == 0U)) {
+        enter(CAL_CAPTURE);
+    } else if (elapsed >= 20000U) {
+        fail_speed(CAL_UNSTABLE);
+    }
+}
+
+// 统计每圈误差及质量，推进有效圈数并保留超时检查。
+static void calibration_step_capture(int32_t delta, float speed, float target, float error, uint16_t flags)
+{
+    ++turn_ticks;
+    turn_progress += delta;
+    error_sum += error;
+    error_sq += error * error;
+    if (fabsf(error) > error_peak) {
+        error_peak = fabsf(error);
+    }
+    uint16_t reject_flags = state.mode == 4U ? (flags & (uint16_t)~CAL_SLEW) : flags;
+    if (reject_flags || delta < -16 || speed * (state.reverse ? -1.0f : 1.0f) < 5.0f) {
+        turn_bad = 1U;
+    }
+    if (turn_progress >= 32768) {
+        uint8_t friction = state.mode == 4U;
+        uint8_t good = !turn_bad &&
+                       fabsf(error_sum / turn_ticks) <= fmaxf(.5f, fabsf(target) * (friction ? .05f : .02f)) &&
+                       sqrtf(error_sq / turn_ticks) <= fmaxf(.5f, fabsf(target) * (friction ? .15f : .03f)) &&
+                       error_peak <= fmaxf(1.0f, fabsf(target) * (friction ? .40f : .08f));
+        if (good || state.mode == 0U) {
+            ++state.accepted_turns;
+        } else {
+            ++state.rejected_turns;
+        }
+        reset_turn();
+        if (state.accepted_turns >= (friction ? 8U : MOTOR_CAL_REQUIRED_TURNS)) {
+            enter(CAL_ZERO);
+        }
+    }
+    if (elapsed >= 90000U) {
+        fail_speed(CAL_UNSTABLE);
+    }
+}
+
+// 1 ms 旋转标定调度；按归零、稳定和采集阶段返回下一周期速度目标 rpm。
+float motor_calibration_step(uint16_t angle, float speed, float applied_target, uint16_t flags, uint8_t healthy)
+{
+    if (!motor_calibration_is_active() || !calibration_sample_valid(speed, applied_target, healthy)) {
+        return 0.0f;
+    }
+    ++elapsed;
+    int32_t delta = calibration_angle_delta(angle);
+    if (state.phase == CAL_ZERO) {
+        return calibration_step_zero(speed, applied_target);
+    }
+    float target = state.target_rpm, error = speed - target;
+    uint8_t commanded = fabsf(applied_target - target) < 0.5f;
+    if (calibration_check_stall(delta, speed, commanded)) {
         return 0.0f;
     }
     if (state.phase == CAL_SETTLE) {
-        if (state.mode == 4U) {
-            ++friction_window_ticks;
-            friction_error_sum += error;
-            friction_error_sq += error * error;
-            if (!commanded || (flags & (uint16_t)~CAL_SLEW) ||
-                speed * (state.reverse ? -1.0f : 1.0f) < fabsf(target) * .5f) {
-                friction_window_bad = 1U;
-            }
-            /* 直流摩擦采集按平均运动误差判断稳定性；
-             * 保留独立窗口门限，不套用齿槽采集的逐周期误差门限。 */
-            if (friction_window_ticks >= 1000U) {
-                uint8_t good = !friction_window_bad && fabsf(friction_error_sum / 1000.0f) <= fabsf(target) * .05f &&
-                               sqrtf(friction_error_sq / 1000.0f) <= fabsf(target) * .15f;
-                stable_ticks = good ? stable_ticks + 1000U : 0U;
-                friction_window_ticks = 0U;
-                friction_error_sum = friction_error_sq = 0.0f;
-                friction_window_bad = 0U;
-            }
-        } else if (commanded && fabsf(error) <= fmaxf(1.0f, fabsf(target) * .03f) && !flags) {
-            ++stable_ticks;
-            if (delta > 0) {
-                stable_progress += delta;
-            }
-        } else {
-            stable_ticks = 0U;
-            stable_progress = 0;
-        }
-        /* 5 seconds and 5 complete revolutions in total, plus a continuous
-         * 2-second stable window. No samples from startup qualify as turns. */
-        if (elapsed >= 5000U && progress >= 5 * 32768 && ((stable_ticks >= 2000U) || state.mode == 0U)) {
-            enter(CAL_CAPTURE);
-        } else if (elapsed >= 20000U) {
-            fail_speed(CAL_UNSTABLE);
-        }
+        calibration_step_settle(delta, speed, target, error, flags, commanded);
     } else {
-        ++turn_ticks;
-        turn_progress += delta;
-        error_sum += error;
-        error_sq += error * error;
-        if (fabsf(error) > error_peak) {
-            error_peak = fabsf(error);
-        }
-        uint16_t reject_flags = state.mode == 4U ? (flags & (uint16_t)~CAL_SLEW) : flags;
-        if (reject_flags || delta < -16 || speed * (state.reverse ? -1.0f : 1.0f) < 5.0f) {
-            turn_bad = 1U;
-        }
-        if (turn_progress >= 32768) {
-            uint8_t friction = state.mode == 4U;
-            uint8_t good = !turn_bad &&
-                           fabsf(error_sum / turn_ticks) <= fmaxf(.5f, fabsf(target) * (friction ? .05f : .02f)) &&
-                           sqrtf(error_sq / turn_ticks) <= fmaxf(.5f, fabsf(target) * (friction ? .15f : .03f)) &&
-                           error_peak <= fmaxf(1.0f, fabsf(target) * (friction ? .40f : .08f));
-            if (good || state.mode == 0U) {
-                ++state.accepted_turns;
-            } else {
-                ++state.rejected_turns;
-            }
-            reset_turn();
-            if (state.accepted_turns >= (friction ? 8U : MOTOR_CAL_REQUIRED_TURNS)) {
-                enter(CAL_ZERO);
-            }
-        }
-        if (elapsed >= 90000U) {
-            fail_speed(CAL_UNSTABLE);
-        }
+        calibration_step_capture(delta, speed, target, error, flags);
     }
     return state.target_rpm;
 }
@@ -582,20 +622,9 @@ uint8_t motor_calibration_replay(uint32_t first, uint8_t count, motor_cal_sample
     return count;
 }
 
-// 1 ms 逐点状态机入口；保持等待、稳定、质量重试和目标跨零处理次序。
-void motor_calibration_step_point(uint16_t angle, float speed, uint16_t flags, uint8_t healthy)
+// 计算最短机械位置误差，单位为编码器计数。
+static float calibration_point_error(uint16_t angle)
 {
-    if (!motor_calibration_is_active() || state.mode != 5U) {
-        return;
-    }
-    if (state.dropped) {
-        motor_calibration_abort(CAL_OVERFLOW);
-        return;
-    }
-    if (!healthy || !isfinite(speed)) {
-        motor_calibration_abort(CAL_SENSOR);
-        return;
-    }
     float error = point_target - angle;
     if (error > 16384) {
         error -= 32768;
@@ -603,6 +632,91 @@ void motor_calibration_step_point(uint16_t angle, float speed, uint16_t flags, u
     if (error < -16384) {
         error += 32768;
     }
+    return error;
+}
+
+// 当前点通过后推进点位、方向和轮次；返回 1 表示会话完成。
+static uint8_t calibration_advance_point(void)
+{
+    ++state.accepted_turns;
+    point_failed_attempts = 0U;
+    if (++point_index >= point_count) {
+        if (state.reverse) {
+            state.passed_mask |= (uint8_t)(1U << state.speed_index);
+            if (++state.speed_index >= point_repeats) {
+                state.speed_index = (uint8_t)(point_repeats - 1U);
+                state.phase = CAL_DONE;
+                state.target_rpm = 0;
+                return 1U;
+            }
+            state.reverse = 0;
+        } else {
+            state.reverse = 1;
+        }
+        point_index = 0;
+        state.accepted_turns = 0;
+        state.phase = CAL_ZERO;
+        point_target = state.reverse ? 0.0f : (float)(32768U - 32768U / point_count);
+    } else {
+        state.phase = CAL_SETTLE;
+        point_target = (float)(state.reverse ? point_count - 1U - point_index : point_index) *
+                       (float)(32768U / point_count);
+    }
+    stable_ticks = elapsed = 0;
+    point_assist = 1;
+    return 0U;
+}
+
+// 处理逐点采集质量及重试；返回 1 表示本周期应立即结束。
+static uint8_t calibration_capture_point(float error, float speed, uint16_t flags)
+{
+    uint8_t capture_stable =
+        fabsf(speed) <= 1.0f && !flags && (point_averaging() || fabsf(error) <= MOTOR_CAL_POINT_MAX_ERROR_COUNTS);
+    if (!capture_stable) {
+        reject_point_capture();
+    } else if (++stable_ticks >= point_capture_ms()) {
+        if (!point_capture_valid()) {
+            reject_point_capture();
+            if (!point_retry_until_good && elapsed >= MOTOR_CAL_POINT_TIMEOUT_MS) {
+                motor_calibration_abort(CAL_UNSTABLE);
+            }
+            return 1U; /* 重新完成连续稳定窗口后重试当前目标 */
+        }
+        if (calibration_advance_point()) {
+            return 1U;
+        }
+    }
+    return 0U;
+}
+
+// 辅助撤销后完成连续稳定窗口，再开始采样。
+static void calibration_settle_point(uint8_t stable)
+{
+    stable_ticks = stable ? stable_ticks + 1 : 0;
+    if (stable_ticks >= MOTOR_CAL_POINT_SETTLE_MS) {
+        if (state.phase == CAL_ZERO) {
+            point_target = state.reverse ? (float)(32768U - 32768U / point_count) : 0.0f;
+            state.phase = CAL_SETTLE;
+            elapsed = 0;
+            point_assist = 1;
+        } else {
+            reset_point_capture();
+            state.phase = CAL_CAPTURE;
+        }
+        stable_ticks = 0;
+    }
+}
+
+// 1 ms 逐点调度；辅助退出、采集重试和超时的提前返回保持原语义。
+void motor_calibration_step_point(uint16_t angle, float speed, uint16_t flags, uint8_t healthy)
+{
+    if (!motor_calibration_is_active() || state.mode != 5U) {
+        return;
+    }
+    if (!calibration_sample_valid(speed, 0.0f, healthy)) {
+        return;
+    }
+    float error = calibration_point_error(angle);
     ++elapsed;
     uint8_t stable = fabsf(error) <= MOTOR_CAL_POINT_MAX_ERROR_COUNTS && fabsf(speed) <= 1.0f && !flags;
     if (point_assist) {
@@ -616,60 +730,13 @@ void motor_calibration_step_point(uint16_t angle, float speed, uint16_t flags, u
         return; /* 辅助撤销后才开始计算稳定窗口 */
     }
     if (state.phase == CAL_CAPTURE) {
-        uint8_t capture_stable =
-            fabsf(speed) <= 1.0f && !flags && (point_averaging() || fabsf(error) <= MOTOR_CAL_POINT_MAX_ERROR_COUNTS);
-        if (!capture_stable) {
-            reject_point_capture();
-        } else if (++stable_ticks >= point_capture_ms()) {
-            if (!point_capture_valid()) {
-                reject_point_capture();
-                if (!point_retry_until_good && elapsed >= MOTOR_CAL_POINT_TIMEOUT_MS) {
-                    motor_calibration_abort(CAL_UNSTABLE);
-                }
-                return; /* 重新完成连续稳定窗口后重试当前目标 */
-            }
-            ++state.accepted_turns;
-            point_failed_attempts = 0U;
-            if (++point_index >= point_count) {
-                if (state.reverse) {
-                    state.passed_mask |= (uint8_t)(1U << state.speed_index);
-                    if (++state.speed_index >= point_repeats) {
-                        state.speed_index = (uint8_t)(point_repeats - 1U);
-                        state.phase = CAL_DONE;
-                        state.target_rpm = 0;
-                        return;
-                    }
-                    state.reverse = 0;
-                } else {
-                    state.reverse = 1;
-                }
-                point_index = 0;
-                state.accepted_turns = 0;
-                state.phase = CAL_ZERO;
-                point_target = state.reverse ? 0.0f : (float)(32768U - 32768U / point_count);
-            } else {
-                state.phase = CAL_SETTLE;
-                point_target = (float)(state.reverse ? point_count - 1U - point_index : point_index) *
-                               (float)(32768U / point_count);
-            }
-            stable_ticks = elapsed = 0;
-            point_assist = 1;
+        if (calibration_capture_point(error, speed, flags)) {
+            return;
         }
     } else {
-        stable_ticks = stable ? stable_ticks + 1 : 0;
-        if (stable_ticks >= MOTOR_CAL_POINT_SETTLE_MS) {
-            if (state.phase == CAL_ZERO) {
-                point_target = state.reverse ? (float)(32768U - 32768U / point_count) : 0.0f;
-                state.phase = CAL_SETTLE;
-                elapsed = 0;
-                point_assist = 1;
-            } else {
-                reset_point_capture();
-                state.phase = CAL_CAPTURE;
-            }
-            stable_ticks = 0;
-        }
+        calibration_settle_point(stable);
     }
+
     if (state.phase != CAL_CAPTURE && (fabsf(error) > 32.0f || fabsf(speed) > 2.0f)) {
         point_assist = 1;
         stable_ticks = 0;

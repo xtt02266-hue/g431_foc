@@ -93,14 +93,21 @@ static void test_average_policy(void) {
     for (unsigned i=0;i<2000 && status().phase!=CAL_CAPTURE;i++) point_step(0,.01f,.01f);
     assert(status().phase==CAL_CAPTURE);
     assert(motor_calibration_sample_flags()&CAL_POINT_AVERAGE);
-    motor_calibration_step_point(4,0,0,1);
-    assert(status().phase==CAL_SETTLE && !status().accepted_turns);
-    for (unsigned i=0;i<1000;i++) point_step(0,.01f,.01f);
-    assert(status().phase==CAL_CAPTURE);
-    /* An ADC-only position excursion is still rejected by the complete-window checks. */
-    motor_cal_sample_t rec={0};rec.flags=motor_calibration_sample_flags();
-    motor_calibration_publish_control(&rec);motor_calibration_capture(4,.01f,.01f,0,0);drain();
-    for (unsigned i=0;i<1000;i++) point_step(0,.01f,.01f);
+    /* Policy 1 checks mean absolute position error: one excursion may qualify,
+     * but a complete window outside the configured tolerance must be rejected. */
+    uint16_t outside=(uint16_t)MOTOR_CAL_POINT_MAX_ERROR_COUNTS+1U;
+    point_step(outside,.01f,.01f);
+    assert(status().phase==CAL_CAPTURE && !status().accepted_turns);
+    for (unsigned i=1;i<MOTOR_CAL_POINT_AVERAGE_MS;i++) point_step(0,.01f,.01f);
+    assert(status().accepted_turns==1);reset();
+    assert(motor_calibration_begin_with_policy(5,512,1,1,1));reach_first_point();
+    for (unsigned attempt=0;attempt<2;attempt++) {
+        for (unsigned i=0;i<MOTOR_CAL_POINT_CAPTURE_MS;i++) point_step(0,i&1?.03f:-.01f,i&1?.03f:-.01f);
+        assert(status().phase==CAL_SETTLE && !status().accepted_turns);
+        for (unsigned i=0;i<MOTOR_CAL_POINT_SETTLE_MS;i++) point_step(0,.01f,.01f);
+    }
+    assert(motor_calibration_sample_flags()&CAL_POINT_AVERAGE);
+    for (unsigned i=0;i<MOTOR_CAL_POINT_AVERAGE_MS;i++) point_step(outside,.01f,.01f);
     assert(status().phase==CAL_SETTLE && !status().accepted_turns);
     motor_calibration_step_point(0,0,0,0);
     assert(status().phase==CAL_FAILED && status().reason==CAL_SENSOR);reset();
@@ -209,20 +216,21 @@ int main(int argc, char **argv) {
         assert(status().phase==CAL_SETTLE && status().accepted_turns==0 && motor_calibration_point_target()==0);
         reset();
     }
-    /* Boundary and wrap-around: 3 counts may settle; 4 must restart capture. */
+    /* Test the configured boundary and one count outside it, including wrap-around. */
     assert(motor_calibration_begin(5));
     uint16_t guide=(uint16_t)motor_calibration_point_target();
-    motor_calibration_step_point(guide+4,0,0,1);
+    uint16_t allowed=(uint16_t)MOTOR_CAL_POINT_MAX_ERROR_COUNTS;
+    motor_calibration_step_point(guide+allowed+1U,0,0,1);
     assert(motor_calibration_point_assist());
-    motor_calibration_step_point(guide+3,0,0,1);
+    motor_calibration_step_point(guide+allowed,0,0,1);
     assert(!motor_calibration_point_assist());
-    for (unsigned i=0;i<MOTOR_CAL_POINT_SETTLE_MS;i++) motor_calibration_step_point(guide+3,0,0,1);
+    for (unsigned i=0;i<MOTOR_CAL_POINT_SETTLE_MS;i++) motor_calibration_step_point(guide+allowed,0,0,1);
     assert(motor_calibration_point_target()==0);
-    motor_calibration_step_point(32765,0,0,1); /* -3 across the single-turn boundary */
+    motor_calibration_step_point(32768U-allowed,0,0,1);
     assert(!motor_calibration_point_assist());
-    for (unsigned i=0;i<MOTOR_CAL_POINT_SETTLE_MS;i++) motor_calibration_step_point(32765,0,0,1);
+    for (unsigned i=0;i<MOTOR_CAL_POINT_SETTLE_MS;i++) motor_calibration_step_point(32768U-allowed,0,0,1);
     assert(status().phase==CAL_CAPTURE);
-    motor_calibration_step_point(32764,0,0,1); /* -4 */
+    motor_calibration_step_point(32768U-allowed-1U,0,0,1);
     assert(status().phase==CAL_SETTLE && status().accepted_turns==0);
     reset();
     assert(motor_calibration_begin(5));

@@ -43,9 +43,8 @@ void motor_system_restore_calibration(void)
     ++g_config_revision;
 }
 
-// 检查主机控制权和启动条件，保存原配置后启动指定采集；返回 MOTOR_CMD_*。
-uint8_t motor_system_host_start_calibration(uint8_t mode, uint16_t point_count, uint8_t repeats,
-                                            uint8_t retry_until_good, uint8_t policy)
+// 依原顺序检查控制权、模式、参数和补偿配置，返回 MOTOR_CMD_*。
+static uint8_t calibration_session_validate(uint8_t mode)
 {
     if (motor_encoder_cal_is_active()) {
         return MOTOR_CMD_BUSY;
@@ -77,14 +76,12 @@ uint8_t motor_system_host_start_calibration(uint8_t mode, uint16_t point_count, 
          verification.max_iq_a <= 0.0f || verification.max_iq_a > .010001f || !motor_cogging_get_table_revision())) {
         return MOTOR_CMD_INVALID_VALUE;
     }
-    uint32_t mask = __get_PRIMASK();
-    __disable_irq();
-    if (!motor_calibration_begin_with_policy(mode, point_count, repeats, retry_until_good, policy)) {
-        if (!mask) {
-            __enable_irq();
-        }
-        return MOTOR_CMD_BUSY;
-    }
+    return MOTOR_CMD_OK;
+}
+
+// 在已屏蔽中断的启动路径保存配置，供统一停机恢复。
+static void calibration_session_save_config(void)
+{
     motor_cogging_get_config(&g_cal_saved_cogging);
     motor_feedforward_get_friction_config(&g_cal_saved_friction);
     g_cal_saved_limit = g_host_iq_limit_a;
@@ -94,6 +91,11 @@ uint8_t motor_system_host_start_calibration(uint8_t mode, uint16_t point_count, 
     g_cal_saved_pos_max = g_pi_pos.out_max;
     g_cal_saved_pos_min = g_pi_pos.out_min;
     g_cal_saved_valid = 1U;
+}
+
+// 设置标定控制模式、补偿和保护限幅；调用方持有原临界区。
+static void calibration_session_configure(uint8_t mode)
+{
     motor_cogging_config_t disabled = g_cal_saved_cogging;
     if (mode != 3U) {
         disabled.enabled = 0U;
@@ -115,9 +117,7 @@ uint8_t motor_system_host_start_calibration(uint8_t mode, uint16_t point_count, 
         g_pi_pos.out_max = 30.0f;
         g_pi_pos.out_min = -30.0f;
     }
-    g_cal_control_flags = 0U;
-    g_cal_last_crc = mt6826s_get_crc_error_count();
-    g_cal_last_transfer = mt6826s_get_transfer_error_count();
+    motor_runtime_begin_calibration();
     g_host_speed_slew_rpm_per_s = 30.0f;
     g_host_speed_target_rpm = g_host_speed_applied_rpm = 0.0f;
     g_host_iq_applied_a = 0.0f;
@@ -125,6 +125,26 @@ uint8_t motor_system_host_start_calibration(uint8_t mode, uint16_t point_count, 
     motor_cogging_runtime_start();
     g_run_requested = 1U;
     ++g_config_revision;
+}
+
+// 检查启动条件后在原临界区建立会话、保存配置并请求运行。
+uint8_t motor_system_host_start_calibration(uint8_t mode, uint16_t point_count, uint8_t repeats,
+                                            uint8_t retry_until_good, uint8_t policy)
+{
+    uint8_t result = calibration_session_validate(mode);
+    if (result != MOTOR_CMD_OK) {
+        return result;
+    }
+    uint32_t mask = __get_PRIMASK();
+    __disable_irq();
+    if (!motor_calibration_begin_with_policy(mode, point_count, repeats, retry_until_good, policy)) {
+        if (!mask) {
+            __enable_irq();
+        }
+        return MOTOR_CMD_BUSY;
+    }
+    calibration_session_save_config();
+    calibration_session_configure(mode);
     if (!mask) {
         __enable_irq();
     }
