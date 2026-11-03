@@ -11,7 +11,7 @@
  * 生命周期负责运行/故障，主机模块负责权限和给定，控制周期发布观测，标定保存恢复配置。
  */
 #define MOTOR_ENCODER_MAX_SAMPLE_AGE_MS  2U      // 控制路径允许的有效编码器样本最大年龄，单位 ms
-#define MOTOR_CURRENT_LOOP_CONTROL_BW_HZ 75.0f   // 正常控制时电流 PI 调谐带宽，单位 Hz
+#define MOTOR_CURRENT_LOOP_CONTROL_BW_HZ 150.0f   // 正常控制时电流 PI 调谐带宽，单位 Hz
 #define MOTOR_CURRENT_LOOP_MUSIC_BW_HZ   2000.0f // 音乐模式电流 PI 调谐带宽，单位 Hz
 
 // 电位器低通滤波系数 (一阶 EMA, 1kHz 更新率)

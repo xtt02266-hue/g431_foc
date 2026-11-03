@@ -49,7 +49,7 @@
 #define MOTOR_SPEED_IQ_SLEW_A_PER_S 5.0f
 
 /* FREE 模式摩擦补偿的轻微反向速度阻尼，现有限幅为 10 mA。 */
-#define MOTOR_FREE_FRICTION_DAMPING_A_PER_RAD_S 0.0001f
+#define MOTOR_FREE_FRICTION_DAMPING_A_PER_RAD_S 0.0002f
 #define MOTOR_FREE_FRICTION_DAMPING_MAX_A       0.01f // 自由模式附加速度阻尼电流上限 A
 #define MOTOR_PARAMETERS_AUTO_IDENTIFY          0     // 0 禁用上电自动辨识，沿用当前配置
 /* 保留旧宏供现有代码兼容；运行时由 motor_input_source_t 决定 POT/HOST。 */
@@ -67,12 +67,12 @@
  * MT6826S 15位SPI角度的速度估算始终每1 ms发布；只调整滚动位置窗长度。
  * 窗口切换使用迟滞，避免临界转速附近来回切换。
  */
-#define SPEED_EST_WINDOW_TICKS      20U   // 低速位置差分窗口，单位 1 ms 周期
-#define SPEED_EST_MID_WINDOW_TICKS  10U   // 中速位置差分窗口，单位 1 ms 周期
-#define SPEED_EST_HIGH_WINDOW_TICKS 5U    // 高速位置差分窗口，单位 1 ms 周期
-#define SPEED_EST_LOW_TO_MID_RPM    35.0f // 低速切到中速窗口的迟滞门限 rpm
-#define SPEED_EST_MID_TO_LOW_RPM    25.0f // 中速退回低速窗口的迟滞门限 rpm
-#define SPEED_EST_MID_TO_HIGH_RPM   85.0f // 中速切到高速窗口的迟滞门限 rpm
-#define SPEED_EST_HIGH_TO_MID_RPM   70.0f // 高速退回中速窗口的迟滞门限 rpm
+#define SPEED_EST_WINDOW_TICKS       3U   // 低速位置差分窗口，单位 1 ms 周期
+#define SPEED_EST_MID_WINDOW_TICKS   2U   // 中速位置差分窗口，单位 1 ms 周期
+#define SPEED_EST_HIGH_WINDOW_TICKS  1U   // 高速位置差分窗口，单位 1 ms 周期
+#define SPEED_EST_LOW_TO_MID_RPM    15.0f // 低速切到中速窗口的迟滞门限 rpm
+#define SPEED_EST_MID_TO_LOW_RPM    10.0f // 中速退回低速窗口的迟滞门限 rpm
+#define SPEED_EST_MID_TO_HIGH_RPM   55.0f // 中速切到高速窗口的迟滞门限 rpm
+#define SPEED_EST_HIGH_TO_MID_RPM   45.0f // 高速退回中速窗口的迟滞门限 rpm
 
 #endif
